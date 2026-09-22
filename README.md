@@ -21,6 +21,7 @@ npm run preview   # preview van de build
 ## Nog te koppelen
 
 1. **Contactformulier & terugbelwidget** &mdash; werken nu via een `mailto:`-fallback (opent het mailprogramma van de bezoeker met het bericht klaar om te versturen naar `info@avydo.nl`). Voor directe verzending vanaf de website: koppel een formulierdienst (bijv. Formspree, Netlify Forms) of eigen backend in `src/components/ContactForm.astro` en `src/components/CallbackWidget.astro`.
-2. **Fotografie** &mdash; de site gebruikt bewust geen stockfoto's. Zodra er echte foto's zijn (kantoor, team, Venray), kunnen die worden toegevoegd aan `public/images/` en verwerkt in de hero, teampagina en dienstenpagina's.
+2. **Fotografie** &mdash; de site gebruikt bewust geen stockfoto's. De teampagina heeft inmiddels echte foto's van René en Eric (`public/images/team/`); overige secties (hero, kantoor, Venray) kunnen op dezelfde manier worden aangevuld zodra er beeldmateriaal is.
 3. **Kenniscentrum** &mdash; de pagina staat klaar voor content maar bevat nog geen artikelen (om geen verouderd nieuws uit 2009-2010 als actueel te presenteren). Voeg een content collection toe zodra er actuele artikelen zijn.
 4. **Analytics/cookies** &mdash; er is geen tracking geïmplementeerd. Voeg een cookieconsent-oplossing toe voordat analytics wordt geactiveerd (zie privacyverklaring).
+5. **Video-ondertiteling** &mdash; de twee kennismakingsvideo's op `/diensten` (`public/videos/`) hebben nog geen ondertiteling/`<track>`-bestand. Voor WCAG 1.2.2 (captions) is een transcript van de gesproken tekst nodig om een `.vtt`-bestand te kunnen toevoegen aan `src/components/VideoCard.astro`.

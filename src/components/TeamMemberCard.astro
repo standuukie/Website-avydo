@@ -4,17 +4,20 @@ interface Props { member: TeamMember }
 const { member } = Astro.props;
 ---
 
-<div class="card p-7">
-  <div class="flex items-center gap-4">
-    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-ink-100 text-ink-700 font-display text-xl font-semibold">
-      {member.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+<div class="card p-7 flex flex-col sm:flex-row gap-5">
+  <img
+    src={member.photo}
+    alt={member.name}
+    width="80"
+    height="120"
+    class="w-20 sm:w-24 h-auto aspect-[2/3] rounded-md object-cover object-top shrink-0 border border-ink-100"
+    loading="lazy"
+  />
+  <div>
+    <h3 class="font-display text-lg font-semibold text-ink-900">{member.name}</h3>
+    <p class="text-sm text-brand-600 font-medium">{member.role}</p>
+    <div class="mt-4 space-y-3 text-sm text-ink-600 leading-relaxed">
+      {member.bio.map((p) => <p>{p}</p>)}
     </div>
-    <div>
-      <h3 class="font-display text-lg font-semibold text-ink-900">{member.name}</h3>
-      <p class="text-sm text-brand-600 font-medium">{member.role}</p>
-    </div>
-  </div>
-  <div class="mt-5 space-y-3 text-sm text-ink-600 leading-relaxed">
-    {member.bio.map((p) => <p>{p}</p>)}
   </div>
 </div>

@@ -1,0 +1,24 @@
+---
+import type { IntroVideo } from '@/data/videos';
+interface Props { video: IntroVideo }
+const { video } = Astro.props;
+---
+
+<div class="card overflow-hidden">
+  <video
+    controls
+    preload="none"
+    playsinline
+    poster={video.poster}
+    width={video.width}
+    height={video.height}
+    class="w-full h-auto aspect-video bg-ink-900"
+  >
+    <source src={video.src} type="video/mp4" />
+    Uw browser ondersteunt deze video niet. U kunt de video downloaden via <a href={video.src}>deze link</a>.
+  </video>
+  <div class="p-5">
+    <h3 class="font-display text-lg font-semibold text-ink-900">{video.name}</h3>
+    <p class="text-sm text-brand-600 font-medium">{video.role}</p>
+  </div>
+</div>
