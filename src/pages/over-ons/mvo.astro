@@ -26,8 +26,18 @@ import { company } from '@/data/company';
       <div class="mt-8 grid md:grid-cols-3 gap-6">
         {sponsorships.map((s) => (
           <div class="card p-7">
-            <h3 class="font-display text-lg font-semibold text-ink-900">{s.name}</h3>
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">{s.description}</p>
+            <div class="flex items-center gap-4">
+              <img
+                src={s.logo}
+                alt={`Logo ${s.name}`}
+                width={s.logoWidth}
+                height={s.logoHeight}
+                loading="lazy"
+                class="h-14 w-14 shrink-0 rounded border border-ink-100 object-contain bg-white"
+              />
+              <h3 class="font-display text-lg font-semibold text-ink-900">{s.name}</h3>
+            </div>
+            <p class="mt-4 text-sm text-ink-600 leading-relaxed">{s.description}</p>
             <a href={s.website} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
               Website bezoeken
               <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
