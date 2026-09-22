@@ -3,24 +3,45 @@ import { company } from '@/data/company';
 interface Props {
   title?: string;
   intro?: string;
+  showBrochure?: boolean;
 }
 const {
   title = 'Maak kennis met uw betrouwbare partner',
   intro = 'Bespreek vrijblijvend uw situatie met Avydo. U krijgt altijd een vast aanspreekpunt dat uw bedrijfsvoering écht kent.',
+  showBrochure = true,
 } = Astro.props;
 ---
 
 <section class="section bg-ink-900 text-white">
   <div class="container max-w-content">
-    <div class="rounded-lg border border-ink-700 bg-ink-800 px-6 py-12 md:px-14 md:py-16 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
-      <div class="max-w-xl">
-        <h2 class="text-2xl md:text-3xl font-display font-semibold text-white">{title}</h2>
-        <p class="mt-3 text-ink-200 leading-relaxed">{intro}</p>
+    <div class="rounded-lg border border-ink-700 bg-ink-800 px-6 py-12 md:px-14 md:py-16">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+        <div class="max-w-xl">
+          <h2 class="text-2xl md:text-3xl font-display font-semibold text-white">{title}</h2>
+          <p class="mt-3 text-ink-200 leading-relaxed">{intro}</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3 shrink-0">
+          <a href="/contact" class="btn-primary">Maak een afspraak</a>
+          <a href={company.phoneHref} class="btn-ghost-light">Bel {company.phone}</a>
+        </div>
       </div>
-      <div class="flex flex-col sm:flex-row gap-3 shrink-0">
-        <a href="/contact" class="btn-primary">Maak een afspraak</a>
-        <a href={company.phoneHref} class="btn-ghost-light">Bel {company.phone}</a>
-      </div>
+
+      {showBrochure && (
+        <div class="mt-10 pt-8 border-t border-ink-700 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div class="max-w-xl">
+            <h3 class="text-lg md:text-xl font-display font-semibold text-white">Bekijk onze brochure</h3>
+            <p class="mt-2 text-sm text-ink-300 leading-relaxed">Lees meer over Avydo, onze diensten en onze werkwijze.</p>
+          </div>
+          <a
+            href="/downloads/avydo-brochure.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-ghost-light shrink-0"
+          >
+            Brochure bekijken
+          </a>
+        </div>
+      )}
     </div>
   </div>
 </section>

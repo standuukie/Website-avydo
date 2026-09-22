@@ -3,6 +3,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import PageHero from '@/components/PageHero.astro';
 import ContactForm from '@/components/ContactForm.astro';
 import CallbackWidget from '@/components/CallbackWidget.astro';
+import CTASection from '@/components/CTASection.astro';
 import { company } from '@/data/company';
 
 const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(company.mapsQuery)}&output=embed`;
@@ -80,4 +81,9 @@ const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(company.mapsQ
       </div>
     </div>
   </section>
+
+  <CTASection
+    title="Liever direct bellen of mailen?"
+    intro="U kunt ons ook rechtstreeks bereiken via telefoon of e-mail."
+  />
 </BaseLayout>
