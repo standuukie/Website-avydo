@@ -5,6 +5,9 @@ dist/
 # vercel
 .vercel/
 
+# kenniscentrum fetch script run output
+.kenniscentrum-run-result.json
+
 # dependencies
 node_modules/
 

@@ -1,0 +1,79 @@
+name: Kenniscentrum bijwerken
+
+# Haalt automatisch nieuwe artikelen op uit de geconfigureerde officiële
+# bronnen (zie scripts/kenniscentrum/sources.config.mjs), en commit nieuwe
+# content-bestanden zodat Vercel automatisch een nieuwe deployment start.
+#
+# Kosten: gratis. Gebruikt alleen de gratis GitHub Actions-minuten van dit
+# account en (optioneel, alleen als het secret ANTHROPIC_API_KEY is gezet)
+# een klein aantal Claude Haiku-aanroepen, uitsluitend voor nieuwe artikelen.
+
+on:
+  schedule:
+    # Elke dag om 05:23 UTC (buiten spitsuren van de bronnen, en niet op een
+    # heel of half uur zodat de load niet samenvalt met andere cronjobs).
+    - cron: '23 5 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kenniscentrum-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Artikelen ophalen
+        id: fetch
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run kenniscentrum:fetch
+
+      - name: Job summary schrijven
+        if: always()
+        run: |
+          echo '## Kenniscentrum ophalen' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .kenniscentrum-run-result.json ]; then
+            node -e "
+              const r = require('./.kenniscentrum-run-result.json');
+              console.log('**Nieuwe artikelen:** ' + r.totalAdded);
+              console.log('');
+              console.log('| Bron | Status | Nieuw | Gezien |');
+              console.log('|---|---|---|---|');
+              for (const s of r.results) {
+                console.log(\`| \${s.id} | \${s.ok ? '✅' : '❌'} | \${s.added} | \${s.seen} |\`);
+              }
+            " >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Geen resultaatbestand gevonden (onverwachte scriptfout).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Wijzigingen committen en pushen
+        run: |
+          rm -f .kenniscentrum-run-result.json
+          git config user.name "avydo-kenniscentrum-bot"
+          git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain src/content/kenniscentrum)" ]; then
+            git add src/content/kenniscentrum
+            git commit -m "Kenniscentrum: automatische update $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Geen nieuwe artikelen, niets te committen."
+          fi

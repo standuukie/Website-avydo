@@ -1,0 +1,202 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import CTASection from '@/components/CTASection.astro';
+import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
+import { formatDate } from '@/lib/kenniscentrum';
+import { resourceLinks } from '@/data/links';
+import { company } from '@/data/company';
+
+const allArticles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
+allArticles.sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf());
+
+const featured =
+  allArticles.find((a) => a.data.featured) ??
+  allArticles.find((a) => a.data.priority === 'belangrijk') ??
+  allArticles[0];
+
+const gridArticles = allArticles.filter((a) => a.slug !== featured?.slug);
+
+const categories = [...new Set(allArticles.map((a) => a.data.category))].sort();
+
+const INITIAL_VISIBLE = 9;
+---
+
+<BaseLayout
+  title="Kenniscentrum"
+  description="Het kenniscentrum van Avydo verzamelt actuele ontwikkelingen in belastingen, accountancy, personeel en ondernemerschap die relevant zijn voor Nederlandse mkb-ondernemers."
+  path="/kenniscentrum"
+>
+  <PageHero
+    eyebrow="Kenniscentrum"
+    title="Actuele ontwikkelingen voor mkb-ondernemers"
+    intro="Avydo verzamelt hier belangrijke recente ontwikkelingen op het gebied van belastingen, accountancy, personeel en ondernemerschap &mdash; met een korte, eigen uitleg wat dit voor uw onderneming kan betekenen, en een link naar de oorspronkelijke bron."
+    crumbs={[{ label: 'Kenniscentrum' }]}
+  />
+
+  {allArticles.length === 0 ? (
+    <section class="section">
+      <div class="container max-w-content">
+        <div class="rounded-md border border-dashed border-ink-300 bg-ink-50/60 p-8 md:p-10 text-center max-w-3xl mx-auto">
+          <p class="eyebrow">Binnenkort</p>
+          <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Actuele artikelen van Avydo</h2>
+          <p class="mt-3 text-ink-600 leading-relaxed">
+            Ons systeem verzamelt automatisch relevante ontwikkelingen van officiële bronnen zoals de Belastingdienst en de Rijksoverheid. De eerste artikelen verschijnen hier zodra dat proces heeft gedraaid. Heeft u nu al een vraag? Neem gerust contact met ons op via <a href={`mailto:${company.email}`} class="font-semibold text-brand-600 hover:underline">{company.email}</a> of <a href={company.phoneHref} class="font-semibold text-brand-600 hover:underline">{company.phone}</a>.
+          </p>
+        </div>
+      </div>
+    </section>
+  ) : (
+    <>
+      {featured && (
+        <section class="section pb-0">
+          <div class="container max-w-content">
+            <p class="eyebrow">Uitgelicht</p>
+            <a href={`/kenniscentrum/${featured.slug}`} class="mt-3 group block card p-7 md:p-9 hover:shadow-card-hover transition-shadow duration-200">
+              <div class="flex items-center gap-2 flex-wrap">
+                {featured.data.priority === 'belangrijk' && (
+                  <span class="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">Belangrijk</span>
+                )}
+                <span class="text-xs font-medium text-ink-500">{featured.data.category}</span>
+                <span class="text-xs text-ink-400">&middot;</span>
+                <time datetime={featured.data.publishedAt.toISOString()} class="text-xs text-ink-500">{formatDate(featured.data.publishedAt)}</time>
+              </div>
+              <h2 class="mt-3 font-display text-2xl md:text-3xl font-semibold text-ink-900 group-hover:text-brand-600 transition-colors">
+                {featured.data.title}
+              </h2>
+              <p class="mt-3 text-ink-600 leading-relaxed max-w-3xl">{featured.data.summary}</p>
+              <span class="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
+                Lees meer
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+              </span>
+            </a>
+          </div>
+        </section>
+      )}
+
+      <section class="section">
+        <div class="container max-w-content">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex flex-wrap gap-2" id="category-filters">
+              <button type="button" data-category-filter="" class="filter-chip is-active">Alles</button>
+              {categories.map((cat) => (
+                <button type="button" data-category-filter={cat} class="filter-chip">{cat}</button>
+              ))}
+            </div>
+            <div class="relative w-full lg:w-72 shrink-0">
+              <input
+                type="search"
+                id="kc-search"
+                placeholder="Zoeken in kenniscentrum&hellip;"
+                class="w-full rounded border border-ink-200 px-3.5 py-2.5 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-colors"
+                aria-label="Zoeken in kenniscentrum"
+              />
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.55 4.3l3.2 3.2a.75.75 0 1 1-1.06 1.06l-3.2-3.2A7 7 0 0 1 2 9Z" clip-rule="evenodd" /></svg>
+            </div>
+          </div>
+
+          <p id="kc-empty" class="hidden mt-10 text-center text-ink-500 py-12">Geen artikelen gevonden voor deze zoekopdracht of categorie.</p>
+
+          <div id="kc-grid" data-initial-visible={INITIAL_VISIBLE} class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {gridArticles.map((article, i) => (
+              <div class:list={['kc-item', i >= INITIAL_VISIBLE && 'kc-extra hidden']}>
+                <ArticleCard article={article} />
+              </div>
+            ))}
+          </div>
+
+          {gridArticles.length > INITIAL_VISIBLE && (
+            <div class="mt-8 text-center">
+              <button type="button" id="kc-load-more" class="btn-outline">Toon meer artikelen</button>
+            </div>
+          )}
+        </div>
+      </section>
+    </>
+  )}
+
+  <section class="section bg-ink-50/60 border-y border-ink-100">
+    <div class="container max-w-content">
+      <p class="eyebrow">Handige bronnen</p>
+      <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Betrouwbare informatie voor ondernemers</h2>
+      <p class="mt-3 text-ink-600 leading-relaxed max-w-2xl">Avydo vertrouwt op de volgende organisaties voor actuele en betrouwbare informatie.</p>
+      <div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {resourceLinks.map((link) => (
+          <a href={link.url} target="_blank" rel="noopener noreferrer" class="card p-6 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
+            <h3 class="font-display font-semibold text-ink-900 flex items-center justify-between gap-2">
+              {link.name}
+              <svg class="h-4 w-4 shrink-0 text-ink-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+            </h3>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">{link.description}</p>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>
+
+<style>
+  .filter-chip {
+    @apply rounded-full border border-ink-200 px-3.5 py-1.5 text-sm font-medium text-ink-700 hover:border-brand-300 hover:text-brand-600 transition-colors;
+  }
+  .filter-chip.is-active {
+    @apply border-brand-600 bg-brand-600 text-white hover:border-brand-600 hover:text-white;
+  }
+</style>
+
+<script>
+  const grid = document.getElementById('kc-grid');
+  const initialVisible = Number(grid?.dataset.initialVisible ?? 9);
+  const items = Array.from(document.querySelectorAll<HTMLElement>('.kc-item'));
+  const emptyState = document.getElementById('kc-empty');
+  const loadMoreBtn = document.getElementById('kc-load-more');
+  const searchInput = document.getElementById('kc-search') as HTMLInputElement | null;
+  const filterButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-category-filter]'));
+
+  let activeCategory = '';
+  let showAll = false;
+
+  function applyFilters() {
+    const query = (searchInput?.value ?? '').trim().toLowerCase();
+    const filtering = Boolean(activeCategory) || Boolean(query);
+    let visibleCount = 0;
+
+    items.forEach((item, index) => {
+      const article = item.querySelector('article');
+      const category = article?.getAttribute('data-category') ?? '';
+      const title = article?.getAttribute('data-title') ?? '';
+      const summary = article?.getAttribute('data-summary') ?? '';
+
+      const matchesCategory = !activeCategory || category === activeCategory;
+      const matchesQuery = !query || title.includes(query) || summary.includes(query);
+      const withinInitialBatch = showAll || filtering || index < initialVisible;
+
+      const visible = matchesCategory && matchesQuery && withinInitialBatch;
+      item.classList.toggle('hidden', !visible);
+      if (visible) visibleCount += 1;
+    });
+
+    emptyState?.classList.toggle('hidden', visibleCount > 0);
+    if (loadMoreBtn) loadMoreBtn.style.display = filtering || showAll ? 'none' : '';
+  }
+
+  filterButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeCategory = btn.dataset.categoryFilter ?? '';
+      filterButtons.forEach((b) => b.classList.toggle('is-active', b === btn));
+      applyFilters();
+    });
+  });
+
+  searchInput?.addEventListener('input', applyFilters);
+
+  loadMoreBtn?.addEventListener('click', () => {
+    showAll = true;
+    applyFilters();
+  });
+
+  applyFilters();
+</script>

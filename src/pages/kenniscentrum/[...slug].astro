@@ -1,0 +1,124 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import CTASection from '@/components/CTASection.astro';
+import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
+import { formatDate } from '@/lib/kenniscentrum';
+import { safeJsonLd } from '@/lib/seo';
+
+export async function getStaticPaths() {
+  const articles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
+  return articles.map((article) => ({
+    params: { slug: article.slug },
+    props: { article, allArticles: articles },
+  }));
+}
+
+const { article, allArticles } = Astro.props;
+const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance } = article.data;
+
+const related = allArticles
+  .filter((a) => a.slug !== article.slug && a.data.category === category)
+  .sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf())
+  .slice(0, 3);
+
+const description = summary.length > 155 ? `${summary.slice(0, 152)}…` : summary;
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: title,
+  description,
+  datePublished: publishedAt.toISOString(),
+  dateModified: (updatedAt ?? publishedAt).toISOString(),
+  author: { '@type': 'Organization', name: 'Avydo Accountants & Belastingadviseurs' },
+  publisher: { '@type': 'Organization', name: 'Avydo Accountants & Belastingadviseurs' },
+  isBasedOn: sourceUrl,
+  articleSection: category,
+};
+---
+
+<BaseLayout title={title} description={description} path={`/kenniscentrum/${article.slug}`}>
+  <script type="application/ld+json" set:html={safeJsonLd(structuredData)} slot="head" />
+
+  <section class="bg-ink-900 text-white">
+    <div class="container max-w-content py-14 md:py-16">
+      <nav aria-label="Breadcrumb" class="mb-6">
+        <ol class="flex flex-wrap items-center gap-1.5 text-xs text-ink-300">
+          <li><a href="/" class="hover:text-white">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li><a href="/kenniscentrum" class="hover:text-white">Kenniscentrum</a></li>
+          <li aria-hidden="true">/</li>
+          <li><span class="text-white">{category}</span></li>
+        </ol>
+      </nav>
+      <div class="flex items-center gap-2 flex-wrap">
+        {priority === 'belangrijk' && (
+          <span class="inline-flex items-center rounded-full bg-brand-500/20 px-2.5 py-0.5 text-xs font-semibold text-brand-300">Belangrijk</span>
+        )}
+        <span class="text-xs font-medium text-ink-300">{category}</span>
+        <span class="text-xs text-ink-500">&middot;</span>
+        <time datetime={publishedAt.toISOString()} class="text-xs text-ink-300">{formatDate(publishedAt)}</time>
+      </div>
+      <h1 class="mt-3 text-3xl md:text-4xl font-display font-semibold text-white max-w-3xl leading-tight">{title}</h1>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container max-w-content grid lg:grid-cols-3 gap-12">
+      <div class="lg:col-span-2 max-w-2xl">
+        <h2 class="text-lg font-display font-semibold text-ink-900">Samenvatting</h2>
+        <p class="mt-3 text-ink-700 leading-relaxed text-lg">{summary}</p>
+
+        <div class="mt-8 rounded-md border border-ink-100 bg-ink-50/60 p-6">
+          <h2 class="font-display text-lg font-semibold text-ink-900">Wat betekent dit voor uw onderneming?</h2>
+          <p class="mt-2 text-ink-700 leading-relaxed">{relevance}</p>
+        </div>
+
+        <div class="mt-8 rounded-md border border-ink-100 p-6">
+          <h2 class="font-display text-base font-semibold text-ink-900">Bron</h2>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            Dit bericht is een samenvatting door Avydo op basis van een publicatie van <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
+          </p>
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
+            Lees de volledige publicatie bij de bron
+            <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+          </a>
+        </div>
+
+        <p class="mt-6 text-xs text-ink-500 leading-relaxed">
+          Dit bericht is met zorg samengesteld op basis van de bovengenoemde bron en is bedoeld als algemene informatie. Het vormt geen fiscaal of juridisch advies. Voor advies toegespitst op uw situatie kunt u <a href="/contact" class="underline hover:text-brand-600">contact opnemen met Avydo</a>.
+        </p>
+      </div>
+
+      <aside>
+        <div class="card p-6">
+          <h2 class="font-display text-lg font-semibold text-ink-900">In het kort</h2>
+          <dl class="mt-4 space-y-3 text-sm">
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Categorie</dt><dd class="font-semibold text-ink-900">{category}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Gepubliceerd</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
+            {updatedAt && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">Bijgewerkt</dt><dd class="font-semibold text-ink-900">{formatDate(updatedAt)}</dd></div>
+            )}
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Bron</dt><dd class="font-semibold text-ink-900 text-right">{sourceName}</dd></div>
+          </dl>
+          <a href="/kenniscentrum" class="btn-outline mt-6 w-full">Naar het kenniscentrum</a>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  {related.length > 0 && (
+    <section class="section bg-ink-50/60 border-y border-ink-100">
+      <div class="container max-w-content">
+        <p class="eyebrow">Ook interessant</p>
+        <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Gerelateerde artikelen</h2>
+        <div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {related.map((a) => <ArticleCard article={a} />)}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <CTASection />
+</BaseLayout>
