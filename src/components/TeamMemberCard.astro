@@ -1,5 +1,6 @@
 ---
 import type { TeamMember } from '@/data/team';
+import { company } from '@/data/company';
 interface Props { member: TeamMember }
 const { member } = Astro.props;
 ---
@@ -7,9 +8,9 @@ const { member } = Astro.props;
 <div class="card p-7 flex flex-col sm:flex-row gap-5">
   <img
     src={member.photo}
-    alt={member.name}
-    width="320"
-    height="480"
+    alt={`${member.name} – ${company.name}`}
+    width="683"
+    height="1024"
     class="w-28 sm:w-32 h-auto aspect-[2/3] rounded-md object-cover object-top shrink-0 border border-ink-100"
     loading="lazy"
   />
