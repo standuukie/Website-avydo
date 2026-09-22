@@ -1,0 +1,48 @@
+---
+import { footerNav } from '@/data/nav';
+import { company } from '@/data/company';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="bg-navy-900 text-navy-200">
+  <div class="container max-w-content py-14 grid gap-10 md:grid-cols-2 lg:grid-cols-5">
+    <div class="lg:col-span-2">
+      <a href="/" class="flex items-center gap-2.5">
+        <span class="flex h-10 w-10 items-center justify-center rounded bg-copper-500 text-white font-display font-semibold text-lg">A</span>
+        <span class="font-display font-semibold text-lg text-white leading-tight">
+          Avydo<span class="block text-xs font-sans font-medium text-navy-300 tracking-wide">Accountants &amp; Belastingadviseurs</span>
+        </span>
+      </a>
+      <p class="mt-4 text-sm leading-relaxed text-navy-300 max-w-sm">
+        Uw partner in bedrijfsvoering in Venray en omstreken. Sinds 2006 begeleiden wij mkb-ondernemers met accountancy, belastingadvies en loonadministratie.
+      </p>
+      <address class="mt-5 not-italic text-sm leading-relaxed text-navy-300">
+        {company.address.street}<br />
+        {company.address.postalCode} {company.address.city}
+      </address>
+      <div class="mt-4 flex flex-col gap-1.5 text-sm">
+        <a href={company.phoneHref} class="hover:text-white transition-colors">{company.phone}</a>
+        <a href={`mailto:${company.email}`} class="hover:text-white transition-colors">{company.email}</a>
+      </div>
+    </div>
+
+    {footerNav.map((col) => (
+      <div>
+        <h3 class="text-white font-semibold text-sm tracking-wide uppercase mb-4">{col.heading}</h3>
+        <ul class="space-y-2.5">
+          {col.links.map((link) => (
+            <li><a href={link.href} class="text-sm text-navy-300 hover:text-white transition-colors">{link.label}</a></li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </div>
+
+  <div class="border-t border-navy-800">
+    <div class="container max-w-content py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-navy-300">
+      <p>&copy; {year} {company.name}. Alle rechten voorbehouden.</p>
+      <p>KvK-gegevens en beroepsregistratie op aanvraag beschikbaar via {company.email}.</p>
+    </div>
+  </div>
+</footer>

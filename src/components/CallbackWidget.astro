@@ -1,0 +1,25 @@
+---
+import { company } from '@/data/company';
+---
+
+<div class="card p-7 bg-navy-800 border-navy-800 text-white">
+  <h3 class="font-display text-xl font-semibold text-white">Liever dat wij u bellen?</h3>
+  <p class="mt-2 text-sm text-navy-200 leading-relaxed">Laat uw telefoonnummer achter en wij nemen contact met u op.</p>
+  <form
+    action={`mailto:${company.email}`}
+    method="post"
+    enctype="text/plain"
+    class="mt-5 flex flex-col gap-3"
+  >
+    <label for="callback-phone" class="sr-only">Telefoonnummer</label>
+    <input
+      id="callback-phone"
+      name="Terugbelverzoek - telefoonnummer"
+      type="tel"
+      required
+      placeholder="Uw telefoonnummer"
+      class="w-full rounded border border-navy-600 bg-navy-900/60 px-3.5 py-2.5 text-white placeholder:text-navy-400 focus:border-copper-400 focus:ring-1 focus:ring-copper-400 outline-none transition-colors"
+    />
+    <button type="submit" class="btn-primary">Bel mij terug</button>
+  </form>
+</div>

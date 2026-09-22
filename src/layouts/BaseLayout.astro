@@ -1,0 +1,60 @@
+---
+import Header from '@/components/Header.astro';
+import Footer from '@/components/Footer.astro';
+import SEO from '@/components/SEO.astro';
+import { company } from '@/data/company';
+import '@/styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  path?: string;
+  image?: string;
+  noindex?: boolean;
+}
+
+const { title, description, path = Astro.url.pathname, image, noindex } = Astro.props;
+
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'AccountingService',
+  name: company.name,
+  image: new URL('/images/og-avydo.svg', Astro.site).toString(),
+  url: Astro.site?.toString(),
+  telephone: company.phone,
+  email: company.email,
+  priceRange: '€€',
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: company.address.street,
+    postalCode: company.address.postalCode,
+    addressLocality: company.address.city,
+    addressCountry: 'NL',
+  },
+  areaServed: company.region,
+  foundingDate: '2006-07-01',
+  founders: company.founders.map((name) => ({ '@type': 'Person', name })),
+};
+---
+
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#152735" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <SEO title={title} description={description} path={path} image={image} noindex={noindex} />
+    <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+  </head>
+  <body>
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:top-3 focus:left-3 focus:bg-white focus:text-navy-900 focus:px-4 focus:py-2 focus:rounded focus:shadow-card-hover">
+      Ga naar de inhoud
+    </a>
+    <Header />
+    <main id="main-content">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

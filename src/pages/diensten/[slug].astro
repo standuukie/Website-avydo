@@ -1,0 +1,77 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import CTASection from '@/components/CTASection.astro';
+import { services } from '@/data/services';
+import { company } from '@/data/company';
+
+export function getStaticPaths() {
+  return services.map((service) => ({
+    params: { slug: service.slug },
+    props: { service },
+  }));
+}
+
+const { service } = Astro.props;
+const otherServices = services.filter((s) => s.slug !== service.slug);
+---
+
+<BaseLayout
+  title={service.name}
+  description={service.short}
+  path={`/diensten/${service.slug}`}
+>
+  <PageHero
+    eyebrow="Diensten"
+    title={service.name}
+    intro={service.intro}
+    crumbs={[{ label: 'Diensten', href: '/diensten' }, { label: service.name }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content grid lg:grid-cols-3 gap-12">
+      <div class="lg:col-span-2">
+        <h2 class="text-2xl font-display font-semibold text-navy-900">Wat wij voor u verzorgen</h2>
+        <ul class="mt-6 space-y-3">
+          {service.items.map((item) => (
+            <li class="flex gap-3 items-start">
+              <svg class="h-5 w-5 mt-0.5 shrink-0 text-copper-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
+              <span class="text-navy-700 leading-relaxed">{item}</span>
+            </li>
+          ))}
+        </ul>
+
+        <div class="mt-10 rounded-md border border-navy-100 bg-navy-50/60 p-6">
+          <h3 class="font-display text-lg font-semibold text-navy-900">Vragen over {service.name.toLowerCase()}?</h3>
+          <p class="mt-2 text-sm text-navy-600 leading-relaxed">
+            Mail naar <a href={`mailto:${company.email}`} class="font-semibold text-copper-600 hover:underline">{company.email}</a> of bel <a href={company.phoneHref} class="font-semibold text-copper-600 hover:underline">{company.phone}</a> voor een informatief gesprek.
+          </p>
+        </div>
+      </div>
+
+      <aside class="space-y-6">
+        <div class="card p-6">
+          <h3 class="font-display text-lg font-semibold text-navy-900">Andere diensten</h3>
+          <ul class="mt-4 space-y-1">
+            {otherServices.map((s) => (
+              <li>
+                <a href={`/diensten/${s.slug}`} class="flex items-center justify-between rounded px-3 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50 hover:text-copper-600 transition-colors">
+                  {s.name}
+                  <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+                </a>
+              </li>
+            ))}
+            <li>
+              <a href="/diensten/aanvullende-diensten" class="flex items-center justify-between rounded px-3 py-2.5 text-sm font-medium text-navy-700 hover:bg-navy-50 hover:text-copper-600 transition-colors">
+                Aanvullende diensten
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>

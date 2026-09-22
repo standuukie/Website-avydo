@@ -1,0 +1,88 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import { company } from '@/data/company';
+---
+
+<BaseLayout
+  title="Privacyverklaring"
+  description="Lees hoe Avydo Accountants & Belastingadviseurs omgaat met persoonsgegevens."
+  path="/privacy"
+  noindex={true}
+>
+  <PageHero
+    eyebrow="Juridisch"
+    title="Privacyverklaring"
+    crumbs={[{ label: 'Privacyverklaring' }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content">
+      <div class="prose prose-slate max-w-prose-wide prose-headings:font-display prose-headings:text-navy-900 prose-a:text-copper-600">
+        <p>
+          {company.name}, gevestigd aan {company.address.street}, {company.address.postalCode} {company.address.city}, is verantwoordelijk voor de verwerking van persoonsgegevens zoals weergegeven in deze privacyverklaring.
+        </p>
+
+        <h2>Contactgegevens</h2>
+        <p>
+          {company.address.street}<br />
+          {company.address.postalCode} {company.address.city}<br />
+          {company.phone}
+        </p>
+        <p>
+          René Duijkers is de Functionaris Gegevensbescherming van {company.name}. Hij is te bereiken via <a href={`mailto:${company.privacyEmail}`}>{company.privacyEmail}</a>.
+        </p>
+
+        <h2>Persoonsgegevens die wij verwerken</h2>
+        <p>{company.shortName} verwerkt uw persoonsgegevens doordat u gebruikmaakt van onze diensten en/of omdat u deze zelf aan ons verstrekt. Hieronder vindt u een overzicht van de persoonsgegevens die wij verwerken:</p>
+        <ul>
+          <li>Voor- en achternaam</li>
+          <li>Telefoonnummer</li>
+          <li>E-mailadres</li>
+          <li>Gegevens over uw surfgedrag over verschillende websites heen, indien van toepassing binnen een advertentienetwerk</li>
+          <li>Internetbrowser en apparaattype</li>
+        </ul>
+
+        <h2>Bijzondere en/of gevoelige persoonsgegevens</h2>
+        <p>
+          Onze website en/of dienst heeft niet de intentie gegevens te verzamelen over websitebezoekers die jonger zijn dan 16 jaar, tenzij zij toestemming hebben van ouders of voogd. We kunnen echter niet controleren of een bezoeker ouder dan 16 jaar is. Wij raden ouders dan ook aan betrokken te zijn bij de online activiteiten van hun kinderen, om te voorkomen dat er gegevens over kinderen worden verzameld zonder ouderlijke toestemming. Als u ervan overtuigd bent dat wij zonder die toestemming persoonlijke gegevens hebben verzameld over een minderjarige, neem dan contact met ons op via <a href={`mailto:${company.privacyEmail}`}>{company.privacyEmail}</a>, dan verwijderen wij deze informatie.
+        </p>
+
+        <h2>Met welk doel en op basis van welke grondslag wij persoonsgegevens verwerken</h2>
+        <p>{company.shortName} verwerkt uw persoonsgegevens voor de volgende doelen:</p>
+        <ul>
+          <li>Het verzenden van onze nieuwsbrief en/of reclamefolder</li>
+          <li>Om u te kunnen bellen of e-mailen indien dit nodig is om onze dienstverlening te kunnen uitvoeren</li>
+        </ul>
+
+        <h2>Hoe lang we persoonsgegevens bewaren</h2>
+        <p>
+          {company.shortName} bewaart uw persoonsgegevens niet langer dan strikt nodig is om de doelen te realiseren waarvoor uw gegevens worden verzameld.
+        </p>
+
+        <h2>Delen van persoonsgegevens met derden</h2>
+        <p>
+          {company.shortName} verstrekt uitsluitend gegevens aan derden als dit nodig is voor de uitvoering van onze overeenkomst met u of om te voldoen aan een wettelijke verplichting.
+        </p>
+
+        <h2>Cookies, of vergelijkbare technieken, die wij gebruiken</h2>
+        <p>
+          {company.shortName} gebruikt functionele en analytische cookies. Een cookie is een klein tekstbestand dat bij het eerste bezoek aan deze website wordt opgeslagen in de browser van uw computer, tablet of smartphone. Deze cookies zorgen ervoor dat de website naar behoren werkt, dat bijvoorbeeld uw voorkeursinstellingen worden onthouden en dat wij de website kunnen optimaliseren. U kunt zich afmelden voor cookies door uw internetbrowser zo in te stellen dat deze geen cookies meer opslaat. Daarnaast kunt u ook alle informatie die eerder is opgeslagen via de instellingen van uw browser verwijderen. Zie voor een toelichting: <a href="https://veiliginternetten.nl/themes/situatie/cookies-wat-zijn-het-en-wat-doe-ik-ermee/" target="_blank" rel="noopener noreferrer">veiliginternetten.nl</a>.
+        </p>
+
+        <h2>Gegevens inzien, aanpassen of verwijderen</h2>
+        <p>
+          U heeft het recht om uw persoonsgegevens in te zien, te corrigeren of te verwijderen. Daarnaast heeft u het recht om uw eventuele toestemming voor de gegevensverwerking in te trekken of bezwaar te maken tegen de verwerking van uw persoonsgegevens door {company.shortName}, en heeft u het recht op gegevensoverdraagbaarheid. U kunt een verzoek tot inzage, correctie, verwijdering, gegevensoverdraging van uw persoonsgegevens of verzoek tot intrekking van uw toestemming sturen naar <a href={`mailto:${company.privacyEmail}`}>{company.privacyEmail}</a>. Om er zeker van te zijn dat het verzoek tot inzage door u is gedaan, vragen wij u een kopie van uw identiteitsbewijs met het verzoek mee te sturen, waarbij u uw pasfoto, MRZ, paspoortnummer en burgerservicenummer (BSN) zwart maakt ter bescherming van uw privacy.
+        </p>
+        <p>
+          Wij reageren zo snel mogelijk, maar binnen vier weken, op uw verzoek. {company.shortName} wijst u er ook op dat u de mogelijkheid heeft om een klacht in te dienen bij de nationale toezichthouder, de Autoriteit Persoonsgegevens, via <a href="https://autoriteitpersoonsgegevens.nl/nl/contact-met-de-autoriteit-persoonsgegevens/tip-ons" target="_blank" rel="noopener noreferrer">autoriteitpersoonsgegevens.nl</a>.
+        </p>
+
+        <h2>Hoe wij persoonsgegevens beveiligen</h2>
+        <p>
+          {company.shortName} neemt de bescherming van uw gegevens serieus en neemt passende maatregelen om misbruik, verlies, onbevoegde toegang, ongewenste openbaarmaking en ongeoorloofde wijziging tegen te gaan. Heeft u de indruk dat uw gegevens niet goed beveiligd zijn, of zijn er aanwijzingen van misbruik? Neem dan contact op via <a href={`mailto:${company.privacyEmail}`}>{company.privacyEmail}</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

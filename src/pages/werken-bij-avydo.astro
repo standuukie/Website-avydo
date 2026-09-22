@@ -1,0 +1,64 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import { jobs, applyAddress, internships } from '@/data/jobs';
+import { company } from '@/data/company';
+---
+
+<BaseLayout
+  title="Werken bij Avydo"
+  description="Bekijk de vacatures bij Avydo Accountants & Belastingadviseurs in Venray, of solliciteer open. Ook stagiairs zijn welkom."
+  path="/werken-bij-avydo"
+>
+  <PageHero
+    eyebrow="Werken bij Avydo"
+    title="Kom jij ons team versterken?"
+    intro="Avydo heeft een sterk team in huis. Dat betekent niet dat er geen ruimte is voor nieuwe versterkingen. Ben jij van mening dat je een meerwaarde voor Avydo bent of kan worden? Reageer op onderstaande vacatures &mdash; open sollicitaties worden ook serieus bekeken."
+    crumbs={[{ label: 'Werken bij Avydo' }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content space-y-8">
+      {jobs.map((job) => (
+        <div class="card p-8">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="font-display text-xl font-semibold text-navy-900">{job.title}</h2>
+            <span class="rounded-full bg-copper-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-copper-700">{job.type}</span>
+          </div>
+          <p class="mt-4 text-navy-600 leading-relaxed">{job.intro}</p>
+          <h3 class="mt-5 text-sm font-semibold text-navy-800 uppercase tracking-wide">Takenpakket</h3>
+          <ul class="mt-3 space-y-2">
+            {job.tasks.map((t) => (
+              <li class="flex gap-3 items-start text-sm text-navy-600 leading-relaxed">
+                <svg class="h-4 w-4 mt-1 shrink-0 text-copper-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
+                {t}
+              </li>
+            ))}
+          </ul>
+          <p class="mt-5 text-sm text-navy-500">Solliciteren kan t.a.v. {job.contact} &mdash; zie contactgegevens hieronder.</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section bg-navy-50/60 border-y border-navy-100">
+    <div class="container max-w-content grid lg:grid-cols-2 gap-10">
+      <div class="card p-8">
+        <h2 class="font-display text-xl font-semibold text-navy-900">Solliciteren</h2>
+        <p class="mt-3 text-navy-600 leading-relaxed">
+          Stuur een sollicitatiebrief met cv naar <a href={`mailto:${company.email}`} class="font-semibold text-copper-600 hover:underline">{company.email}</a>, of per post naar:
+        </p>
+        <address class="mt-3 not-italic text-navy-700 leading-relaxed">
+          {applyAddress.line1}<br />
+          {applyAddress.line2}<br />
+          {applyAddress.line3}<br />
+          {applyAddress.line4}
+        </address>
+      </div>
+      <div class="card p-8">
+        <h2 class="font-display text-xl font-semibold text-navy-900">Stage lopen bij Avydo</h2>
+        <p class="mt-3 text-navy-600 leading-relaxed">{internships.intro}</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

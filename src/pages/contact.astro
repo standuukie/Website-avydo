@@ -1,0 +1,83 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import ContactForm from '@/components/ContactForm.astro';
+import CallbackWidget from '@/components/CallbackWidget.astro';
+import { company } from '@/data/company';
+
+const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(company.mapsQuery)}&output=embed`;
+---
+
+<BaseLayout
+  title="Contact"
+  description="Neem contact op met Avydo Accountants & Belastingadviseurs in Venray. Bel 0478-583097, mail info@avydo.nl of vul het contactformulier in."
+  path="/contact"
+>
+  <PageHero
+    eyebrow="Contact"
+    title="Neem contact met ons op"
+    intro="Heeft u vragen over onze dienstverlening of wilt u meer informatie? Vul het formulier in, bel of mail ons &mdash; wij denken graag met u mee."
+    crumbs={[{ label: 'Contact' }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content grid lg:grid-cols-3 gap-12">
+      <div class="lg:col-span-2">
+        <h2 class="text-2xl font-display font-semibold text-navy-900">Stuur ons een bericht</h2>
+        <p class="mt-2 text-navy-600">Vul het formulier in en wij nemen zo snel mogelijk contact met u op.</p>
+        <div class="mt-8">
+          <ContactForm />
+        </div>
+      </div>
+
+      <aside class="space-y-6">
+        <div class="card p-7">
+          <h3 class="font-display text-lg font-semibold text-navy-900">Contactgegevens</h3>
+          <dl class="mt-4 space-y-4 text-sm">
+            <div>
+              <dt class="text-navy-500">Adres</dt>
+              <dd class="mt-1 text-navy-800 leading-relaxed">
+                {company.name}<br />
+                {company.address.street}<br />
+                {company.address.postalCode} {company.address.city}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-navy-500">Postadres</dt>
+              <dd class="mt-1 text-navy-800 leading-relaxed">
+                {company.postbus.line}<br />
+                {company.postbus.postalCode} {company.postbus.city}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-navy-500">Telefoon</dt>
+              <dd class="mt-1"><a href={company.phoneHref} class="font-semibold text-copper-600 hover:underline">{company.phone}</a></dd>
+            </div>
+            <div>
+              <dt class="text-navy-500">E-mail</dt>
+              <dd class="mt-1"><a href={`mailto:${company.email}`} class="font-semibold text-copper-600 hover:underline break-all">{company.email}</a></dd>
+            </div>
+          </dl>
+        </div>
+
+        <CallbackWidget />
+      </aside>
+    </div>
+  </section>
+
+  <section class="pb-16 md:pb-24">
+    <div class="container max-w-content">
+      <div class="rounded-md overflow-hidden border border-navy-100 shadow-card">
+        <iframe
+          title={`Kaart met locatie van ${company.name}`}
+          src={mapSrc}
+          width="100%"
+          height="380"
+          style="border:0"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

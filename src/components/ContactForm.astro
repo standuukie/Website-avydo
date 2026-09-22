@@ -1,0 +1,87 @@
+---
+import { company } from '@/data/company';
+---
+
+<form
+  id="contact-form"
+  action={`mailto:${company.email}`}
+  method="post"
+  enctype="text/plain"
+  class="space-y-5"
+  novalidate
+>
+  <div class="grid gap-5 sm:grid-cols-2">
+    <div>
+      <label for="naam" class="block text-sm font-semibold text-navy-800 mb-1.5">Naam <span class="text-copper-600">*</span></label>
+      <input id="naam" name="Naam" type="text" required autocomplete="name"
+        class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 placeholder:text-navy-400 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors" />
+    </div>
+    <div>
+      <label for="bedrijf" class="block text-sm font-semibold text-navy-800 mb-1.5">Bedrijf</label>
+      <input id="bedrijf" name="Bedrijf" type="text" autocomplete="organization"
+        class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 placeholder:text-navy-400 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors" />
+    </div>
+  </div>
+
+  <div class="grid gap-5 sm:grid-cols-2">
+    <div>
+      <label for="email" class="block text-sm font-semibold text-navy-800 mb-1.5">E-mailadres <span class="text-copper-600">*</span></label>
+      <input id="email" name="Email" type="email" required autocomplete="email"
+        class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 placeholder:text-navy-400 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors" />
+    </div>
+    <div>
+      <label for="telefoon" class="block text-sm font-semibold text-navy-800 mb-1.5">Telefoonnummer</label>
+      <input id="telefoon" name="Telefoonnummer" type="tel" autocomplete="tel"
+        class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 placeholder:text-navy-400 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors" />
+    </div>
+  </div>
+
+  <div>
+    <label for="onderwerp" class="block text-sm font-semibold text-navy-800 mb-1.5">Onderwerp</label>
+    <select id="onderwerp" name="Onderwerp"
+      class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors bg-white">
+      <option value="">Maak een keuze (optioneel)</option>
+      <option value="Accountancy">Accountancy</option>
+      <option value="Belastingadvies">Belastingadvies</option>
+      <option value="Loonadministratie">Loonadministratie</option>
+      <option value="Kennismakingsgesprek">Kennismakingsgesprek</option>
+      <option value="Anders">Anders</option>
+    </select>
+  </div>
+
+  <div>
+    <label for="bericht" class="block text-sm font-semibold text-navy-800 mb-1.5">Bericht <span class="text-copper-600">*</span></label>
+    <textarea id="bericht" name="Bericht" rows="5" required
+      class="w-full rounded border border-navy-200 px-3.5 py-2.5 text-navy-900 placeholder:text-navy-400 focus:border-copper-500 focus:ring-1 focus:ring-copper-500 outline-none transition-colors"></textarea>
+  </div>
+
+  <p id="form-error" class="hidden text-sm text-red-600" role="alert">Vul de verplichte velden in voordat u het bericht verstuurt.</p>
+
+  <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+    <button type="submit" class="btn-primary w-full sm:w-auto">Verstuur bericht</button>
+    <p class="text-xs text-navy-500 leading-relaxed">
+      Dit opent uw e-mailprogramma met het bericht klaar om te versturen naar {company.email}. Liever direct spreken? Bel <a href={company.phoneHref} class="underline hover:text-copper-600">{company.phone}</a>.
+    </p>
+  </div>
+</form>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement | null;
+  const errorEl = document.getElementById('form-error');
+
+  form?.addEventListener('submit', (e) => {
+    const required = form.querySelectorAll('[required]');
+    let valid = true;
+    required.forEach((field) => {
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        if (!field.value.trim()) valid = false;
+      }
+    });
+    if (!valid) {
+      e.preventDefault();
+      errorEl?.classList.remove('hidden');
+    } else {
+      errorEl?.classList.add('hidden');
+    }
+  });
+</script>

@@ -1,0 +1,61 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import CTASection from '@/components/CTASection.astro';
+import { sponsorships, mvoIntro } from '@/data/mvo';
+import { internships } from '@/data/jobs';
+import { company } from '@/data/company';
+---
+
+<BaseLayout
+  title="Maatschappelijke betrokkenheid"
+  description="Avydo geeft invulling aan maatschappelijk verantwoord ondernemen via sponsoring van regionale sportverenigingen en het begeleiden van studenten."
+  path="/over-ons/mvo"
+>
+  <PageHero
+    eyebrow="Over Avydo"
+    title="Maatschappelijk verantwoord ondernemen"
+    intro={mvoIntro}
+    crumbs={[{ label: 'Over Avydo', href: '/over-ons' }, { label: 'Maatschappelijke betrokkenheid' }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content">
+      <p class="eyebrow">Sponsoring</p>
+      <h2 class="mt-3 text-2xl font-display font-semibold text-navy-900">Verbonden met sportverenigingen in Venray en omstreken</h2>
+      <div class="mt-8 grid md:grid-cols-3 gap-6">
+        {sponsorships.map((s) => (
+          <div class="card p-7">
+            <h3 class="font-display text-lg font-semibold text-navy-900">{s.name}</h3>
+            <p class="mt-2 text-sm text-navy-600 leading-relaxed">{s.description}</p>
+            <a href={s.website} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-copper-600 hover:underline">
+              Website bezoeken
+              <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section bg-navy-50/60 border-y border-navy-100">
+    <div class="container max-w-content grid lg:grid-cols-3 gap-10">
+      <div>
+        <p class="eyebrow">Studenten</p>
+        <h2 class="mt-3 text-2xl font-display font-semibold text-navy-900">Ruimte voor talent</h2>
+      </div>
+      <div class="lg:col-span-2">
+        <p class="text-navy-600 leading-relaxed">{internships.intro}</p>
+        <p class="mt-4 text-sm font-semibold text-navy-800">In het verleden werkte Avydo samen met:</p>
+        <ul class="mt-2 flex flex-wrap gap-2">
+          {internships.partners.map((p) => (
+            <li class="rounded-full border border-navy-200 bg-white px-3.5 py-1.5 text-sm text-navy-700">{p}</li>
+          ))}
+        </ul>
+        <a href={`mailto:${company.email}`} class="btn-outline mt-6">Stuur je motivatie en cv</a>
+      </div>
+    </div>
+  </section>
+
+  <CTASection />
+</BaseLayout>

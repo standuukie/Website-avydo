@@ -1,0 +1,28 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import TestimonialCard from '@/components/TestimonialCard.astro';
+import CTASection from '@/components/CTASection.astro';
+import { testimonials } from '@/data/testimonials';
+---
+
+<BaseLayout
+  title="Referenties"
+  description="Lees wat klanten van Avydo vinden, waaronder Lely Center Venray, DesignXpress en Reisbureau Vice Versa."
+  path="/referenties"
+>
+  <PageHero
+    eyebrow="Referenties"
+    title="De mening van ondernemers"
+    intro="Avydo is overtuigd van de sterke dienstverlening, maar blijft kritisch kijken naar verbeterpunten. Ondernemen is een voortdurend proces van verbetering &mdash; daarom laten wij graag onze klanten aan het woord."
+    crumbs={[{ label: 'Referenties' }]}
+  />
+
+  <section class="section">
+    <div class="container max-w-content grid md:grid-cols-3 gap-6">
+      {testimonials.map((t) => <TestimonialCard name={t.name} quote={t.quote} />)}
+    </div>
+  </section>
+
+  <CTASection title="Wilt u ook ervaren hoe Avydo werkt?" intro="Maak vrijblijvend kennis en ontdek wat wij voor uw onderneming kunnen betekenen." />
+</BaseLayout>
