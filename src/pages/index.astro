@@ -191,7 +191,7 @@ const faqs = [
         </a>
       </div>
       <div class="mt-10 grid md:grid-cols-3 gap-6">
-        {testimonials.map((t) => <TestimonialCard name={t.name} quote={t.quote} />)}
+        {testimonials.map((t) => <TestimonialCard {...t} />)}
       </div>
     </div>
   </section>

@@ -8,7 +8,7 @@ import { testimonials } from '@/data/testimonials';
 
 <BaseLayout
   title="Referenties"
-  description="Lees wat klanten van Avydo vinden, waaronder Lely Center Venray, DesignXpress en Reisbureau Vice Versa."
+  description="Lees wat klanten van Avydo vinden, waaronder Lely Center Venray, Aandachttrekkers en Reisbureau Vice Versa."
   path="/referenties"
 >
   <PageHero
@@ -20,7 +20,7 @@ import { testimonials } from '@/data/testimonials';
 
   <section class="section">
     <div class="container max-w-content grid md:grid-cols-3 gap-6">
-      {testimonials.map((t) => <TestimonialCard name={t.name} quote={t.quote} />)}
+      {testimonials.map((t) => <TestimonialCard {...t} />)}
     </div>
   </section>
 
