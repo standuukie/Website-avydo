@@ -9,7 +9,7 @@ interface Props {
   noindex?: boolean;
 }
 
-const { title, description, path = '/', image = '/images/og-avydo.svg', noindex = false } = Astro.props;
+const { title, description, path = '/', image = '/images/og-avydo.png', noindex = false } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
 const ogImage = new URL(image, Astro.site).toString();
 const fullTitle = title.includes('Avydo') ? title : `${title} | ${company.shortName}`;

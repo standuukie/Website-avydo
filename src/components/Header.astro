@@ -10,8 +10,8 @@ function isActive(href: string) {
 }
 ---
 
-<header class="sticky top-0 z-50 bg-paper/95 backdrop-blur border-b border-navy-100">
-  <div class="bg-navy-900 text-navy-100 text-sm">
+<header class="sticky top-0 z-50 bg-paper/95 backdrop-blur border-b border-ink-100">
+  <div class="bg-ink-900 text-ink-100 text-sm">
     <div class="container max-w-content flex items-center justify-end gap-6 py-1.5">
       <a href={company.phoneHref} class="flex items-center gap-1.5 hover:text-white transition-colors">
         <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2.5 4.5c0-1.1.9-2 2-2h1.2c.5 0 .9.3 1 .8l.8 2.9c.1.4 0 .8-.3 1.1L6 8.5a11 11 0 0 0 5.5 5.5l1.2-1.2c.3-.3.7-.4 1.1-.3l2.9.8c.5.1.8.5.8 1v1.2c0 1.1-.9 2-2 2h-.5C7.9 17.5 2.5 12.1 2.5 5V4.5Z"/></svg>
@@ -25,11 +25,15 @@ function isActive(href: string) {
   </div>
 
   <div class="container max-w-content flex items-center justify-between py-4">
-    <a href="/" class="flex items-center gap-2.5 shrink-0" aria-label={`${company.name} - naar homepage`}>
-      <span class="flex h-10 w-10 items-center justify-center rounded bg-navy-800 text-white font-display font-semibold text-lg">A</span>
-      <span class="font-display font-semibold text-lg text-navy-900 leading-tight">
-        Avydo<span class="block text-xs font-sans font-medium text-navy-500 tracking-wide">Accountants &amp; Belastingadviseurs</span>
-      </span>
+    <a href="/" class="flex items-center shrink-0" aria-label={`${company.name} - naar homepage`}>
+      <img
+        src="/images/avydo-logo.png"
+        alt="Avydo Accountants & Belastingadviseurs"
+        width="227"
+        height="75"
+        class="h-9 sm:h-11 w-auto"
+        fetchpriority="high"
+      />
     </a>
 
     <nav class="hidden lg:flex items-center gap-1" aria-label="Hoofdnavigatie">
@@ -39,7 +43,7 @@ function isActive(href: string) {
             href={item.href}
             class:list={[
               'flex items-center gap-1 px-3.5 py-2 rounded text-sm font-medium transition-colors',
-              isActive(item.href) ? 'text-copper-600' : 'text-navy-800 hover:text-copper-600',
+              isActive(item.href) ? 'text-brand-600' : 'text-ink-800 hover:text-brand-600',
             ]}
             aria-current={isActive(item.href) ? 'page' : undefined}
           >
@@ -52,11 +56,11 @@ function isActive(href: string) {
           </a>
           {item.children && (
             <div class="invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0 absolute left-0 top-full pt-2 transition-all duration-150">
-              <div class="w-72 rounded-md border border-navy-100 bg-white shadow-card-hover p-2">
+              <div class="w-72 rounded-md border border-ink-100 bg-white shadow-card-hover p-2">
                 {item.children.map((child) => (
-                  <a href={child.href} class="block rounded px-3 py-2.5 hover:bg-navy-50 transition-colors">
-                    <span class="block text-sm font-semibold text-navy-900">{child.label}</span>
-                    {child.description && <span class="block text-xs text-navy-500 mt-0.5">{child.description}</span>}
+                  <a href={child.href} class="block rounded px-3 py-2.5 hover:bg-ink-50 transition-colors">
+                    <span class="block text-sm font-semibold text-ink-900">{child.label}</span>
+                    {child.description && <span class="block text-xs text-ink-500 mt-0.5">{child.description}</span>}
                   </a>
                 ))}
               </div>
@@ -73,7 +77,7 @@ function isActive(href: string) {
     <button
       id="mobile-menu-toggle"
       type="button"
-      class="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded border border-navy-200 text-navy-800"
+      class="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded border border-ink-200 text-ink-800"
       aria-expanded="false"
       aria-controls="mobile-menu"
       aria-label="Menu openen"
@@ -83,14 +87,14 @@ function isActive(href: string) {
     </button>
   </div>
 
-  <div id="mobile-menu" class="lg:hidden hidden border-t border-navy-100 bg-white">
+  <div id="mobile-menu" class="lg:hidden hidden border-t border-ink-100 bg-white">
     <nav class="container max-w-content py-4 flex flex-col" aria-label="Mobiele navigatie">
       {mainNav.map((item) => (
-        <div class="border-b border-navy-100 last:border-0">
+        <div class="border-b border-ink-100 last:border-0">
           <div class="flex items-center justify-between">
-            <a href={item.href} class="flex-1 py-3.5 text-navy-900 font-medium">{item.label}</a>
+            <a href={item.href} class="flex-1 py-3.5 text-ink-900 font-medium">{item.label}</a>
             {item.children && (
-              <button type="button" class="mobile-submenu-toggle p-3.5 text-navy-500" aria-expanded="false" aria-label={`${item.label} submenu`}>
+              <button type="button" class="mobile-submenu-toggle p-3.5 text-ink-500" aria-expanded="false" aria-label={`${item.label} submenu`}>
                 <svg class="h-4 w-4 transition-transform" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fill-rule="evenodd" d="M5.2 7.2a.75.75 0 0 1 1.06 0L10 10.94l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L5.2 8.26a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
                 </svg>
@@ -100,7 +104,7 @@ function isActive(href: string) {
           {item.children && (
             <div class="mobile-submenu hidden pb-3 pl-4 flex flex-col gap-0.5">
               {item.children.map((child) => (
-                <a href={child.href} class="py-2 text-sm text-navy-600">{child.label}</a>
+                <a href={child.href} class="py-2 text-sm text-ink-600">{child.label}</a>
               ))}
             </div>
           )}

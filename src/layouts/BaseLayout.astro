@@ -19,7 +19,8 @@ const structuredData = {
   '@context': 'https://schema.org',
   '@type': 'AccountingService',
   name: company.name,
-  image: new URL('/images/og-avydo.svg', Astro.site).toString(),
+  image: new URL('/images/og-avydo.png', Astro.site).toString(),
+  logo: new URL('/images/avydo-logo.png', Astro.site).toString(),
   url: Astro.site?.toString(),
   telephone: company.phone,
   email: company.email,
@@ -42,13 +43,15 @@ const structuredData = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#152735" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#18181B" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
     <SEO title={title} description={description} path={path} image={image} noindex={noindex} />
     <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
   </head>
   <body>
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:top-3 focus:left-3 focus:bg-white focus:text-navy-900 focus:px-4 focus:py-2 focus:rounded focus:shadow-card-hover">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:top-3 focus:left-3 focus:bg-white focus:text-ink-900 focus:px-4 focus:py-2 focus:rounded focus:shadow-card-hover">
       Ga naar de inhoud
     </a>
     <Header />

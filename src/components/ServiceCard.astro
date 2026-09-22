@@ -9,12 +9,12 @@ const { name, description, href, index = 0 } = Astro.props;
 ---
 
 <a href={href} class="card group flex flex-col p-7 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
-  <span class="flex h-11 w-11 items-center justify-center rounded bg-navy-50 text-navy-700 font-display font-semibold group-hover:bg-copper-50 group-hover:text-copper-600 transition-colors">
+  <span class="flex h-11 w-11 items-center justify-center rounded bg-ink-50 text-ink-700 font-display font-semibold group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
     {String(index + 1).padStart(2, '0')}
   </span>
-  <h3 class="mt-5 text-xl font-display font-semibold text-navy-900">{name}</h3>
-  <p class="mt-2.5 text-sm leading-relaxed text-navy-600 flex-1">{description}</p>
-  <span class="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-copper-600 group-hover:gap-2.5 transition-all">
+  <h3 class="mt-5 text-xl font-display font-semibold text-ink-900">{name}</h3>
+  <p class="mt-2.5 text-sm leading-relaxed text-ink-600 flex-1">{description}</p>
+  <span class="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
     Lees meer
     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
   </span>

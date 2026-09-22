@@ -6,15 +6,15 @@ const { member } = Astro.props;
 
 <div class="card p-7">
   <div class="flex items-center gap-4">
-    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-navy-100 text-navy-700 font-display text-xl font-semibold">
+    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-ink-100 text-ink-700 font-display text-xl font-semibold">
       {member.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
     </div>
     <div>
-      <h3 class="font-display text-lg font-semibold text-navy-900">{member.name}</h3>
-      <p class="text-sm text-copper-600 font-medium">{member.role}</p>
+      <h3 class="font-display text-lg font-semibold text-ink-900">{member.name}</h3>
+      <p class="text-sm text-brand-600 font-medium">{member.role}</p>
     </div>
   </div>
-  <div class="mt-5 space-y-3 text-sm text-navy-600 leading-relaxed">
+  <div class="mt-5 space-y-3 text-sm text-ink-600 leading-relaxed">
     {member.bio.map((p) => <p>{p}</p>)}
   </div>
 </div>

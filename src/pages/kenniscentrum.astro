@@ -20,29 +20,29 @@ import { company } from '@/data/company';
 
   <section class="section">
     <div class="container max-w-content">
-      <div class="rounded-md border border-dashed border-navy-300 bg-navy-50/60 p-8 md:p-10 text-center max-w-3xl mx-auto">
+      <div class="rounded-md border border-dashed border-ink-300 bg-ink-50/60 p-8 md:p-10 text-center max-w-3xl mx-auto">
         <p class="eyebrow">Binnenkort</p>
-        <h2 class="mt-3 text-2xl font-display font-semibold text-navy-900">Actuele artikelen van Avydo</h2>
-        <p class="mt-3 text-navy-600 leading-relaxed">
-          Op deze pagina publiceren wij binnenkort actuele artikelen over fiscale wijzigingen, ondernemersregelingen en ontwikkelingen die voor het mkb relevant zijn. Heeft u nu al een vraag? Neem gerust contact met ons op via <a href={`mailto:${company.email}`} class="font-semibold text-copper-600 hover:underline">{company.email}</a> of <a href={company.phoneHref} class="font-semibold text-copper-600 hover:underline">{company.phone}</a>.
+        <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Actuele artikelen van Avydo</h2>
+        <p class="mt-3 text-ink-600 leading-relaxed">
+          Op deze pagina publiceren wij binnenkort actuele artikelen over fiscale wijzigingen, ondernemersregelingen en ontwikkelingen die voor het mkb relevant zijn. Heeft u nu al een vraag? Neem gerust contact met ons op via <a href={`mailto:${company.email}`} class="font-semibold text-brand-600 hover:underline">{company.email}</a> of <a href={company.phoneHref} class="font-semibold text-brand-600 hover:underline">{company.phone}</a>.
         </p>
       </div>
     </div>
   </section>
 
-  <section class="section bg-navy-50/60 border-y border-navy-100">
+  <section class="section bg-ink-50/60 border-y border-ink-100">
     <div class="container max-w-content">
       <p class="eyebrow">Handige bronnen</p>
-      <h2 class="mt-3 text-2xl font-display font-semibold text-navy-900">Betrouwbare informatie voor ondernemers</h2>
-      <p class="mt-3 text-navy-600 leading-relaxed max-w-2xl">Avydo vertrouwt op de volgende organisaties voor actuele en betrouwbare informatie.</p>
+      <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Betrouwbare informatie voor ondernemers</h2>
+      <p class="mt-3 text-ink-600 leading-relaxed max-w-2xl">Avydo vertrouwt op de volgende organisaties voor actuele en betrouwbare informatie.</p>
       <div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {resourceLinks.map((link) => (
           <a href={link.url} target="_blank" rel="noopener noreferrer" class="card p-6 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
-            <h3 class="font-display font-semibold text-navy-900 flex items-center justify-between gap-2">
+            <h3 class="font-display font-semibold text-ink-900 flex items-center justify-between gap-2">
               {link.name}
-              <svg class="h-4 w-4 shrink-0 text-navy-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+              <svg class="h-4 w-4 shrink-0 text-ink-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
             </h3>
-            <p class="mt-2 text-sm text-navy-600 leading-relaxed">{link.description}</p>
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">{link.description}</p>
           </a>
         ))}
       </div>

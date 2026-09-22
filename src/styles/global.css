@@ -24,12 +24,12 @@
   }
 
   body {
-    @apply bg-paper text-ink font-sans antialiased;
+    @apply bg-paper text-ink-900 font-sans antialiased;
     text-rendering: optimizeLegibility;
   }
 
   h1, h2, h3, h4 {
-    @apply font-display text-navy-900;
+    @apply font-display text-ink-900;
   }
 
   a {
@@ -37,30 +37,30 @@
   }
 
   :focus-visible {
-    outline: 2px solid theme('colors.copper.500');
+    outline: 2px solid theme('colors.brand.500');
     outline-offset: 2px;
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded font-sans font-semibold text-sm px-6 py-3.5 transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-copper-500;
+    @apply inline-flex items-center justify-center gap-2 rounded font-sans font-semibold text-sm px-6 py-3.5 transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-brand-500;
   }
   .btn-primary {
-    @apply btn bg-copper-600 text-white hover:bg-copper-700;
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
   }
   .btn-secondary {
-    @apply btn bg-navy-800 text-white hover:bg-navy-700;
+    @apply btn bg-ink-800 text-white hover:bg-ink-700;
   }
   .btn-outline {
-    @apply btn border border-navy-300 text-navy-800 hover:bg-navy-50;
+    @apply btn border border-ink-300 text-ink-800 hover:bg-ink-50;
   }
   .btn-ghost-light {
     @apply btn border border-white/40 text-white hover:bg-white/10;
   }
 
   .eyebrow {
-    @apply inline-block text-xs font-semibold uppercase tracking-[0.14em] text-copper-600;
+    @apply inline-block text-xs font-semibold uppercase tracking-[0.14em] text-brand-600;
   }
 
   .section {
@@ -68,6 +68,6 @@
   }
 
   .card {
-    @apply bg-white rounded-md border border-navy-100 shadow-card;
+    @apply bg-white rounded-md border border-ink-100 shadow-card;
   }
 }

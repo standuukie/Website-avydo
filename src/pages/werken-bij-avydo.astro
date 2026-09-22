@@ -22,33 +22,33 @@ import { company } from '@/data/company';
       {jobs.map((job) => (
         <div class="card p-8">
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <h2 class="font-display text-xl font-semibold text-navy-900">{job.title}</h2>
-            <span class="rounded-full bg-copper-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-copper-700">{job.type}</span>
+            <h2 class="font-display text-xl font-semibold text-ink-900">{job.title}</h2>
+            <span class="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-700">{job.type}</span>
           </div>
-          <p class="mt-4 text-navy-600 leading-relaxed">{job.intro}</p>
-          <h3 class="mt-5 text-sm font-semibold text-navy-800 uppercase tracking-wide">Takenpakket</h3>
+          <p class="mt-4 text-ink-600 leading-relaxed">{job.intro}</p>
+          <h3 class="mt-5 text-sm font-semibold text-ink-800 uppercase tracking-wide">Takenpakket</h3>
           <ul class="mt-3 space-y-2">
             {job.tasks.map((t) => (
-              <li class="flex gap-3 items-start text-sm text-navy-600 leading-relaxed">
-                <svg class="h-4 w-4 mt-1 shrink-0 text-copper-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
+              <li class="flex gap-3 items-start text-sm text-ink-600 leading-relaxed">
+                <svg class="h-4 w-4 mt-1 shrink-0 text-brand-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
                 {t}
               </li>
             ))}
           </ul>
-          <p class="mt-5 text-sm text-navy-500">Solliciteren kan t.a.v. {job.contact} &mdash; zie contactgegevens hieronder.</p>
+          <p class="mt-5 text-sm text-ink-500">Solliciteren kan t.a.v. {job.contact} &mdash; zie contactgegevens hieronder.</p>
         </div>
       ))}
     </div>
   </section>
 
-  <section class="section bg-navy-50/60 border-y border-navy-100">
+  <section class="section bg-ink-50/60 border-y border-ink-100">
     <div class="container max-w-content grid lg:grid-cols-2 gap-10">
       <div class="card p-8">
-        <h2 class="font-display text-xl font-semibold text-navy-900">Solliciteren</h2>
-        <p class="mt-3 text-navy-600 leading-relaxed">
-          Stuur een sollicitatiebrief met cv naar <a href={`mailto:${company.email}`} class="font-semibold text-copper-600 hover:underline">{company.email}</a>, of per post naar:
+        <h2 class="font-display text-xl font-semibold text-ink-900">Solliciteren</h2>
+        <p class="mt-3 text-ink-600 leading-relaxed">
+          Stuur een sollicitatiebrief met cv naar <a href={`mailto:${company.email}`} class="font-semibold text-brand-600 hover:underline">{company.email}</a>, of per post naar:
         </p>
-        <address class="mt-3 not-italic text-navy-700 leading-relaxed">
+        <address class="mt-3 not-italic text-ink-700 leading-relaxed">
           {applyAddress.line1}<br />
           {applyAddress.line2}<br />
           {applyAddress.line3}<br />
@@ -56,8 +56,8 @@ import { company } from '@/data/company';
         </address>
       </div>
       <div class="card p-8">
-        <h2 class="font-display text-xl font-semibold text-navy-900">Stage lopen bij Avydo</h2>
-        <p class="mt-3 text-navy-600 leading-relaxed">{internships.intro}</p>
+        <h2 class="font-display text-xl font-semibold text-ink-900">Stage lopen bij Avydo</h2>
+        <p class="mt-3 text-ink-600 leading-relaxed">{internships.intro}</p>
       </div>
     </div>
   </section>
