@@ -40,7 +40,44 @@ export const applyAddress = {
   line4: '5800 AG Venray',
 };
 
+export type EducationPartner = {
+  name: string;
+  institution: string;
+  location?: string;
+  href: string;
+  logo: string;
+  logoWidth: number;
+  logoHeight: number;
+};
+
 export const internships = {
   intro: 'Avydo werkt graag mee aan de ontwikkeling van talentvolle studenten. Ben jij een enthousiaste hbo-student op economisch en/of fiscaal gebied en denk je een meerwaarde te kunnen zijn voor Avydo? Stuur je stageopdracht en cv naar info@avydo.nl of per post naar Postbus 257, 5800 AG Venray, t.a.v. de directie.',
-  partners: ['Fontys: CE-SPECO, Tilburg', 'Fontys: Fiscaal Recht en Economie, Eindhoven'],
+  partners: [
+    {
+      name: 'Commerciële Economie SPECO Sportmarketing',
+      institution: 'Fontys',
+      location: 'Tilburg',
+      href: 'https://www.fontys.nl/Opleidingen/Commerciele-Economie-SPECO-Sportmarketing-bachelor-voltijd.htm',
+      logo: '/images/education/fontys.jpg',
+      logoWidth: 520,
+      logoHeight: 440,
+    },
+    {
+      name: 'Finance, Tax and Advice',
+      institution: 'Fontys',
+      location: 'Eindhoven',
+      href: 'https://www.fontys.nl/Opleidingen/Finance-Tax-and-Advice-bachelor-voltijd.htm',
+      logo: '/images/education/fontys.jpg',
+      logoWidth: 520,
+      logoHeight: 440,
+    },
+    {
+      name: 'Accountancy',
+      institution: 'HAN',
+      href: 'https://www.han.nl/opleidingen/hbo/accountancy/voltijd/',
+      logo: '/images/education/han.png',
+      logoWidth: 300,
+      logoHeight: 228,
+    },
+  ] satisfies EducationPartner[],
 };
