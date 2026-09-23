@@ -8,7 +8,8 @@
  * productiegebruik — wordt na de fix weer verwijderd.
  */
 const candidates = [
-  { label: 'www.rijksoverheid.nl/news/sitemap.xml (kandidaat, gevonden via sitemapindex)', url: 'https://www.rijksoverheid.nl/news/sitemap.xml', preview: 4000 },
+  { label: 'www.rijksoverheid.nl/sitemap/1.xml (algemene sitemap, testen op omvang + bevat testcase-URL)', url: 'https://www.rijksoverheid.nl/sitemap/1.xml', preview: 800 },
+  { label: 'testcase-artikel: og:description ophalen', url: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven', preview: 0, extractMeta: true },
 ];
 
 async function check(c) {
@@ -28,12 +29,19 @@ async function check(c) {
     console.log(`Status: ${res.status} ${res.statusText} | redirected: ${res.redirected} | finale URL: ${res.url}`);
     console.log(`Content-Type: ${contentType}`);
     console.log(`Lengte: ${text.length} tekens`);
-    const preview = c.preview || 400;
-    console.log(`Eerste ${preview} tekens:\n${text.slice(0, preview).replace(/\n/g, ' ')}`);
+    const preview = c.preview ?? 400;
+    if (preview > 0) console.log(`Eerste ${preview} tekens:\n${text.slice(0, preview).replace(/\n/g, ' ')}`);
     console.log(`Bevat "e-facturatie": ${text.includes('e-facturatie')}`);
     console.log(`Bevat "2026/09/11": ${text.includes('2026/09/11')}`);
     const urlCount = (text.match(/<loc>/g) || []).length;
-    console.log(`Aantal <loc> entries: ${urlCount}`);
+    if (urlCount) console.log(`Aantal <loc> entries: ${urlCount}`);
+    if (c.extractMeta) {
+      const descMatch = text.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/i)
+        || text.match(/<meta[^>]+property="og:description"[^>]+content="([^"]*)"/i);
+      const titleMatch = text.match(/<title>([^<]*)<\/title>/i);
+      console.log(`<title>: ${titleMatch ? titleMatch[1] : '(niet gevonden)'}`);
+      console.log(`meta description: ${descMatch ? descMatch[1] : '(niet gevonden)'}`);
+    }
   } catch (err) {
     console.log(`\n=== ${c.label} ===`);
     console.log(`URL: ${c.url}`);
