@@ -34,4 +34,4 @@ export const sponsorships: Sponsorship[] = [
   },
 ];
 
-export const mvoIntro = 'Avydo hecht veel waarde aan het plezier en succes binnen Venray en geeft op diverse manieren invulling aan maatschappelijk verantwoord ondernemen — onder meer via sponsoring en door de ontwikkeling van studenten aan te moedigen.';
+export const mvoIntro = 'Avydo hecht veel waarde aan het plezier en succes binnen Venray en geeft op diverse manieren invulling aan maatschappelijk verantwoord ondernemen, onder meer via sponsoring en door de ontwikkeling van studenten aan te moedigen.';
