@@ -8,17 +8,7 @@
  * productiegebruik — wordt na de fix weer verwijderd.
  */
 const candidates = [
-  { label: 'feeds.rijksoverheid.nl/nieuws.rss (huidig geconfigureerd)', url: 'https://feeds.rijksoverheid.nl/nieuws.rss' },
-  { label: 'feeds.rijksoverheid.nl/onderwerpen/belastingen-voor-ondernemers/nieuws.rss (huidig)', url: 'https://feeds.rijksoverheid.nl/onderwerpen/belastingen-voor-ondernemers/nieuws.rss' },
-  { label: 'www.rijksoverheid.nl/service/rss', url: 'https://www.rijksoverheid.nl/service/rss' },
-  { label: 'www.rijksoverheid.nl/rss.xml', url: 'https://www.rijksoverheid.nl/rss.xml' },
-  { label: 'www.rijksoverheid.nl/actueel/nieuws/rss', url: 'https://www.rijksoverheid.nl/actueel/nieuws/rss' },
-  { label: 'www.rijksoverheid.nl/actueel.rss', url: 'https://www.rijksoverheid.nl/actueel.rss' },
-  { label: 'www.rijksoverheid.nl/sitemap.xml', url: 'https://www.rijksoverheid.nl/sitemap.xml' },
-  { label: 'persberichten.rijksoverheid.nl/service/rss', url: 'https://persberichten.rijksoverheid.nl/service/rss' },
-  { label: 'persberichten.rijksoverheid.nl/rss', url: 'https://persberichten.rijksoverheid.nl/rss' },
-  { label: 'persberichten.rijksoverheid.nl/rss.xml', url: 'https://persberichten.rijksoverheid.nl/rss.xml' },
-  { label: 'De testcase-URL zelf (mag NOOIT hardcoded in productiecode, alleen ter controle of de pagina live is)', url: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven' },
+  { label: 'www.rijksoverheid.nl/news/sitemap.xml (kandidaat, gevonden via sitemapindex)', url: 'https://www.rijksoverheid.nl/news/sitemap.xml', preview: 4000 },
 ];
 
 async function check(c) {
@@ -38,7 +28,12 @@ async function check(c) {
     console.log(`Status: ${res.status} ${res.statusText} | redirected: ${res.redirected} | finale URL: ${res.url}`);
     console.log(`Content-Type: ${contentType}`);
     console.log(`Lengte: ${text.length} tekens`);
-    console.log(`Eerste 400 tekens:\n${text.slice(0, 400).replace(/\n/g, ' ')}`);
+    const preview = c.preview || 400;
+    console.log(`Eerste ${preview} tekens:\n${text.slice(0, preview).replace(/\n/g, ' ')}`);
+    console.log(`Bevat "e-facturatie": ${text.includes('e-facturatie')}`);
+    console.log(`Bevat "2026/09/11": ${text.includes('2026/09/11')}`);
+    const urlCount = (text.match(/<loc>/g) || []).length;
+    console.log(`Aantal <loc> entries: ${urlCount}`);
   } catch (err) {
     console.log(`\n=== ${c.label} ===`);
     console.log(`URL: ${c.url}`);
