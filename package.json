@@ -9,7 +9,8 @@
     "build": "astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "kenniscentrum:fetch": "node scripts/kenniscentrum/fetch-articles.mjs"
+    "kenniscentrum:fetch": "node scripts/kenniscentrum/fetch-articles.mjs",
+    "kenniscentrum:test": "node --test scripts/kenniscentrum/*.test.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",

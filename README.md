@@ -28,7 +28,7 @@ npm run preview   # preview van de build
 ### Architectuur
 
 ```
-RSS-feeds (officiële bronnen)
+RSS-feeds + Google News-sitemaps (officiële bronnen)
    -> scripts/kenniscentrum/fetch-articles.mjs   (GitHub Actions, dagelijks)
    -> filtering op relevantie + categorie/prioriteit
    -> samenvatting (extractief, of optioneel via Claude Haiku)
@@ -43,20 +43,26 @@ De site zelf blijft volledig statisch: er draait geen server of API-route in pro
 
 Zie `scripts/kenniscentrum/sources.config.mjs` voor de volledige, becommentarieerde lijst. Op dit moment:
 
-| Bron | Feed | Categorie |
-|---|---|---|
-| Belastingdienst (Actueel zakelijk) | `nieuwsfeed_actueel_zakelijk.xml` | Belastingen |
-| Rijksoverheid | Onderwerp "Belastingen voor ondernemers" | Belastingen |
-| Rijksoverheid | Ministerie van Sociale Zaken en Werkgelegenheid | Personeel & loon |
-| Rijksoverheid | Algemeen nieuws (streng gefilterd op mkb-trefwoorden) | gemengd |
+| Bron | Type | Bron-URL | Categorie |
+|---|---|---|---|
+| Belastingdienst (Actueel zakelijk) | RSS | `nieuwsfeed_actueel_zakelijk.xml` | Belastingen |
+| Rijksoverheid | Google News-sitemap | `rijksoverheid.nl/news/sitemap.xml` | gemengd (streng gefilterd op brede mkb-trefwoorden) |
 
-Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL is teruggevonden bij het samenstellen van deze lijst; `inferred` betekent dat de URL een bevestigd patroon volgt maar niet één-op-één live is geverifieerd. Dit was noodzakelijk omdat deze ontwikkelomgeving geen toegang had tot externe websites om live te verifiëren. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed wordt overgeslagen (nooit verzonnen), en de uitkomst per bron is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary"). **Aanbevolen: controleer na de eerste paar runs of alle bronnen op "OK" staan; pas zo nodig de URL aan in `sources.config.mjs`.**
+Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL rechtstreeks live is getest (niet via een zoekmachine); `inferred` betekent dat de URL een bevestigd patroon volgt maar niet 1-op-1 live is geverifieerd. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed/sitemap wordt overgeslagen (nooit verzonnen), en de uitkomst per bron — inclusief de stadia *opgehaald → geparsed → relevant → gepubliceerd* — is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary") en in de jobs-log.
+
+**Bron-types** (veld `type` in `sources.config.mjs`):
+- `rss`: een RSS/Atom-feed met title/link/description/pubDate per item.
+- `sitemap`: een Google News-sitemap (`xmlns:news`), die alleen recente artikelen bevat (titel, publicatiedatum, canonieke URL) zonder samenvattingstekst. Voor elk nieuw artikel wordt de paginabron zelf opgehaald om de `meta description`/`og:description` te lezen als brontekst voor de samenvatting.
+
+**Waarom Rijksoverheid een sitemap gebruikt in plaats van RSS**: rijksoverheid.nl is medio 2026 overgestapt op een nieuw technisch platform, waarbij de oude RSS-infrastructuur op `feeds.rijksoverheid.nl` buiten gebruik is geraakt (het domein resolvet niet meer — dit was structureel de oorzaak dat er nooit Rijksoverheid-artikelen verschenen, ook al werkte de Belastingdienst-feed in dezelfde runs prima). `rijksoverheid.nl/news/sitemap.xml` is live geverifieerd als werkende, officiële vervanging.
+
+Om te voorkomen dat één bron structureel (bijna) alle artikelen levert, geldt naast het totale `maxArticlesPerRun` ook een `maxArticlesPerSourcePerRun`-plafond per bron per run.
 
 ### Bronnen toevoegen, verwijderen of aan/uitzetten
 
 Open `scripts/kenniscentrum/sources.config.mjs`:
 
-- Nieuwe bron toevoegen: nieuw object toevoegen aan de `sources`-array (id, naam, `feedUrl`, `defaultCategory`, `enabled: true`).
+- Nieuwe bron toevoegen: nieuw object toevoegen aan de `sources`-array (id, naam, `type: 'rss'` met `feedUrl`, of `type: 'sitemap'` met `sitemapUrl`, plus `defaultCategory`, `enabled: true`).
 - Bron tijdelijk uitzetten: `enabled: false` zetten (bestaande artikelen van die bron blijven gewoon staan).
 - Trefwoorden per categorie of "belangrijk"-signalen aanpassen: `categoryKeywords` / `importantKeywords` in hetzelfde bestand.
 
@@ -85,7 +91,7 @@ Er zijn **geen** environment variables nodig op Vercel voor het Kenniscentrum ze
 
 ### Fallback en betrouwbaarheid
 
-- Iedere bron wordt los geprobeerd (try/catch); een niet-bereikbare of ongeldige feed stopt de andere bronnen niet.
+- Iedere bron wordt los geprobeerd (try/catch); een niet-bereikbare of ongeldige feed/sitemap stopt de andere bronnen niet.
 - Er wordt nooit content verzonnen: zonder voldoende broninformatie (te korte beschrijving, ontbrekende titel/link) wordt een item overgeslagen.
 - De workflow faalt nooit hard op een bronprobleem (exit code altijd 0) &mdash; anders zou een tijdelijk offline feed onterecht een rode kruis in GitHub Actions veroorzaken.
 - Omdat artikelen gewone, gecommitte bestanden zijn, is de site nooit leeg of stuk door een tijdelijk niet-beschikbare bron: het laatst succesvol opgehaalde resultaat blijft gewoon live staan totdat de volgende run iets nieuws vindt.
@@ -94,7 +100,7 @@ Er zijn **geen** environment variables nodig op Vercel voor het Kenniscentrum ze
 ### Kosten
 
 - GitHub Actions: gratis binnen de standaard minutenlimiet van deze repository (de job duurt typisch enkele seconden tot een minuut per run).
-- RSS-bronnen: gratis, publieke overheidsfeeds.
+- Bronnen: gratis, publieke overheidsfeeds en -sitemaps.
 - AI-samenvatting: optioneel, alleen bij gezette `ANTHROPIC_API_KEY`, alleen voor nieuwe artikelen (geen herhaalde verwerking van bestaande content).
 - Geen betaalde nieuws-API's of zoekdiensten gebruikt.
 

@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
- * Haalt nieuwe artikelen op uit de geconfigureerde RSS-bronnen (zie
- * sources.config.mjs), filtert op relevantie voor MKB-ondernemers,
- * genereert een korte eigen samenvatting + "wat betekent dit voor jou"-tekst,
- * en schrijft nieuwe items weg als content-bestanden in
+ * Haalt nieuwe artikelen op uit de geconfigureerde bronnen (RSS-feeds en
+ * Google News-sitemaps, zie sources.config.mjs), filtert op relevantie voor
+ * MKB-ondernemers, genereert een korte eigen samenvatting + "wat betekent
+ * dit voor jou"-tekst, en schrijft nieuwe items weg als content-bestanden in
  * src/content/kenniscentrum/.
  *
- * Nooit fabricage: als een bron niet bereikbaar is, geen geldige RSS levert,
- * of onvoldoende informatie bevat, wordt die bron/dat item simpelweg
+ * Nooit fabricage: als een bron niet bereikbaar is, geen geldige feed/sitemap
+ * levert, of onvoldoende informatie bevat, wordt die bron/dat item simpelweg
  * overgeslagen. Bestaande content blijft altijd staan (fallback = het laatst
  * succesvol opgehaalde resultaat, gecommit in git).
+ *
+ * Elke bron faalt volledig onafhankelijk: een probleem bij de ene bron mag
+ * nooit de andere bronnen blokkeren of de hele run laten mislukken.
  *
  * Gebruik: node scripts/kenniscentrum/fetch-articles.mjs
  * Env: ANTHROPIC_API_KEY (optioneel) — indien gezet, wordt Claude Haiku
@@ -26,6 +29,7 @@ import {
   categoryKeywords,
   importantKeywords,
   maxArticlesPerRun,
+  maxArticlesPerSourcePerRun,
 } from './sources.config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -138,6 +142,56 @@ export function parseFeedItems(xmlText) {
   return null;
 }
 
+// Google News-sitemap (xmlns:news): <urlset><url><loc>...</loc>
+// <news:news><news:title>...</news:title>
+// <news:publication_date>...</news:publication_date></news:news></url>...
+// Bevat geen samenvattingstekst — die wordt apart per artikel opgehaald
+// (zie fetchArticleDescription) zodat we nooit een samenvatting verzinnen.
+export function parseSitemapNewsItems(xmlText) {
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+  const doc = parser.parse(xmlText);
+
+  const urlset = doc?.urlset?.url;
+  if (!urlset) return null;
+
+  const arr = Array.isArray(urlset) ? urlset : [urlset];
+  return arr
+    .map((u) => {
+      const news = u['news:news'];
+      const title = news?.['news:title'];
+      const pubDate = news?.['news:publication_date'] ?? u.lastmod ?? null;
+      const link = typeof u.loc === 'string' ? u.loc : u.loc?.['#text'] ?? '';
+      if (!title || !link) return null;
+      return { title: stripHtml(String(title)), link, pubDate, description: '' };
+    })
+    .filter(Boolean);
+}
+
+// Haalt de meta-description (of og:description als fallback) op van een
+// artikelpagina, als brontekst voor de samenvatting. Nooit fabricage: als
+// geen van beide aanwezig is, wordt null teruggegeven en slaat de caller dat
+// artikel over.
+export function extractMetaDescription(html) {
+  const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i)
+    || html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']/i);
+  if (!descMatch) return null;
+  const decoded = stripHtml(descMatch[1]);
+  return decoded || null;
+}
+
+async function fetchArticleDescription(url) {
+  try {
+    const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+    if (!res.ok) return null;
+    const html = await res.text();
+    return extractMetaDescription(html);
+  } catch {
+    return null;
+  }
+}
+
 export function scoreCategories(text) {
   const lower = text.toLowerCase();
   const scores = {};
@@ -177,6 +231,8 @@ const RELEVANCE_TEMPLATES = {
   'Wet- en regelgeving': 'Deze wijziging in wet- of regelgeving kan verplichtingen met zich meebrengen voor ondernemers. Ga na of en wanneer dit voor u van toepassing wordt.',
   Subsidies: 'Mogelijk komt uw onderneming in aanmerking voor deze regeling. Controleer de voorwaarden en eventuele deadlines bij de bron.',
   Financiën: 'Dit kan invloed hebben op de financiële planning van uw onderneming. Bekijk de volledige publicatie voor de precieze details.',
+  Digitalisering: 'Dit kan gevolgen hebben voor uw administratieve of digitale processen. Controleer of en wanneer deze verplichting voor uw onderneming gaat gelden.',
+  Duurzaamheid: 'Dit kan relevant zijn voor de duurzaamheidsverplichtingen of -kansen van uw onderneming. Bekijk de volledige publicatie voor de precieze details.',
 };
 
 function extractiveSummary(item) {
@@ -262,23 +318,57 @@ function writeArticle({ title, category, priority, publishedAt, sourceName, sour
   return filename;
 }
 
-async function processSource(source, existingUrls, remainingBudget) {
-  log(`\n=== ${source.name} (${source.id}) ===`);
-  if (!source.enabled) {
-    log('  overgeslagen (uitgeschakeld in sources.config.mjs)');
-    return { added: 0, seen: 0, ok: true };
+// Verwerkt één ruw item (na parsing, vóór relevantie/schrijven) dat al een
+// niet-lege description heeft. Gedeeld door de RSS- en sitemap-paden zodat
+// categorisering/samenvatting/schrijven identiek verloopt, ongeacht bron-type.
+async function publishItem(item, source) {
+  const combinedText = `${item.title} ${item.description}`;
+  const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date();
+  if (Number.isNaN(publishedAt.getTime())) return null;
+
+  const category = pickCategory(combinedText, source.defaultCategory) ?? 'Ondernemen';
+  const priority = pickPriority(combinedText, publishedAt);
+
+  let summaryData;
+  if (ANTHROPIC_API_KEY) {
+    summaryData = await aiSummary(item, category);
+  } else {
+    const { summary } = extractiveSummary(item);
+    summaryData = { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES.Ondernemen, aiAssisted: false };
   }
+
+  return writeArticle({
+    title: item.title,
+    category,
+    priority,
+    publishedAt,
+    sourceName: source.name,
+    sourceUrl: item.link,
+    summary: summaryData.summary,
+    relevance: summaryData.relevance,
+    aiAssisted: summaryData.aiAssisted,
+  });
+}
+
+// Stadia zoals gevraagd: opgehaald -> succesvol geparsed -> relevant ->
+// gepubliceerd. Elke bron rapporteert deze vier tellingen, ongeacht type.
+function newStageCounters() {
+  return { fetched: 0, parsed: 0, relevant: 0, published: 0 };
+}
+
+async function processRssSource(source, existingUrls, remainingBudget) {
+  const stages = newStageCounters();
 
   let res;
   try {
     res = await fetchWithTimeout(source.feedUrl, FETCH_TIMEOUT_MS);
   } catch (err) {
     log(`  FOUT: kon feed niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
-    return { added: 0, seen: 0, ok: false };
+    return { added: 0, seen: 0, ok: false, stages };
   }
   if (!res.ok) {
     log(`  FOUT: HTTP ${res.status} bij ophalen feed. Bron overgeslagen.`);
-    return { added: 0, seen: 0, ok: false };
+    return { added: 0, seen: 0, ok: false, stages };
   }
 
   const xmlText = await res.text();
@@ -287,65 +377,134 @@ async function processSource(source, existingUrls, remainingBudget) {
     items = parseFeedItems(xmlText);
   } catch (err) {
     log(`  FOUT: kon feed niet parsen als RSS/Atom (${err.message}). Bron overgeslagen.`);
-    return { added: 0, seen: 0, ok: false };
+    return { added: 0, seen: 0, ok: false, stages };
   }
   if (!items) {
     log('  FOUT: onherkenbaar feedformaat (geen RSS- of Atom-items gevonden). Bron overgeslagen.');
-    return { added: 0, seen: 0, ok: false };
+    return { added: 0, seen: 0, ok: false, stages };
   }
 
+  stages.fetched = items.length;
   log(`  ${items.length} item(s) in feed`);
   let added = 0;
+  let sourceCount = 0;
 
   for (const item of items) {
-    if (remainingBudget.count <= 0) break;
+    if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
     if (!item.title || !item.link) continue;
     if (existingUrls.has(item.link)) continue;
-
-    const combinedText = `${item.title} ${item.description}`;
-    if (source.requireKeywordMatch) {
-      const scores = scoreCategories(combinedText);
-      if (Object.keys(scores).length === 0) continue;
-    }
     if (!item.description || item.description.length < 20) {
       // Onvoldoende broninformatie om een eigen samenvatting op te baseren.
       continue;
     }
+    stages.parsed += 1;
 
-    const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date();
-    if (Number.isNaN(publishedAt.getTime())) continue;
-
-    const category = pickCategory(combinedText, source.defaultCategory) ?? 'Ondernemen';
-    const priority = pickPriority(combinedText, publishedAt);
-
-    let summaryData;
-    if (ANTHROPIC_API_KEY) {
-      summaryData = await aiSummary(item, category);
-    } else {
-      const { summary } = extractiveSummary(item);
-      summaryData = { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES.Ondernemen, aiAssisted: false };
+    if (source.requireKeywordMatch) {
+      const scores = scoreCategories(`${item.title} ${item.description}`);
+      if (Object.keys(scores).length === 0) continue;
     }
+    stages.relevant += 1;
 
-    const filename = writeArticle({
-      title: item.title,
-      category,
-      priority,
-      publishedAt,
-      sourceName: source.name,
-      sourceUrl: item.link,
-      summary: summaryData.summary,
-      relevance: summaryData.relevance,
-      aiAssisted: summaryData.aiAssisted,
-    });
+    const filename = await publishItem(item, source);
+    if (!filename) continue;
 
     existingUrls.add(item.link);
     added += 1;
+    sourceCount += 1;
     remainingBudget.count -= 1;
+    stages.published += 1;
     log(`  + ${filename}`);
   }
 
   log(`  ${added} nieuw artikel(en) toegevoegd`);
-  return { added, seen: items.length, ok: true };
+  return { added, seen: items.length, ok: true, stages };
+}
+
+async function processSitemapSource(source, existingUrls, remainingBudget) {
+  const stages = newStageCounters();
+
+  let res;
+  try {
+    res = await fetchWithTimeout(source.sitemapUrl, FETCH_TIMEOUT_MS);
+  } catch (err) {
+    log(`  FOUT: kon sitemap niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
+    return { added: 0, seen: 0, ok: false, stages };
+  }
+  if (!res.ok) {
+    log(`  FOUT: HTTP ${res.status} bij ophalen sitemap. Bron overgeslagen.`);
+    return { added: 0, seen: 0, ok: false, stages };
+  }
+
+  const xmlText = await res.text();
+  let items;
+  try {
+    items = parseSitemapNewsItems(xmlText);
+  } catch (err) {
+    log(`  FOUT: kon sitemap niet parsen (${err.message}). Bron overgeslagen.`);
+    return { added: 0, seen: 0, ok: false, stages };
+  }
+  if (!items) {
+    log('  FOUT: onherkenbare sitemap (geen news:news-items gevonden). Bron overgeslagen.');
+    return { added: 0, seen: 0, ok: false, stages };
+  }
+
+  stages.fetched = items.length;
+  log(`  ${items.length} item(s) in sitemap`);
+  let added = 0;
+  let sourceCount = 0;
+
+  for (const item of items) {
+    if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
+    if (!item.title || !item.link) continue;
+    if (existingUrls.has(item.link)) continue;
+
+    // Sitemap-items hebben geen samenvattingstekst: de artikelpagina zelf
+    // wordt opgehaald voor de meta-description. Een probleem bij één
+    // artikel (pagina niet bereikbaar, geen description) slaat alleen dat
+    // artikel over, niet de hele bron.
+    const description = await fetchArticleDescription(item.link);
+    if (!description || description.length < 20) {
+      log(`  - overgeslagen (geen samenvattingstekst op bron-pagina): ${item.link}`);
+      continue;
+    }
+    const enrichedItem = { ...item, description };
+    stages.parsed += 1;
+
+    if (source.requireKeywordMatch) {
+      const scores = scoreCategories(`${enrichedItem.title} ${enrichedItem.description}`);
+      if (Object.keys(scores).length === 0) continue;
+    }
+    stages.relevant += 1;
+
+    const filename = await publishItem(enrichedItem, source);
+    if (!filename) continue;
+
+    existingUrls.add(item.link);
+    added += 1;
+    sourceCount += 1;
+    remainingBudget.count -= 1;
+    stages.published += 1;
+    log(`  + ${filename}`);
+  }
+
+  log(`  ${added} nieuw artikel(en) toegevoegd`);
+  return { added, seen: items.length, ok: true, stages };
+}
+
+async function processSource(source, existingUrls, remainingBudget) {
+  log(`\n=== ${source.name} (${source.id}) ===`);
+  if (!source.enabled) {
+    log('  overgeslagen (uitgeschakeld in sources.config.mjs)');
+    return { added: 0, seen: 0, ok: true, stages: newStageCounters() };
+  }
+
+  const result = source.type === 'sitemap'
+    ? await processSitemapSource(source, existingUrls, remainingBudget)
+    : await processRssSource(source, existingUrls, remainingBudget);
+
+  const s = result.stages;
+  log(`  Bron → opgehaald: ${s.fetched} → succesvol geparsed: ${s.parsed} → relevant: ${s.relevant} → gepubliceerd: ${s.published}`);
+  return result;
 }
 
 async function main() {
@@ -359,7 +518,7 @@ async function main() {
   const results = [];
   for (const source of sources) {
     const result = await processSource(source, existingUrls, remainingBudget);
-    results.push({ id: source.id, ...result });
+    results.push({ id: source.id, name: source.name, ...result });
   }
 
   const totalAdded = results.reduce((sum, r) => sum + r.added, 0);
@@ -367,11 +526,15 @@ async function main() {
 
   log('\n=== Samenvatting ===');
   for (const r of results) {
-    log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.id}: ${r.added} nieuw / ${r.seen} gezien`);
+    log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.id}: ${r.added} nieuw / ${r.seen} gezien (opgehaald ${r.stages.fetched}, geparsed ${r.stages.parsed}, relevant ${r.stages.relevant}, gepubliceerd ${r.stages.published})`);
   }
   log(`Totaal nieuwe artikelen: ${totalAdded}`);
   if (failedSources.length > 0) {
-    log(`${failedSources.length} bron(nen) waren niet bereikbaar of leverden geen geldige feed. Bestaande content blijft ongewijzigd staan voor deze bronnen.`);
+    log(`${failedSources.length} bron(nen) waren niet bereikbaar of leverden geen geldige feed/sitemap. Bestaande content blijft ongewijzigd staan voor deze bronnen.`);
+  }
+  const sourcesWithArticles = new Set(results.filter((r) => r.added > 0).map((r) => r.id)).size;
+  if (sourcesWithArticles > 0) {
+    log(`Bronnen met nieuwe artikelen deze run: ${sourcesWithArticles} van ${results.length}.`);
   }
 
   // Schrijf een machine-leesbaar resultaat voor de GitHub Actions-stap die

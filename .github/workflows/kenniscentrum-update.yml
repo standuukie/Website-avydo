@@ -55,10 +55,11 @@ jobs:
               const r = require('./.kenniscentrum-run-result.json');
               console.log('**Nieuwe artikelen:** ' + r.totalAdded);
               console.log('');
-              console.log('| Bron | Status | Nieuw | Gezien |');
-              console.log('|---|---|---|---|');
+              console.log('| Bron | Status | Opgehaald | Geparsed | Relevant | Gepubliceerd |');
+              console.log('|---|---|---|---|---|---|');
               for (const s of r.results) {
-                console.log(\`| \${s.id} | \${s.ok ? '✅' : '❌'} | \${s.added} | \${s.seen} |\`);
+                const st = s.stages || {};
+                console.log(\`| \${s.name || s.id} | \${s.ok ? '✅' : '❌'} | \${st.fetched ?? 0} | \${st.parsed ?? 0} | \${st.relevant ?? 0} | \${st.published ?? 0} |\`);
               }
             " >> "$GITHUB_STEP_SUMMARY"
           else
