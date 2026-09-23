@@ -1,0 +1,21 @@
+name: Kenniscentrum bronnen diagnosticeren (tijdelijk)
+
+# Eenmalig diagnose-workflow om vanaf een omgeving met echte internettoegang
+# te testen welke Rijksoverheid-URL's (RSS/sitemap) daadwerkelijk werken,
+# na de platformmigratie van rijksoverheid.nl. Wordt na gebruik verwijderd.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Bronnen testen
+        run: node scripts/kenniscentrum/diagnose-sources.mjs
