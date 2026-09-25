@@ -92,13 +92,16 @@ Optioneel kan een betere, meer toegespitste samenvatting worden gegenereerd door
 
 | Variabele | Verplicht | Waar instellen | Doel |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Nee (aanbevolen) | GitHub &rarr; repository Secrets (Actions) **én** Vercel &rarr; Project Settings &rarr; Environment Variables | Betere AI-samenvatting in de nieuwsengine, en de AI-assistent (`/kenniscentrum/ai-assistent`). |
+| `GEMINI_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Primaire, gratis AI-provider voor de AI-assistent (`/kenniscentrum/ai-assistent`). Zie "Kenniscentrum: AI-assistent" hieronder. |
+| `GROQ_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Secundaire, gratis fallback-provider voor de AI-assistent. |
+| `AI_PROVIDER` | Nee | Vercel &rarr; Project Settings &rarr; Environment Variables | Kiest de providerketen (`free` = standaard). Zie "Provider-configuratie" hieronder. |
+| `ANTHROPIC_API_KEY` | Nee | GitHub &rarr; repository Secrets (Actions) **én/of** Vercel &rarr; Project Settings &rarr; Environment Variables | Betere AI-samenvatting in de nieuwsengine, en (alleen bij expliciete `AI_PROVIDER=anthropic`/`free-with-paid-fallback`) een optionele, betaalde provider voor de AI-assistent. |
 
-Dezelfde sleutel wordt op twee plekken gebruikt, maar altijd uitsluitend server-side:
-- In GitHub Actions (workflow "Kenniscentrum bijwerken") voor een optioneel betere samenvatting bij het ophalen van nieuwe artikelen. Zonder deze key werkt alles gewoon, met de extractieve samenvatting.
-- Op Vercel, gelezen door `src/pages/api/kenniscentrum-chat.ts` (een serverless function, zie hieronder) voor de AI-assistent. **Zonder deze key op Vercel toont de assistent een nette "momenteel niet beschikbaar"-melding** in plaats van te crashen; de rest van de website blijft gewoon werken.
+Alle sleutels worden uitsluitend server-side gebruikt:
+- `ANTHROPIC_API_KEY` in GitHub Actions (workflow "Kenniscentrum bijwerken") voor een optioneel betere samenvatting bij het ophalen van nieuwe artikelen. Zonder deze key werkt alles gewoon, met de extractieve samenvatting.
+- `GEMINI_API_KEY`/`GROQ_API_KEY`/`ANTHROPIC_API_KEY` op Vercel, gelezen door `src/pages/api/kenniscentrum-chat.ts` en `src/lib/ai-providers/` (een serverless function, zie hieronder) voor de AI-assistent. **Zonder minstens één geldige sleutel op Vercel toont de assistent een nette "momenteel niet beschikbaar"-melding** in plaats van te crashen; de rest van de website blijft gewoon werken.
 
-Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/environment variable, alleen server-side gelezen.
+Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/environment variable, alleen server-side gelezen. Dit is na implementatie expliciet gecontroleerd door de volledige Vercel build-output te doorzoeken op de sleutelnamen en provider-domeinen: die komen alleen voor in de servergebundelde function, nooit in de statische client-bundels.
 
 ### Fallback en betrouwbaarheid
 
@@ -134,26 +137,71 @@ De assistent verzint nooit zelf fiscale feiten. Elke vraag doorloopt:
 
 De volledige systeemprompt (stijl, brongebruik, privacy/veiligheidsregels) staat in `src/pages/api/kenniscentrum-chat.ts`.
 
-### Gebruikte AI-provider
+### Gebruikte AI-provider(s): gratis-eerst, providerneutraal
 
-Anthropic Claude (`claude-haiku-4-5-20251001`), via dezelfde `ANTHROPIC_API_KEY` als de nieuwsengine hierboven &mdash; bewust geen nieuwe provider toegevoegd. De aanroep gebeurt met een rechtstreekse `fetch` naar de Anthropic Messages API (zelfde patroon als `aiSummary()` in `fetch-articles.mjs`), dus geen extra SDK-dependency.
+De AI-assistent gebruikt **standaard uitsluitend gratis AI-providers**, zonder creditcard, via een kleine provider-abstractielaag in `src/lib/ai-providers/`:
+
+| Provider | Rol | Model (standaard) | Env-var(s) |
+|---|---|---|---|
+| **Google Gemini** | Primair | `gemini-flash-latest` (officiële Google-alias, wijst automatisch naar het actuele Flash-model) | `GEMINI_API_KEY`, optioneel `GEMINI_MODEL` |
+| **Groq** | Fallback, als Gemini faalt/geen quota meer heeft | `llama-3.3-70b-versatile` | `GROQ_API_KEY`, optioneel `GROQ_MODEL` |
+| **Anthropic Claude** | Optioneel, **standaard uitgeschakeld** | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY`, optioneel `ANTHROPIC_MODEL` |
+
+**Waarom Gemini als primaire keuze** (vergeleken met Groq, OpenRouter en Vercel AI Gateway, onderzocht september 2026):
+- Een daadwerkelijk gratis API-sleutel via Google AI Studio, **zonder creditcard**, met een ruime gratis-quota (orde van grootte 15 requests/minuut, 1.500 requests/dag, 1M tokens/minuut — deze cijfers zijn door Google zelf gepubliceerd en kunnen per model licht verschillen; controleer de actuele waarden op [ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits) omdat dit type limiet vaker wijzigt dan de rest van deze documentatie).
+- Sterke Nederlandstalige kwaliteit, geschikt voor het uitleggen van fiscale/accountancy-onderwerpen.
+- Ondersteunt **gedwongen function calling** (`toolConfig.functionCallingConfig.mode: "ANY"`), functioneel gelijk aan Anthropic's `tool_choice`: het model *moet* de opgegeven tool aanroepen, en de server valideert de output alsnog altijd zelf (zie hieronder).
+- **Geverifieerd**: tijdens ontwikkeling is een echte (ongeldige) aanroep naar `generativelanguage.googleapis.com` gedaan; Google's API accepteerde het verzoekformaat en gaf een specifieke, correcte authenticatiefout terug (`API_KEY_INVALID`) &mdash; dit bevestigt dat de requestopbouw (URL, headers, JSON-vorm) klopt tegen de echte, actuele API.
+
+**Waarom Groq als fallback** (en niet als primaire keuze): eveneens daadwerkelijk gratis zonder creditcard, met eigen or model afhankelijke limieten (orde van grootte 30 requests/minuut; zie [console.groq.com](https://console.groq.com/docs/rate-limits) voor de actuele cijfers per model). Twee onafhankelijke gratis providers na elkaar betekent dat een storing of uitgeputte quota bij Gemini niet meteen de hele assistent platlegt. Ondersteunt eveneens een gedwongen `tool_choice`.
+
+**Waarom niet OpenRouter**: de gratis modellen daar zijn beperkt tot 20 requests/minuut én slechts 50 requests/dag (zonder ooit een creditcard toegevoegd te hebben), en de beschikbare gratis modellen wisselen periodiek &mdash; te instabiel en te krap voor een publieke pagina.
+**Waarom niet Vercel AI Gateway**: geeft $5 gratis krediet per maand, maar is daarmee een *krediet met een bodem* in plaats van een onvoorwaardelijk gratis tier; bij uitputting zou dit (afhankelijk van de Vercel-projectinstellingen) kunnen doorlopen in betaald verbruik, wat afwijkt van de "nooit ongemerkt kosten"-eis van dit project.
+
+Beide gratis providers worden aangeroepen met een rechtstreekse `fetch` (geen extra SDK-dependency), op dezelfde manier als de bestaande Anthropic-integratie dat al deed.
+
+### Provider-configuratie (`AI_PROVIDER`)
+
+```
+AI_PROVIDER=free                     # standaard (ook als de variabele ontbreekt): Gemini → Groq, nooit betaald
+AI_PROVIDER=free-with-paid-fallback  # Gemini → Groq → Anthropic als allerlaatste, betaald redmiddel
+AI_PROVIDER=gemini                   # alleen Gemini (bv. om gericht te testen)
+AI_PROVIDER=groq                     # alleen Groq
+AI_PROVIDER=anthropic                # alleen Anthropic (het oorspronkelijke gedrag vóór deze wijziging)
+```
+
+Een onbekende of lege waarde valt altijd terug op de veilige standaard (`free`). De keten wordt bepaald in `src/lib/ai-providers/index.ts` (`resolveProviderChain()`); elke provider daarin is een losstaande adapter die dezelfde `AiProvider`-interface implementeert (`src/lib/ai-providers/types.ts`), zodat een nieuwe provider toevoegen of de standaardkeuze wijzigen geen wijzigingen elders vereist (retrieval, promptopbouw, brontoewijzing-validatie en de frontend blijven ongewijzigd, ongeacht welke provider actief is).
+
+**Bestaande Anthropic-integratie is behouden, niet verwijderd** &mdash; alleen verplaatst naar `src/lib/ai-providers/anthropic.ts` en niet meer standaard actief. Wie later (weer) naar Anthropic wil overschakelen, zet `AI_PROVIDER=anthropic` (of `free-with-paid-fallback` voor een gratis-eerst-met-betaald-vangnet-opstelling) en de bestaande `ANTHROPIC_API_KEY`.
 
 ### Serverless architectuur op Vercel
 
-De site is en blijft grotendeels **statisch** (`output: 'hybrid'` in `astro.config.mjs`): alle bestaande pagina's worden nog steeds als statische HTML gebouwd, precies zoals voorheen. Alleen `src/pages/api/kenniscentrum-chat.ts` heeft `export const prerender = false` en draait als Vercel serverless function (via de `@astrojs/vercel/serverless`-adapter), omdat die route de `ANTHROPIC_API_KEY` server-side nodig heeft en dus niet vooraf gebouwd kan worden. De API-sleutel wordt uitsluitend binnen deze route gelezen (`import.meta.env.ANTHROPIC_API_KEY`) en komt nooit in de browser of in de HTML terecht &mdash; de frontend praat alleen met `/api/kenniscentrum-chat`, nooit rechtstreeks met Anthropic.
+De site is en blijft grotendeels **statisch** (`output: 'hybrid'` in `astro.config.mjs`): alle bestaande pagina's worden nog steeds als statische HTML gebouwd, precies zoals voorheen. Alleen `src/pages/api/kenniscentrum-chat.ts` heeft `export const prerender = false` en draait als Vercel serverless function (via de `@astrojs/vercel/serverless`-adapter), omdat die route provider-sleutels server-side nodig heeft en dus niet vooraf gebouwd kan worden. Alle sleutels worden uitsluitend binnen deze route en de providers in `src/lib/ai-providers/` gelezen (`import.meta.env.*`) en komen nooit in de browser of in de HTML terecht &mdash; de frontend praat alleen met `/api/kenniscentrum-chat`, nooit rechtstreeks met Gemini, Groq of Anthropic. Dit is expliciet gecontroleerd door de volledige build-output te doorzoeken: geen van de sleutelnamen of provider-domeinen komt voor in `.vercel/output/static/` (de client-bundels), alleen in de servergebundelde functie.
 
 Lokaal testen van de API-route kan met `npm run dev` (Astro's eigen dev-server voert server-routes direct uit); `npm run preview` serveert alleen de statische bestanden en draait de API-route niet.
 
-### Misbruikbescherming
+### Structured output & validatie (providerneutraal)
 
-- Maximale vraaglengte (600 tekens, zowel client- als server-side afgedwongen), maximale gespreksgeschiedenis (laatste 8 berichten) en een `max_tokens`-limiet op de AI-aanroep.
-- Eenvoudige, in-memory rate limiting per IP-adres (standaard 12 aanvragen per 5 minuten) plus een globale limiet per serverless-instance, in `src/pages/api/kenniscentrum-chat.ts`. Dit is bewust géén externe store (Vercel KV/Upstash e.d.) om geen nieuwe infrastructuur-afhankelijkheid toe te voegen; de teller leeft alleen zolang een serverless-instance warm is. Bij veel verkeer is een gedeelde store de logische vervolgstap.
+Elke provider levert zijn antwoord via een gedwongen tool-/function-call in zijn eigen formaat (Anthropic `tool_use`, Gemini `functionCall`, Groq/OpenAI-stijl `tool_calls`), maar de adapter in `src/lib/ai-providers/` vertaalt dit altijd naar hetzelfde generieke `{ ok: true, input: {...} }`-resultaat. `kenniscentrum-chat.ts` valideert die `input` vervolgens **altijd zelf**, ongeacht welke provider hem leverde: elke `gebruikteBronIds`-verwijzing die niet in de daadwerkelijk opgehaalde bronnenlijst voorkomt wordt genegeerd, en zonder bronnen wordt `onvoldoendeInformatie` geforceerd op `true`. De modeloutput wordt dus nooit blind vertrouwd, welke provider er ook antwoordde.
+
+### Misbruikbescherming en kostenbeheersing
+
+- Maximale vraaglengte (600 tekens, zowel client- als server-side afgedwongen), maximale gespreksgeschiedenis (laatste 8 berichten) en een `max_tokens`-limiet op de AI-aanroep &mdash; ongewijzigd.
+- Eenvoudige, in-memory rate limiting per IP-adres (12 aanvragen per 5 minuten, ongewijzigd) plus een globale limiet per serverless-instance, in `src/pages/api/kenniscentrum-chat.ts`. Deze globale limiet is bij deze wijziging **verlaagd van 40 naar 20 aanvragen/minuut**, om beter aan te sluiten bij de eigen (lagere) gratis-tier-limiet van Gemini (~15/minuut) en te voorkomen dat de applicatie zelf onnodig vaak tegen 429's van de gratis provider(s) aanloopt.
+- Dit is bewust géén externe store (Vercel KV/Upstash e.d.) om geen nieuwe infrastructuur-afhankelijkheid toe te voegen; de teller leeft alleen zolang een serverless-instance warm is. Bij veel verkeer is een gedeelde store de logische vervolgstap.
+- **Geen onverwachte kosten**: de standaardketen (`AI_PROVIDER=free` of geen waarde) bevat uitsluitend gratis providers. Anthropic wordt nooit automatisch als stille fallback gebruikt &mdash; dat vereist een expliciete, bewuste configuratiewijziging (`AI_PROVIDER=anthropic` of `free-with-paid-fallback`). Vallen zowel Gemini als Groq weg (storing, quota op), dan toont de assistent gewoon "De AI-assistent is momenteel niet beschikbaar" in plaats van ongemerkt over te schakelen naar een betaalde provider.
+- **Misbruikrisico van de gratis tiers**: een individuele bezoeker kan, ondanks de rate limiting hierboven, in theorie de dagelijkse gratis quota van Gemini/Groq mede opmaken als er zeer veel verschillende bezoekers/IP-adressen tegelijk actief zijn. Bij een uitgeputte gratis quota geven beide providers een foutstatus terug (nooit een verrassende rekening), en valt de keten netjes terug op de volgende gratis provider of op de nette "niet beschikbaar"-melding.
 
 ### Privacy
 
-- Gesprekken worden **niet permanent opgeslagen**: de geschiedenis leeft alleen in het geheugen van de browsertab (een gewone JavaScript-variabele) en is na een paginaverversing verdwenen. Er is geen database, geen cookie en geen localStorage voor chatinhoud.
+- Gesprekken worden **niet permanent opgeslagen**: de geschiedenis leeft alleen in het geheugen van de browsertab (een gewone JavaScript-variabele) en is na een paginaverversing verdwenen. Er is geen database, geen cookie en geen localStorage voor chatinhoud. Dit gedrag is ongewijzigd.
 - De pagina waarschuwt expliciet om geen BSN, wachtwoorden, bankgegevens of andere vertrouwelijke gegevens te delen.
 - Externe artikeltekst die als context wordt meegegeven, wordt in de prompt expliciet als *data* behandeld (binnen een `<bronnen>`-blok), nooit als instructie &mdash; de systeemprompt instrueert het model om een "opdracht" die ergens in een artikel zou staan te negeren.
+- **Wat een provider met de input doet (belangrijk verschil tussen de providers):**
+  - **Google Gemini (gratis tier)**: Google geeft zelf aan dat bij *onbetaald* gebruik (dus ook de gratis tier van AI Studio/Gemini API) input en output gebruikt mogen worden om Google-producten en -modellen te verbeteren; menselijke reviewers kunnen dit lezen, al ontkoppelt Google de data eerst van accountgegevens. Dit is een bewuste afweging voor de gratis fase van dit project: er wordt geen persoonlijke bezoekersinformatie mee gestuurd (alleen de vraag zelf, het gesprek, en de openbare Kenniscentrum-/Belastingkalender-bronteksten), maar het is geen "zero data retention"-garantie zoals bij een betaalde tier. Bron: Google's Gemini API-voorwaarden.
+  - **Groq**: treedt uitsluitend op als inferentie-provider voor open modellen (geen eigen modeltraining op klantverzoeken); raadpleeg Groq's actuele voorwaarden voor de exacte bewaartermijnen als dit relevant wordt.
+  - **Anthropic** (indien expliciet ingeschakeld): ongewijzigd t.o.v. de oorspronkelijke integratie.
+  - In alle gevallen ontvangt de provider alleen: de vraag van de bezoeker, het lopende gesprek (max. 8 berichten), en de opgehaalde, publieke Kenniscentrum-/Belastingkalender-/Avydo-contextsnippets &mdash; nooit IP-adressen, cookies, accountgegevens of andere identificerende bezoekersdata.
 
 ## Overig nog te koppelen
 

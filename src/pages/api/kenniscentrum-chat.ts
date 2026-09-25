@@ -1,9 +1,9 @@
 // Server-side API-route voor de Kenniscentrum-AI-assistent.
 //
 // Draait als Vercel serverless function (export const prerender = false).
-// De ANTHROPIC_API_KEY wordt uitsluitend hier, server-side, gebruikt en
-// komt nooit in de browser terecht — de client praat alleen met dit
-// endpoint, nooit rechtstreeks met de Anthropic API.
+// Alle AI-provider-sleutels worden uitsluitend hier, server-side, gebruikt
+// en komen nooit in de browser terecht — de client praat alleen met dit
+// endpoint, nooit rechtstreeks met een AI-provider.
 //
 // RAG-aanpak: retrieveContext() zoekt relevante Kenniscentrum-artikelen,
 // Belastingkalender-deadlines en Avydo-informatie (zie
@@ -14,12 +14,19 @@
 // valideren is: elke id die niet in de echte, opgehaalde bronnenlijst
 // voorkomt, wordt server-side genegeerd. Zo kan een verzonnen bron of URL
 // nooit bij de gebruiker terechtkomen.
+//
+// Provider-onafhankelijk (zie src/lib/ai-providers/): standaard wordt
+// uitsluitend een gratis providerketen gebruikt (Gemini → Groq, beide
+// zonder creditcard); Anthropic blijft als optionele, expliciet in te
+// schakelen provider bestaan (AI_PROVIDER=anthropic of
+// AI_PROVIDER=free-with-paid-fallback). Zie README voor de volledige
+// afweging en de actuele gratis limieten.
 import type { APIRoute } from 'astro';
 import { retrieveContext, formatSourcesForPrompt, type RetrievedSource } from '@/lib/ai-assistent';
+import { callAiWithFallback, type ToolDefinition } from '@/lib/ai-providers';
 
 export const prerender = false;
 
-const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_MESSAGE_LENGTH = 600;
 const MAX_HISTORY_MESSAGES = 8; // laatste 4 vraag/antwoord-paren
@@ -36,7 +43,13 @@ const MAX_OUTPUT_TOKENS = 700;
 const RATE_LIMIT_WINDOW_MS = 5 * 60_000;
 const RATE_LIMIT_MAX_PER_IP = 12;
 const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
-const GLOBAL_RATE_LIMIT_MAX = 40;
+// Verlaagd van 40 naar 20: de standaard gratis providerketen (Gemini,
+// ~15 requests/minuut op de gratis tier) heeft een lagere eigen limiet dan
+// de oorspronkelijke globale limiet hier. Een lagere eigen limiet voorkomt
+// dat de applicatie zelf onnodig vaak tegen 429's van de gratis provider(s)
+// aanloopt; de Gemini→Groq-fallback vangt een incidentele overschrijding
+// nog steeds netjes op (zie src/lib/ai-providers/index.ts).
+const GLOBAL_RATE_LIMIT_MAX = 20;
 
 const ipHits = new Map<string, number[]>();
 let globalHits: number[] = [];
@@ -83,10 +96,10 @@ function sanitizeSnippet(text: string): string {
   return text.replace(/<\/?bronnen>/gi, '').replace(/<\/?systeem>/gi, '');
 }
 
-const ANSWER_TOOL = {
+const ANSWER_TOOL: ToolDefinition = {
   name: 'geef_antwoord',
   description: 'Geef een gestructureerd antwoord op de vraag van de gebruiker, uitsluitend gebaseerd op de meegegeven bronnen.',
-  input_schema: {
+  schema: {
     type: 'object',
     properties: {
       kortAntwoord: {
@@ -145,50 +158,6 @@ VEILIGHEID
 Antwoord altijd via de tool "geef_antwoord".`;
 }
 
-async function callAnthropic(
-  apiKey: string,
-  systemPrompt: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-): Promise<{ input: Record<string, unknown> } | { error: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        temperature: 0.3,
-        system: systemPrompt,
-        messages,
-        tools: [ANSWER_TOOL],
-        tool_choice: { type: 'tool', name: 'geef_antwoord' },
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return { error: `Anthropic API ${res.status}: ${text.slice(0, 300)}` };
-    }
-    const data = await res.json();
-    const toolUse = (data?.content ?? []).find((c: { type: string }) => c.type === 'tool_use');
-    if (!toolUse || typeof toolUse.input !== 'object') {
-      return { error: 'Geen geldig tool-antwoord ontvangen van het taalmodel.' };
-    }
-    return { input: toolUse.input };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'onbekende fout';
-    return { error: `Netwerkfout of timeout bij aanroep taalmodel: ${message}` };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   if (request.headers.get('content-type')?.includes('application/json') !== true) {
     return jsonResponse({ ok: false, code: 'bad_request', error: 'Ongeldig contenttype.' }, 400);
@@ -242,18 +211,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   const articleSlug = typeof body.articleSlug === 'string' && body.articleSlug.length < 200 ? body.articleSlug : undefined;
 
-  const apiKey = import.meta.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return jsonResponse(
-      {
-        ok: false,
-        code: 'not_configured',
-        error: 'De AI-assistent is momenteel niet beschikbaar.',
-      },
-      503,
-    );
-  }
-
   let sources: RetrievedSource[];
   try {
     sources = await retrieveContext(message, { pinnedArticleSlug: articleSlug });
@@ -270,8 +227,28 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     { role: 'user', content: `${contextBlock}\n\nVraag van de bezoeker: ${message}` },
   ];
 
-  const result = await callAnthropic(apiKey, systemPrompt, messages);
-  if ('error' in result) {
+  const result = await callAiWithFallback({
+    systemPrompt,
+    messages,
+    tool: ANSWER_TOOL,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    timeoutMs: FETCH_TIMEOUT_MS,
+  });
+
+  if (!result.ok) {
+    // Geen enkele provider geconfigureerd (attempted is leeg) versus wel
+    // geprobeerd maar allemaal gefaald: apart afgehandeld voor duidelijkere
+    // statuscodes, zelfde als voorheen bij de losse Anthropic-integratie.
+    if (result.attempted.length === 0) {
+      return jsonResponse(
+        {
+          ok: false,
+          code: 'not_configured',
+          error: 'De AI-assistent is momenteel niet beschikbaar.',
+        },
+        503,
+      );
+    }
     return jsonResponse(
       {
         ok: false,
