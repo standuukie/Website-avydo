@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/werkgevers-vandaag-investeren-morgen-pr
 summary: "Hoe zorgen we ervoor dat werknemers ook in 2035 kunnen rekenen op waardevol werk en goede arbeidsvoorwaarden? Die vraag moet volgens werkgeversorganisaties AWVN, VNO-NCW en MKB-Nederland centraal staan in het arbeidsvoorwaardenoverleg van 2027. De focus moet verschuiven van het…"
 relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
 tags: []
+audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

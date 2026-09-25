@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/stevige-handreiking-kabinet-om-aan-tafe
 summary: "[vno:vnomkb] zien in de gelekte begroting opnieuw een stevige handreiking van het kabinet naar de vakbonden. Juist nu is het zaak om met elkaar aan tafel te gaan en afspraken te maken over wat Nederland de komende jaren nodig heeft. De ondernemersorganisaties zijn teleurgesteld…"
 relevance: "Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

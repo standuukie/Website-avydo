@@ -4,34 +4,30 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import PageHero from '@/components/PageHero.astro';
 import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
-import { formatDate } from '@/lib/kenniscentrum';
+import { audienceOptions, pickHighlighted } from '@/lib/kenniscentrum';
 import { resourceLinks } from '@/data/links';
 import { company } from '@/data/company';
 
 const allArticles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
 allArticles.sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf());
 
-const featured =
-  allArticles.find((a) => a.data.featured) ??
-  allArticles.find((a) => a.data.priority === 'belangrijk') ??
-  allArticles[0];
-
-const gridArticles = allArticles.filter((a) => a.slug !== featured?.slug);
-
 const categories = [...new Set(allArticles.map((a) => a.data.category))].sort();
+const bronnen = [...new Set(allArticles.map((a) => a.data.sourceName))].sort();
+
+const highlighted = pickHighlighted(allArticles, 4);
 
 const INITIAL_VISIBLE = 9;
 ---
 
 <BaseLayout
   title="Kenniscentrum"
-  description="Het kenniscentrum van Avydo verzamelt actuele ontwikkelingen in belastingen, accountancy, personeel en ondernemerschap die relevant zijn voor Nederlandse mkb-ondernemers."
+  description="Het kenniscentrum van Avydo verzamelt actuele ontwikkelingen in belastingen, accountancy, personeel en ondernemerschap die relevant zijn voor Nederlandse mkb-ondernemers. Filter op onderwerp, bron of jouw situatie als ondernemer."
   path="/kenniscentrum"
 >
   <PageHero
     eyebrow="Kenniscentrum"
     title="Actuele ontwikkelingen voor mkb-ondernemers"
-    intro="Avydo verzamelt hier belangrijke recente ontwikkelingen op het gebied van belastingen, accountancy, personeel en ondernemerschap, met een korte, eigen uitleg wat dit voor uw onderneming kan betekenen, en een link naar de oorspronkelijke bron."
+    intro="Avydo verzamelt hier automatisch belangrijke recente ontwikkelingen op het gebied van belastingen, accountancy, personeel en ondernemerschap, met een korte, eigen uitleg wat dit voor uw onderneming kan betekenen, en een link naar de oorspronkelijke bron."
     crumbs={[{ label: 'Kenniscentrum' }]}
   />
 
@@ -49,64 +45,104 @@ const INITIAL_VISIBLE = 9;
     </section>
   ) : (
     <>
-      {featured && (
+      <section class="section pb-0">
+        <div class="container max-w-content">
+          <div class="rounded-md border border-ink-100 bg-white p-5 md:p-6">
+            <h2 id="kc-audience-heading" class="text-sm font-semibold text-ink-900">Waar ben je vooral mee bezig?</h2>
+            <p class="mt-1 text-xs text-ink-500">Kies je situatie en we laten relevante artikelen duidelijker naar voren komen. Dit slaat niets op en gebruikt geen tracking.</p>
+            <div class="mt-3 flex flex-wrap gap-2" role="group" aria-labelledby="kc-audience-heading" id="kc-audience-filters">
+              <button type="button" data-audience-filter="" class="filter-chip is-active" aria-pressed="true">Geen voorkeur</button>
+              {audienceOptions.map((opt) => (
+                <button type="button" data-audience-filter={opt.value} class="filter-chip" aria-pressed="false">{opt.label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {highlighted.length > 0 && (
         <section class="section pb-0">
           <div class="container max-w-content">
             <p class="eyebrow">Uitgelicht</p>
-            <a href={`/kenniscentrum/${featured.slug}`} class="mt-3 group block card p-7 md:p-9 hover:shadow-card-hover transition-shadow duration-200">
-              <div class="flex items-center gap-2 flex-wrap">
-                {featured.data.priority === 'belangrijk' && (
-                  <span class="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">Belangrijk</span>
-                )}
-                <span class="text-xs font-medium text-ink-500">{featured.data.category}</span>
-                <span class="text-xs text-ink-400">&middot;</span>
-                <time datetime={featured.data.publishedAt.toISOString()} class="text-xs text-ink-500">{formatDate(featured.data.publishedAt)}</time>
-              </div>
-              <h2 class="mt-3 font-display text-2xl md:text-3xl font-semibold text-ink-900 group-hover:text-brand-600 transition-colors">
-                {featured.data.title}
-              </h2>
-              <p class="mt-3 text-ink-600 leading-relaxed max-w-3xl">{featured.data.summary}</p>
-              <span class="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 group-hover:gap-2.5 transition-all">
-                Lees meer
-                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
-              </span>
-            </a>
+            <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Belangrijk voor ondernemers</h2>
+            <p class="mt-2 text-ink-600 leading-relaxed max-w-2xl">Een kleine selectie van de meest actuele en relevante ontwikkelingen, automatisch samengesteld uit de laatste artikelen.</p>
+            <div class="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {highlighted.map((article) => (
+                <ArticleCard article={article} highlighted />
+              ))}
+            </div>
           </div>
         </section>
       )}
 
       <section class="section">
         <div class="container max-w-content">
-          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div class="flex flex-wrap gap-2" id="category-filters">
-              <button type="button" data-category-filter="" class="filter-chip is-active">Alles</button>
-              {categories.map((cat) => (
-                <button type="button" data-category-filter={cat} class="filter-chip">{cat}</button>
-              ))}
+          <p class="eyebrow">Automatisch verzameld nieuws</p>
+          <h2 class="text-2xl font-display font-semibold text-ink-900">Laatste nieuws</h2>
+          <p class="mt-2 text-ink-600 leading-relaxed max-w-2xl">Alle artikelen, nieuwste eerst. Zoek of filter hieronder om snel te vinden wat voor jou relevant is.</p>
+
+          <div class="mt-6 lg:hidden">
+            <button
+              type="button"
+              id="kc-filters-toggle"
+              aria-expanded="false"
+              aria-controls="kc-filters-panel"
+              class="btn-outline w-full justify-between"
+            >
+              <span>Filters &amp; zoeken</span>
+              <span id="kc-active-filter-count" class="text-xs text-ink-500"></span>
+            </button>
+          </div>
+
+          <div id="kc-filters-panel" class="hidden lg:block mt-6 space-y-5">
+            <div>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-category-heading">Categorie</span>
+              <div class="flex flex-wrap gap-2" role="group" aria-labelledby="kc-category-heading" id="category-filters">
+                <button type="button" data-category-filter="" class="filter-chip is-active" aria-pressed="true">Alles</button>
+                {categories.map((cat) => (
+                  <button type="button" data-category-filter={cat} class="filter-chip" aria-pressed="false">{cat}</button>
+                ))}
+              </div>
             </div>
-            <div class="relative w-full lg:w-72 shrink-0">
-              <input
-                type="search"
-                id="kc-search"
-                placeholder="Zoeken in kenniscentrum&hellip;"
-                class="w-full rounded border border-ink-200 px-3.5 py-2.5 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-colors"
-                aria-label="Zoeken in kenniscentrum"
-              />
-              <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.55 4.3l3.2 3.2a.75.75 0 1 1-1.06 1.06l-3.2-3.2A7 7 0 0 1 2 9Z" clip-rule="evenodd" /></svg>
+
+            <div>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-source-heading">Bron</span>
+              <div class="flex flex-wrap gap-2" role="group" aria-labelledby="kc-source-heading" id="source-filters">
+                <button type="button" data-source-filter="" class="filter-chip is-active" aria-pressed="true">Alle bronnen</button>
+                {bronnen.map((bron) => (
+                  <button type="button" data-source-filter={bron} class="filter-chip" aria-pressed="false">{bron}</button>
+                ))}
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div class="relative flex-1 sm:max-w-xs">
+                <label for="kc-search" class="sr-only">Zoeken in kenniscentrum</label>
+                <input
+                  type="search"
+                  id="kc-search"
+                  placeholder="Zoek op titel, samenvatting, categorie of bron&hellip;"
+                  class="w-full rounded border border-ink-200 px-3.5 py-2.5 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-colors"
+                />
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.55 4.3l3.2 3.2a.75.75 0 1 1-1.06 1.06l-3.2-3.2A7 7 0 0 1 2 9Z" clip-rule="evenodd" /></svg>
+              </div>
+              <button type="button" id="kc-clear-filters" class="btn-outline shrink-0">Filters wissen</button>
             </div>
           </div>
 
-          <p id="kc-empty" class="hidden mt-10 text-center text-ink-500 py-12">Geen artikelen gevonden voor deze zoekopdracht of categorie.</p>
+          <p id="kc-results-count" class="mt-6 text-sm text-ink-500" aria-live="polite"></p>
 
-          <div id="kc-grid" data-initial-visible={INITIAL_VISIBLE} class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {gridArticles.map((article, i) => (
+          <p id="kc-empty" class="hidden mt-4 text-center text-ink-500 py-12">Geen artikelen gevonden. Probeer een andere zoekterm of wis je filters.</p>
+
+          <div id="kc-grid" data-initial-visible={INITIAL_VISIBLE} class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {allArticles.map((article, i) => (
               <div class:list={['kc-item', i >= INITIAL_VISIBLE && 'kc-extra hidden']}>
                 <ArticleCard article={article} />
               </div>
             ))}
           </div>
 
-          {gridArticles.length > INITIAL_VISIBLE && (
+          {allArticles.length > INITIAL_VISIBLE && (
             <div class="mt-8 text-center">
               <button type="button" id="kc-load-more" class="btn-outline">Toon meer artikelen</button>
             </div>
@@ -152,41 +188,124 @@ const INITIAL_VISIBLE = 9;
   const initialVisible = Number(grid?.dataset.initialVisible ?? 9);
   const items = Array.from(document.querySelectorAll<HTMLElement>('.kc-item'));
   const emptyState = document.getElementById('kc-empty');
+  const resultsCount = document.getElementById('kc-results-count');
   const loadMoreBtn = document.getElementById('kc-load-more');
   const searchInput = document.getElementById('kc-search') as HTMLInputElement | null;
-  const filterButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-category-filter]'));
+  const categoryButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-category-filter]'));
+  const sourceButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-source-filter]'));
+  const audienceButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-audience-filter]'));
+  const clearFiltersBtn = document.getElementById('kc-clear-filters');
+  const filtersToggle = document.getElementById('kc-filters-toggle');
+  const filtersPanel = document.getElementById('kc-filters-panel');
+  const activeFilterCountEl = document.getElementById('kc-active-filter-count');
 
-  let activeCategory = '';
+  function resolveParam(buttons: HTMLButtonElement[], attr: string, value: string | null): string {
+    if (!value) return '';
+    return buttons.some((b) => b.dataset[attr] === value) ? value : '';
+  }
+
+  const initialParams = new URLSearchParams(window.location.search);
+  let activeCategory = resolveParam(categoryButtons, 'categoryFilter', initialParams.get('categorie'));
+  let activeSource = resolveParam(sourceButtons, 'sourceFilter', initialParams.get('bron'));
+  let activeAudience = resolveParam(audienceButtons, 'audienceFilter', initialParams.get('doelgroep'));
+  const initialQuery = initialParams.get('q') ?? '';
+  if (searchInput && initialQuery) searchInput.value = initialQuery;
+
   let showAll = false;
+
+  function setActiveButton(buttons: HTMLButtonElement[], attr: string, value: string) {
+    buttons.forEach((b) => {
+      const isActive = (b.dataset[attr] ?? '') === value;
+      b.classList.toggle('is-active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
+    });
+  }
+
+  function syncUrl() {
+    const params = new URLSearchParams();
+    if (activeCategory) params.set('categorie', activeCategory);
+    if (activeSource) params.set('bron', activeSource);
+    if (activeAudience) params.set('doelgroep', activeAudience);
+    const query = searchInput?.value.trim() ?? '';
+    if (query) params.set('q', query);
+    const qs = params.toString();
+    const newUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+    window.history.replaceState(null, '', newUrl);
+  }
+
+  function updateActiveFilterCount() {
+    if (!activeFilterCountEl) return;
+    const count = [activeCategory, activeSource, activeAudience, searchInput?.value.trim()].filter(Boolean).length;
+    activeFilterCountEl.textContent = count > 0 ? `${count} actief` : '';
+  }
 
   function applyFilters() {
     const query = (searchInput?.value ?? '').trim().toLowerCase();
-    const filtering = Boolean(activeCategory) || Boolean(query);
+    const anyRefinement = Boolean(activeCategory) || Boolean(activeSource) || Boolean(query) || Boolean(activeAudience);
     let visibleCount = 0;
 
     items.forEach((item, index) => {
       const article = item.querySelector('article');
       const category = article?.getAttribute('data-category') ?? '';
+      const source = article?.getAttribute('data-source') ?? '';
       const title = article?.getAttribute('data-title') ?? '';
       const summary = article?.getAttribute('data-summary') ?? '';
+      const tags = article?.getAttribute('data-tags') ?? '';
+      const audiences = (article?.getAttribute('data-audiences') ?? '').split(' ').filter(Boolean);
 
       const matchesCategory = !activeCategory || category === activeCategory;
-      const matchesQuery = !query || title.includes(query) || summary.includes(query);
-      const withinInitialBatch = showAll || filtering || index < initialVisible;
+      const matchesSource = !activeSource || source === activeSource;
+      const matchesQuery = !query
+        || title.includes(query)
+        || summary.includes(query)
+        || category.toLowerCase().includes(query)
+        || source.toLowerCase().includes(query)
+        || tags.includes(query);
+      const withinInitialBatch = showAll || anyRefinement || index < initialVisible;
 
-      const visible = matchesCategory && matchesQuery && withinInitialBatch;
+      const visible = matchesCategory && matchesSource && matchesQuery && withinInitialBatch;
       item.classList.toggle('hidden', !visible);
+
+      const audienceMatch = Boolean(activeAudience) && audiences.includes(activeAudience);
+      const badge = article?.querySelector<HTMLElement>('[data-audience-badge]');
+      badge?.classList.toggle('hidden', !audienceMatch);
+      item.style.order = audienceMatch ? '-1' : '0';
+
       if (visible) visibleCount += 1;
     });
 
     emptyState?.classList.toggle('hidden', visibleCount > 0);
-    if (loadMoreBtn) loadMoreBtn.style.display = filtering || showAll ? 'none' : '';
+    if (loadMoreBtn) loadMoreBtn.style.display = anyRefinement || showAll ? 'none' : '';
+    if (resultsCount) resultsCount.textContent = `${visibleCount} artikel${visibleCount === 1 ? '' : 'en'} gevonden`;
+
+    updateActiveFilterCount();
+    syncUrl();
   }
 
-  filterButtons.forEach((btn) => {
+  setActiveButton(categoryButtons, 'categoryFilter', activeCategory);
+  setActiveButton(sourceButtons, 'sourceFilter', activeSource);
+  setActiveButton(audienceButtons, 'audienceFilter', activeAudience);
+
+  categoryButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       activeCategory = btn.dataset.categoryFilter ?? '';
-      filterButtons.forEach((b) => b.classList.toggle('is-active', b === btn));
+      setActiveButton(categoryButtons, 'categoryFilter', activeCategory);
+      applyFilters();
+    });
+  });
+
+  sourceButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeSource = btn.dataset.sourceFilter ?? '';
+      setActiveButton(sourceButtons, 'sourceFilter', activeSource);
+      applyFilters();
+    });
+  });
+
+  audienceButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeAudience = btn.dataset.audienceFilter ?? '';
+      setActiveButton(audienceButtons, 'audienceFilter', activeAudience);
       applyFilters();
     });
   });
@@ -196,6 +315,23 @@ const INITIAL_VISIBLE = 9;
   loadMoreBtn?.addEventListener('click', () => {
     showAll = true;
     applyFilters();
+  });
+
+  clearFiltersBtn?.addEventListener('click', () => {
+    activeCategory = '';
+    activeSource = '';
+    activeAudience = '';
+    if (searchInput) searchInput.value = '';
+    setActiveButton(categoryButtons, 'categoryFilter', '');
+    setActiveButton(sourceButtons, 'sourceFilter', '');
+    setActiveButton(audienceButtons, 'audienceFilter', '');
+    applyFilters();
+  });
+
+  filtersToggle?.addEventListener('click', () => {
+    const isOpen = !filtersPanel?.classList.contains('hidden');
+    filtersPanel?.classList.toggle('hidden', isOpen);
+    filtersToggle.setAttribute('aria-expanded', String(!isOpen));
   });
 
   applyFilters();

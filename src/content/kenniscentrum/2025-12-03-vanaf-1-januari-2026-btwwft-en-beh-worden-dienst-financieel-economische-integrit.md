@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Bureau Toezicht Wet ter voorkoming van witwassen en financieren van terrorisme (BTWwft) en het Bureau Economische Handhaving (BEH) gaan vanaf 1 januari 2026 samen verder als nieuwe directie Dienst Financieel-Economische Integriteit (DFEI). Deze directie neemt niet-fiscale taken…"
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

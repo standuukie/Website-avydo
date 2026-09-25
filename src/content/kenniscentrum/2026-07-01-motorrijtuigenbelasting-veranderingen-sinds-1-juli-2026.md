@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Sinds 1 juli 2026 zijn de tarieven motorrijtuigenbelasting (mrb) voor een aantal motorrijtuigen veranderd. En de regeling bedrijfsvoertuigenpark is vervallen."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

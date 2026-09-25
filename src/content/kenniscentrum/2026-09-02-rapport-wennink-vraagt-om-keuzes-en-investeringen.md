@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/rapport-wennink-vraagt-om-keuzes-en-inv
 summary: "Nederland moet snel werk maken van een krachtig industrie- en innovatiebeleid. In aanloop naar het Kamerdebat over het rapport-Wennink roepen VNO-NCW en MKB-Nederland het kabinet op om met meer samenhang, regie en investeringskracht aan de slag te gaan. In ons position paper…"
 relevance: "Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

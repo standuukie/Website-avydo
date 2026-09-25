@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "De 'Landelijke Landbouwnormen 2025' zijn beschikbaar. Hierin vindt u de normbedragen voor 2025 voor de meest gangbare kostenposten, en voor bepaalde bedrijfsmiddelen en voorraden voor agrarische bedrijven."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

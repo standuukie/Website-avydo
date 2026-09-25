@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Bent u ondernemer? Steeds meer zakelijke brieven van de Belastingdienst komen digitaal beschikbaar. Wilt u zakelijke post van de Belastingdienst niet meer op papier ontvangen? U kunt nu uw keuze doorgeven in Mijn Belastingdienst Zakelijk."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

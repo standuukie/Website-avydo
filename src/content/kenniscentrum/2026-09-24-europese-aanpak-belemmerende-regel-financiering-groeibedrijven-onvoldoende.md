@@ -8,6 +8,7 @@ sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/24/europese-aanp
 summary: "Innovatieve startups en scale-ups lopen financiering mis, omdat ze ten onrechte aangemerkt kunnen worden als niet-levensvatbare bedrijven volgens de Europese definitie Onderneming in Moeilijkheden (OIM). Het nieuwste voorstel van de Europese..."
 relevance: "Dit kan invloed hebben op de financiële planning van uw onderneming. Bekijk de volledige publicatie voor de precieze details."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

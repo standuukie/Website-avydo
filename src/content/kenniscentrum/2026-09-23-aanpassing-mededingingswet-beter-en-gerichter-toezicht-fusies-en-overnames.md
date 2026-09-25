@@ -8,6 +8,7 @@ sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/22/aanpassing-me
 summary: "Grote bedrijven die innovatieve startups overnemen en daarmee toekomstige concurrentie beperken. Of bedrijven die door meerdere kleinere overnames zich versterken en concurrenten nauwelijks ruimte geven. Nu is het vaak niet mogelijk om te..."
 relevance: "Deze wijziging in wet- of regelgeving kan verplichtingen met zich meebrengen voor ondernemers. Ga na of en wanneer dit voor u van toepassing wordt."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import {
   sources,
   categoryKeywords,
+  audienceKeywords,
   importantKeywords,
   maxArticlesPerRun,
   maxArticlesPerSourcePerRun,
@@ -232,6 +233,19 @@ export function pickCategory(text, defaultCategory) {
   return entries[0][0];
 }
 
+// Bepaalt voor welke doelgroepen (zzp, bv-dga, werkgever, starter,
+// mkb-ondernemer) een artikel relevant is, puur op basis van
+// trefwoordtreffers in titel + samenvatting (zie audienceKeywords). Een
+// artikel kan meerdere doelgroepen krijgen, of geen enkele — nooit geraden.
+export function pickAudiences(text) {
+  const lower = text.toLowerCase();
+  const matches = [];
+  for (const [audience, keywords] of Object.entries(audienceKeywords)) {
+    if (keywords.some((kw) => lower.includes(kw))) matches.push(audience);
+  }
+  return matches;
+}
+
 export function pickPriority(text, pubDate) {
   const lower = text.toLowerCase();
   if (importantKeywords.some((kw) => lower.includes(kw))) return 'belangrijk';
@@ -301,7 +315,7 @@ Geef terug als JSON met exact deze velden, geen andere tekst:
   }
 }
 
-function writeArticle({ title, category, priority, publishedAt, sourceName, sourceUrl, summary, relevance, aiAssisted }) {
+function writeArticle({ title, category, priority, publishedAt, sourceName, sourceUrl, summary, relevance, audiences, aiAssisted }) {
   const dateStr = publishedAt.toISOString().slice(0, 10);
   let baseSlug = `${dateStr}-${slugify(title)}`;
   let filename = `${baseSlug}.md`;
@@ -322,6 +336,7 @@ function writeArticle({ title, category, priority, publishedAt, sourceName, sour
     `summary: "${yamlEscape(summary)}"`,
     `relevance: "${yamlEscape(relevance)}"`,
     'tags: []',
+    `audiences: [${audiences.map((a) => `"${a}"`).join(', ')}]`,
     'featured: false',
     'hidden: false',
     `aiAssisted: ${aiAssisted}`,
@@ -347,6 +362,7 @@ async function publishItem(item, source) {
 
   const category = pickCategory(combinedText, source.defaultCategory) ?? 'Ondernemen';
   const priority = pickPriority(combinedText, publishedAt);
+  const audiences = pickAudiences(combinedText);
 
   let summaryData;
   if (ANTHROPIC_API_KEY) {
@@ -365,6 +381,7 @@ async function publishItem(item, source) {
     sourceUrl: item.link,
     summary: summaryData.summary,
     relevance: summaryData.relevance,
+    audiences,
     aiAssisted: summaryData.aiAssisted,
   });
 }

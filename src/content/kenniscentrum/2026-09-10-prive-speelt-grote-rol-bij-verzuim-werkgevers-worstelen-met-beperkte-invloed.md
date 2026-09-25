@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/prive-speelt-grote-rol-bij-verzuim-werk
 summary: "Werkgevers in het mkb worstelen met verzuim waarbij privéproblemen en andere niet-werkgerelateerde factoren een rol spelen. Ruim zes op de tien ondernemers zien deze factoren als belangrijke oorzaken van verzuim. Tegelijk noemt bijna driekwart de beperkte invloed op de…"
 relevance: "Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is."
 tags: []
+audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

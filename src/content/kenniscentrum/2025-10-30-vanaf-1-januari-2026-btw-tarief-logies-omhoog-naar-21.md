@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Vanaf 1 januari 2026 geldt voor het verstrekken van logies het btw-tarief van 21%."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

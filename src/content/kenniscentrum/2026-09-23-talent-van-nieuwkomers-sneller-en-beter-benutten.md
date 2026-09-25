@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/talent-van-nieuwkomers-sneller-en-beter
 summary: "VNO-NCW en MKB-Nederland steunen het SER-advies om nieuwkomers sneller aan werk te helpen met goede begeleiding en praktische steun voor werkgevers."
 relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
 tags: []
+audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "De nieuwe DAC8/CARF-regelgeving brengt belangrijke verplichtingen met zich mee voor cryptodienstverleners. Daarom organiseren wij op 7 oktober een vraag- en antwoordsessie."
 relevance: "Deze wijziging in wet- of regelgeving kan verplichtingen met zich meebrengen voor ondernemers. Ga na of en wanneer dit voor u van toepassing wordt."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

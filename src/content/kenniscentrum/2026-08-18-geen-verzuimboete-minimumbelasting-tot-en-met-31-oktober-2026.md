@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Groepsentiteiten die aangifte Minimumbelasting moeten doen, krijgen tot en met 31 oktober 2026 geen boete als zij hun aangifte te laat indienen of te laat betalen."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

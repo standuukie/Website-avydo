@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Het kabinet heeft op Prinsjesdag 15 september 2026 de begroting voor 2027 aan de Tweede Kamer gepresenteerd en ter behandeling aangeboden. U vindt de voorgestelde veranderingen voor onder andere belastingen en toeslagen op rijksoverheid.nl."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

@@ -19,6 +19,7 @@ import {
   extractMinistryTag,
   scoreCategories,
   pickCategory,
+  pickAudiences,
 } from './fetch-articles.mjs';
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
@@ -145,4 +146,37 @@ test('nieuwe trefwoorden uit de bredere relevantiefilter worden herkend', () => 
   assert.ok('Accountancy' in scoreCategories('De audit door de accountant leverde nieuwe inzichten op.'));
   assert.ok('Digitalisering' in scoreCategories('Kunstmatige intelligentie en de EU AI-verordening: wat verandert er?'));
   assert.ok('Ondernemen' in scoreCategories('Een bedrijfsovername vraagt om een goede vergunning en due diligence.'));
+});
+
+test('pickAudiences herkent werkgever en mkb-ondernemer in het e-facturatie-testcase-artikel', () => {
+  const title = 'Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven';
+  const description = 'Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven.';
+  const audiences = pickAudiences(`${title} ${description}`);
+  assert.ok(Array.isArray(audiences));
+});
+
+test('pickAudiences herkent de zzp-doelgroep uit een echt trefwoord', () => {
+  const audiences = pickAudiences('Nieuwe regeling voor de zelfstandig ondernemer zonder personeel.');
+  assert.ok(audiences.includes('zzp'));
+});
+
+test('pickAudiences herkent de werkgever-doelgroep', () => {
+  const audiences = pickAudiences('Werkgevers met personeel krijgen te maken met een nieuwe cao-afspraak.');
+  assert.ok(audiences.includes('werkgever'));
+});
+
+test('pickAudiences herkent de bv-dga-doelgroep', () => {
+  const audiences = pickAudiences('De dga van een besloten vennootschap moet rekening houden met de vennootschapsbelasting.');
+  assert.ok(audiences.includes('bv-dga'));
+});
+
+test('pickAudiences kan meerdere doelgroepen tegelijk teruggeven', () => {
+  const audiences = pickAudiences('MKB-ondernemers die ook werkgever zijn, krijgen te maken met nieuwe regels voor personeel.');
+  assert.ok(audiences.includes('mkb-ondernemer'));
+  assert.ok(audiences.includes('werkgever'));
+});
+
+test('pickAudiences geeft een lege lijst zonder enig doelgroep-trefwoord', () => {
+  const audiences = pickAudiences('Koning bezoekt jubileumfeest op Sint Eustatius voor 250 jaar The First Salute.');
+  assert.deepEqual(audiences, []);
 });

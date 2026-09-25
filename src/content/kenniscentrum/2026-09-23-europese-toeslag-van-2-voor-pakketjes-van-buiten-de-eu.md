@@ -8,6 +8,7 @@ sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/22/europese-toes
 summary: "Vanaf 1 november 2026 betalen importeurs een toeslag op alle producten die van buiten de Europese Unie naar Nederland worden geïmporteerd. Met de toeslag van € 2 per productgroep – naast de invoerheffingen – wordt de Douane gecompenseerd voor de..."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

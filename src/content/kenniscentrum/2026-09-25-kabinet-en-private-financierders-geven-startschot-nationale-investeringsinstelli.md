@@ -8,6 +8,7 @@ sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/25/kabinet-en-pr
 summary: "Nederland moet blijven investeren om ook in de toekomst welvarend te zijn en internationaal concurrerend te blijven. Vandaag geven Ministers Heinen (Financiën), Herbert (Economische Zaken en Klimaat) en Sjoerdsma (Buitenlandse Handel en..."
 relevance: "Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

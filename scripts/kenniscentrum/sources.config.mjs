@@ -177,6 +177,34 @@ export const categoryKeywords = {
   ],
 };
 
+// Doelgroepen per artikel: net als categoryKeywords, maar dan om aan te
+// geven voor welk type ondernemer een artikel vooral relevant is. Een
+// artikel krijgt een doelgroep alleen toegekend bij een daadwerkelijke
+// trefwoordtreffer in titel + samenvatting — nooit geraden. Een artikel kan
+// meerdere doelgroepen hebben (bv. zowel "werkgever" als "mkb-ondernemer").
+// De sleutels hier moeten gelijk zijn aan `audiences` in
+// src/content/config.ts.
+export const audienceKeywords = {
+  zzp: ['zzp', "zzp'er", 'zzper', 'zelfstandige zonder personeel', 'eenmanszaak', 'zelfstandig ondernemer'],
+  'bv-dga': ['dga', 'besloten vennootschap', 'vennootschapsbelasting', 'vpb', 'dividend', 'aandeelhouder', 'rechtspersoon'],
+  werkgever: [
+    'werkgever', 'personeel', 'loonheffing', 'payroll', 'cao', 'arbeidsovereenkomst',
+    'minimumloon', 'arbeidsrecht', 'werknemer', 'werknemers', 'ontslag', 're-integratie',
+  ],
+  starter: ['starter', 'startende ondernemer', 'starten met een bedrijf', 'nieuwe onderneming', 'kvk-inschrijving', 'oprichting van een bedrijf'],
+  'mkb-ondernemer': ['mkb', 'midden- en kleinbedrijf', 'ondernemer', 'ondernemers', 'ondernemen', 'bedrijfsleven'],
+};
+
+// Weergavenamen voor de doelgroepen, gebruikt in de frontend
+// (src/lib/kenniscentrum.ts) en gelijk gehouden aan deze sleutels.
+export const audienceLabels = {
+  zzp: "ZZP'er",
+  'bv-dga': 'BV / DGA',
+  werkgever: 'Werkgever',
+  starter: 'Starter',
+  'mkb-ondernemer': 'MKB-ondernemer',
+};
+
 // Trefwoorden die duiden op een belangrijke wijziging (i.t.t. een kleine
 // technische aanpassing). Gebruikt om priority=belangrijk toe te kennen.
 export const importantKeywords = [

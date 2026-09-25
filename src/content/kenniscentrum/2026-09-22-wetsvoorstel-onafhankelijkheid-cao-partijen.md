@@ -8,6 +8,7 @@ sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/22/wetsvoorstel-
 summary: "Er komt in de wet te staan dat partijen onafhankelijk van elkaar moeten zijn in cao-onderhandelingen. Dat voorstel van minister Vijlbrief van het ministerie van Sociale Zaken en Werkgelegenheid gaat vandaag in internetconsultatie. Nu staat dit nog..."
 relevance: "Deze wijziging in wet- of regelgeving kan verplichtingen met zich meebrengen voor ondernemers. Ga na of en wanneer dit voor u van toepassing wordt."
 tags: []
+audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

@@ -8,6 +8,7 @@ sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichte
 summary: "Van 3 november tot en met 1 december 2026 organiseert de Belastingdienst de jaarlijkse Intermediairdagen. Dit evenement voor fiscaal dienstverleners en salarisprofessionals vindt plaats op 8 verschillende locaties. Kunt u er niet bij zijn? U kunt de sessies ook online volgen."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: []
 featured: false
 hidden: false
 aiAssisted: false

@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
-import { formatDate } from '@/lib/kenniscentrum';
+import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
 import { safeJsonLd } from '@/lib/seo';
 
 export async function getStaticPaths() {
@@ -15,7 +15,7 @@ export async function getStaticPaths() {
 }
 
 const { article, allArticles } = Astro.props;
-const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance } = article.data;
+const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences } = article.data;
 
 const related = allArticles
   .filter((a) => a.slug !== article.slug && a.data.category === category)
@@ -61,6 +61,15 @@ const structuredData = {
         <time datetime={publishedAt.toISOString()} class="text-xs text-ink-300">{formatDate(publishedAt)}</time>
       </div>
       <h1 class="mt-3 text-3xl md:text-4xl font-display font-semibold text-white max-w-3xl leading-tight">{title}</h1>
+      {audiences.length > 0 && (
+        <div class="mt-4 flex flex-wrap gap-1.5">
+          {audiences.map((a) => (
+            <span class="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-ink-100">
+              {audienceLabels[a] ?? a}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   </section>
 

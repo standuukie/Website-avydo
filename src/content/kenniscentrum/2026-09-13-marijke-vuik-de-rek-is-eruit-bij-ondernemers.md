@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/marijke-vuik-de-rek-is-eruit-bij-ondern
 summary: "De lasten voor ondernemers zijn de afgelopen jaren enorm gestegen, benadrukte Marijke Vuik in een gesprek bij WNL op zondag, waar zij samen met Coen van Oostrom, voorzitter van VNO-NCW aanwezig was. ‘De rek is eruit.’ Uit de vandaag gepubliceerde uitslag van de…"
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

@@ -8,6 +8,7 @@ sourceUrl: "https://www.mkb.nl/artikelen/ondernemersorganisaties-agenda-voor-gro
 summary: "Reactie VNO-NCW en MKB-Nederland op de Miljoenennota."
 relevance: "Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is."
 tags: []
+audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
 aiAssisted: false

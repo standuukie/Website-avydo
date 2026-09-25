@@ -14,6 +14,12 @@ export const categories = [
 
 export const priorities = ['belangrijk', 'actueel', 'praktisch'] as const;
 
+// Doelgroepen, afgeleid door de nieuwsengine op basis van trefwoorden in de
+// titel/samenvatting van een artikel (zie scripts/kenniscentrum/sources.config.mjs,
+// audienceKeywords) — nooit handmatig geraden. Een artikel kan meerdere
+// doelgroepen hebben, of geen enkele als er geen duidelijke match is.
+export const audiences = ['zzp', 'bv-dga', 'werkgever', 'starter', 'mkb-ondernemer'] as const;
+
 const kenniscentrum = defineCollection({
   type: 'content',
   schema: z.object({
@@ -27,6 +33,7 @@ const kenniscentrum = defineCollection({
     summary: z.string(),
     relevance: z.string(),
     tags: z.array(z.string()).default([]),
+    audiences: z.array(z.enum(audiences)).default([]),
     featured: z.boolean().default(false),
     hidden: z.boolean().default(false),
     aiAssisted: z.boolean().default(false),
