@@ -1,0 +1,487 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import CTASection from '@/components/CTASection.astro';
+import {
+  taxDeadlines,
+  taxTypes,
+  taxTypeLabels,
+  businessAudiences,
+  businessAudienceLabels,
+} from '@/data/belastingkalender';
+import { formatFullDate, monthLabel, getAvailableMonths } from '@/lib/belastingkalender';
+
+const months = getAvailableMonths();
+const currentYear = new Date().getFullYear();
+
+const groupedByMonth = months.map(({ year, month }) => {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  return {
+    year,
+    month,
+    key: prefix,
+    label: monthLabel(year, month),
+    deadlines: taxDeadlines.filter((d) => d.deadline?.startsWith(prefix)),
+  };
+});
+
+const recurringDeadlines = taxDeadlines.filter((d) => !d.deadline);
+
+const availableTaxTypes = taxTypes.filter((t) => taxDeadlines.some((d) => d.taxType === t));
+const availableYears = [...new Set(months.map((m) => m.year))];
+---
+
+<BaseLayout
+  title={`Belastingkalender ${currentYear} – fiscale deadlines voor ondernemers`}
+  description="De Belastingkalender van Avydo toont in één oogopslag de belangrijkste btw-, loonheffingen-, inkomstenbelasting- en vennootschapsbelastingdeadlines voor Nederlandse mkb-ondernemers, met bron en directe link naar de Belastingdienst."
+  path="/belastingkalender"
+>
+  <PageHero
+    eyebrow="Kenniscentrum"
+    title="Belastingkalender"
+    intro="Een overzicht van belangrijke fiscale deadlines voor ondernemers."
+    crumbs={[{ label: 'Kenniscentrum', href: '/kenniscentrum' }, { label: 'Belastingkalender' }]}
+  />
+
+  <section class="section pb-0">
+    <div class="container max-w-content">
+      <div class="rounded-md border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 leading-relaxed">
+        <strong class="font-semibold">Let op:</strong> controleer voor uw specifieke situatie altijd de actuele informatie van de Belastingdienst. Deze kalender is bedoeld als praktisch overzicht en vervangt geen persoonlijk fiscaal advies.
+      </div>
+    </div>
+  </section>
+
+  <section class="section pb-0">
+    <div class="container max-w-content">
+      <div id="next-deadline-block" class="rounded-lg border border-brand-200 bg-brand-50 p-6 md:p-8">
+        <p class="eyebrow">Eerstvolgende deadline</p>
+        <div id="next-deadline-content" class="mt-3">
+          <p class="text-ink-600">Een moment geduld, de eerstvolgende deadline wordt berekend&hellip;</p>
+        </div>
+        <noscript>
+          <p class="mt-2 text-sm text-ink-600">Voor de eerstvolgende deadline op basis van vandaag is JavaScript nodig. Bekijk hieronder het volledige overzicht per maand.</p>
+        </noscript>
+      </div>
+    </div>
+  </section>
+
+  <section class="section pb-0">
+    <div class="container max-w-content">
+      <div class="rounded-md border border-ink-100 bg-white p-5 md:p-6 space-y-5">
+        <div>
+          <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="taxtype-heading">Soort belasting</span>
+          <div class="flex flex-wrap gap-2" role="group" aria-labelledby="taxtype-heading" id="taxtype-filters">
+            <button type="button" data-taxtype-filter="" class="filter-chip is-active" aria-pressed="true">Alle</button>
+            {availableTaxTypes.map((t) => (
+              <button type="button" data-taxtype-filter={t} class="filter-chip" aria-pressed="false">{taxTypeLabels[t]}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="audience-heading">Ik ben</span>
+          <div class="flex flex-wrap gap-2" role="group" aria-labelledby="audience-heading" id="audience-filters">
+            <button type="button" data-audience-filter="" class="filter-chip is-active" aria-pressed="true">Geen voorkeur</button>
+            {businessAudiences.map((a) => (
+              <button type="button" data-audience-filter={a} class="filter-chip" aria-pressed="false">{businessAudienceLabels[a]}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section pb-0">
+    <div class="container max-w-content">
+      <p class="eyebrow">Deze maand</p>
+      <h2 class="mt-2 text-2xl font-display font-semibold text-ink-900">Wat moet u deze maand regelen?</h2>
+      <div id="this-month-content" class="mt-6">
+        <p class="text-ink-500">Een moment geduld&hellip;</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container max-w-content">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <p class="eyebrow">Volledig overzicht</p>
+          <h2 class="mt-2 text-2xl font-display font-semibold text-ink-900">Kalender per maand</h2>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" id="kal-prev" class="btn-outline" aria-label="Vorige maand">&larr; Vorige</button>
+          <span id="kal-current-label" class="font-display font-semibold text-ink-900 min-w-[10rem] text-center"></span>
+          <button type="button" id="kal-next" class="btn-outline" aria-label="Volgende maand">Volgende &rarr;</button>
+          <button type="button" id="kal-today" class="btn-outline">Vandaag</button>
+          {availableYears.length > 1 && (
+            <label class="ml-2 text-sm text-ink-600">
+              Jaar
+              <select id="kal-year-select" class="ml-1.5 rounded border border-ink-200 px-2 py-1.5 text-sm">
+                {availableYears.map((y) => <option value={y}>{y}</option>)}
+              </select>
+            </label>
+          )}
+          <button type="button" id="kal-view-toggle" class="btn-outline" aria-pressed="false">Toon heel jaar</button>
+        </div>
+      </div>
+
+      <p id="kal-empty" class="hidden mt-8 text-center text-ink-500 py-10">Er zijn voor deze maand geen deadlines in de kalender opgenomen.</p>
+
+      <div id="kal-months" class="mt-8 space-y-10">
+        {groupedByMonth.map((group) => (
+          <div class="kal-month-group" data-month-key={group.key} data-year={group.year} data-month={group.month}>
+            <h3 class="text-lg font-display font-semibold text-ink-900">{group.label}</h3>
+            <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {group.deadlines.map((d) => (
+                <details class="deadline-card" data-tax-type={d.taxType} data-audiences={d.audiences.join(' ')} data-deadline={d.deadline ?? ''}>
+                  <summary>
+                    <span class="flex items-center gap-2 flex-wrap">
+                      <span class="tax-badge">{taxTypeLabels[d.taxType]}</span>
+                      <span class="days-badge hidden" data-days-badge></span>
+                    </span>
+                    <span class="block mt-2 text-sm font-semibold text-ink-900">{formatFullDate(d.deadline as string)}</span>
+                    <span class="block mt-1 text-sm text-ink-700 leading-snug">{d.title}</span>
+                  </summary>
+                  <div class="deadline-detail">
+                    <p class="text-sm text-ink-700 leading-relaxed">{d.description}</p>
+                    <dl class="mt-3 space-y-2 text-sm">
+                      <div><dt class="font-semibold text-ink-900">Voor wie</dt><dd class="text-ink-600">{d.forWhom}</dd></div>
+                      <div><dt class="font-semibold text-ink-900">Wat moet u doen</dt><dd class="text-ink-600">{d.whatToDo}</dd></div>
+                    </dl>
+                    <p class="mt-3 text-xs text-ink-500">Bron: {d.sourceName} &middot; gecontroleerd op {formatFullDate(d.lastVerified)}</p>
+                    <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline">
+                      Bekijk officiële informatie
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+                    </a>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {recurringDeadlines.length > 0 && (
+        <div class="mt-12">
+          <h3 class="text-lg font-display font-semibold text-ink-900">Doorlopende regelingen (geen vaste kalenderdatum)</h3>
+          <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recurringDeadlines.map((d) => (
+              <details class="deadline-card" data-tax-type={d.taxType} data-audiences={d.audiences.join(' ')} data-deadline="">
+                <summary>
+                  <span class="flex items-center gap-2 flex-wrap">
+                    <span class="tax-badge">{taxTypeLabels[d.taxType]}</span>
+                  </span>
+                  <span class="block mt-2 text-sm font-semibold text-ink-900">{d.period}</span>
+                  <span class="block mt-1 text-sm text-ink-700 leading-snug">{d.title}</span>
+                </summary>
+                <div class="deadline-detail">
+                  <p class="text-sm text-ink-700 leading-relaxed">{d.description}</p>
+                  <dl class="mt-3 space-y-2 text-sm">
+                    <div><dt class="font-semibold text-ink-900">Voor wie</dt><dd class="text-ink-600">{d.forWhom}</dd></div>
+                    <div><dt class="font-semibold text-ink-900">Wat moet u doen</dt><dd class="text-ink-600">{d.whatToDo}</dd></div>
+                  </dl>
+                  <p class="mt-3 text-xs text-ink-500">Bron: {d.sourceName} &middot; gecontroleerd op {formatFullDate(d.lastVerified)}</p>
+                  <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:underline">
+                    Bekijk officiële informatie
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
+                  </a>
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p class="mt-10 text-xs text-ink-500 leading-relaxed max-w-2xl">
+        De Belastingkalender is bedoeld als praktische informatie. Controleer altijd de actuele informatie van de Belastingdienst en uw eigen aangifte- of betalingsverplichtingen. Deze pagina vormt geen fiscaal of juridisch advies.
+      </p>
+    </div>
+  </section>
+
+  <CTASection
+    title="Vragen over een fiscale deadline?"
+    intro="Avydo helpt u graag verder met uw btw-, loon- of vennootschapsbelastingaangifte."
+    showBrochure={false}
+  />
+</BaseLayout>
+
+<style>
+  .filter-chip {
+    @apply rounded-full border border-ink-200 px-3.5 py-1.5 text-sm font-medium text-ink-700 hover:border-brand-300 hover:text-brand-600 transition-colors;
+  }
+  .filter-chip.is-active {
+    @apply border-brand-600 bg-brand-600 text-white hover:border-brand-600 hover:text-white;
+  }
+  .deadline-card {
+    @apply bg-white rounded-md border border-ink-100 shadow-card p-4 cursor-pointer;
+  }
+  .deadline-card summary {
+    @apply list-none cursor-pointer;
+  }
+  .deadline-card summary::-webkit-details-marker {
+    display: none;
+  }
+  .deadline-card .tax-badge {
+    @apply inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700;
+  }
+  .deadline-card .days-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .deadline-card .deadline-detail {
+    @apply mt-4 pt-4 border-t border-ink-100;
+  }
+  .deadline-card[open] {
+    @apply ring-1 ring-brand-200;
+  }
+</style>
+
+<script>
+  import {
+    taxDeadlines,
+    type TaxDeadline,
+  } from '@/data/belastingkalender';
+  import {
+    formatFullDate,
+    monthLabel,
+    daysUntil,
+    deadlineStatusLabel,
+    getNextDeadline,
+    getDeadlinesForMonth,
+    getAvailableMonths,
+  } from '@/lib/belastingkalender';
+
+  const now = new Date();
+  const availableMonths = getAvailableMonths();
+
+  // ---------- Filters (taxType + audience) ----------
+  const taxTypeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-taxtype-filter]'));
+  const audienceButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-audience-filter]'));
+  let activeTaxType = '';
+  let activeAudience = '';
+
+  function setActive(buttons: HTMLButtonElement[], attr: string, value: string) {
+    buttons.forEach((b) => {
+      const isActive = (b.dataset[attr] ?? '') === value;
+      b.classList.toggle('is-active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
+    });
+  }
+
+  function cardMatchesFilters(card: HTMLElement): boolean {
+    const taxType = card.dataset.taxType ?? '';
+    const audiences = (card.dataset.audiences ?? '').split(' ').filter(Boolean);
+    const matchesTaxType = !activeTaxType || taxType === activeTaxType;
+    const matchesAudience = !activeAudience || audiences.includes(activeAudience);
+    return matchesTaxType && matchesAudience;
+  }
+
+  // ---------- Days-remaining badges on every card ----------
+  function applyDaysBadges() {
+    document.querySelectorAll<HTMLElement>('.deadline-card').forEach((card) => {
+      const iso = card.dataset.deadline;
+      const badge = card.querySelector<HTMLElement>('[data-days-badge]');
+      if (!badge) return;
+      if (!iso) {
+        badge.classList.add('hidden');
+        return;
+      }
+      const days = daysUntil(iso, now);
+      const label = deadlineStatusLabel(days);
+      badge.textContent = label;
+      badge.classList.remove('hidden');
+      badge.classList.remove('bg-red-50', 'text-red-700', 'bg-amber-50', 'text-amber-700', 'bg-ink-100', 'text-ink-500', 'bg-emerald-50', 'text-emerald-700');
+      if (days < 0) {
+        badge.classList.add('bg-ink-100', 'text-ink-500');
+      } else if (days <= 7) {
+        badge.classList.add('bg-red-50', 'text-red-700');
+      } else if (days <= 30) {
+        badge.classList.add('bg-amber-50', 'text-amber-700');
+      } else {
+        badge.classList.add('bg-emerald-50', 'text-emerald-700');
+      }
+    });
+  }
+
+  // ---------- "Eerstvolgende deadline" ----------
+  function renderNextDeadline() {
+    const container = document.getElementById('next-deadline-content');
+    if (!container) return;
+    const pool = taxDeadlines.filter((d) => cardMatchesFilters({ dataset: { taxType: d.taxType, audiences: d.audiences.join(' ') } } as unknown as HTMLElement));
+    const next = getNextDeadline(now, pool);
+    if (!next) {
+      container.innerHTML = '<p class="text-ink-600">Geen aankomende deadline gevonden voor de huidige filters.</p>';
+      return;
+    }
+    const days = daysUntil(next.deadline as string, now);
+    container.innerHTML = `
+      <p class="text-2xl md:text-3xl font-display font-semibold text-ink-900">${formatFullDate(next.deadline as string)}</p>
+      <p class="mt-1 text-ink-700">${next.title}</p>
+      <p class="mt-2 inline-flex items-center rounded-full bg-brand-600 px-3 py-1 text-sm font-semibold text-white">${deadlineStatusLabel(days)}</p>
+    `;
+  }
+
+  // ---------- "Deze maand" ----------
+  function renderThisMonth() {
+    const container = document.getElementById('this-month-content');
+    if (!container) return;
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const items = getDeadlinesForMonth(year, month).filter((d) =>
+      cardMatchesFilters({ dataset: { taxType: d.taxType, audiences: d.audiences.join(' ') } } as unknown as HTMLElement),
+    );
+    if (items.length === 0) {
+      container.innerHTML = '<p class="text-ink-500">Er zijn voor deze maand geen deadlines in de kalender opgenomen.</p>';
+      return;
+    }
+    container.innerHTML = `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${items
+      .map((d: TaxDeadline) => {
+        const days = daysUntil(d.deadline as string, now);
+        return `
+          <div class="card p-4">
+            <span class="tax-badge">${d.taxType}</span>
+            <p class="mt-2 text-sm font-semibold text-ink-900">${formatFullDate(d.deadline as string)}</p>
+            <p class="mt-1 text-sm text-ink-700">${d.title}</p>
+            <p class="mt-2 text-xs font-semibold text-brand-600">${deadlineStatusLabel(days)}</p>
+          </div>
+        `;
+      })
+      .join('')}</div>`;
+    // Vervang de tax-badge tekst door de nette labels (voorkom een aparte import-cyclus in de template string hierboven).
+    container.querySelectorAll<HTMLElement>('.tax-badge').forEach((el, i) => {
+      el.textContent = taxTypeLabelFor(items[i].taxType);
+    });
+  }
+
+  function taxTypeLabelFor(taxType: string): string {
+    const labels: Record<string, string> = {
+      btw: 'Btw',
+      loonheffingen: 'Loonheffingen',
+      inkomstenbelasting: 'Inkomstenbelasting',
+      vennootschapsbelasting: 'Vennootschapsbelasting',
+      dividendbelasting: 'Dividendbelasting',
+      icp: 'ICP',
+    };
+    return labels[taxType] ?? taxType;
+  }
+
+  // ---------- Kalender per maand: navigatie + weergave ----------
+  const monthGroups = Array.from(document.querySelectorAll<HTMLElement>('.kal-month-group'));
+  const kalEmpty = document.getElementById('kal-empty');
+  const kalLabel = document.getElementById('kal-current-label');
+  const yearSelect = document.getElementById('kal-year-select') as HTMLSelectElement | null;
+  const viewToggle = document.getElementById('kal-view-toggle');
+
+  let viewMode: 'month' | 'year' = 'month';
+
+  function closestAvailableIndex(year: number, month: number): number {
+    if (availableMonths.length === 0) return -1;
+    let idx = availableMonths.findIndex((m) => m.year === year && m.month === month);
+    if (idx !== -1) return idx;
+    // Kies de eerstvolgende beschikbare maand; anders de laatst beschikbare.
+    idx = availableMonths.findIndex((m) => m.year > year || (m.year === year && m.month >= month));
+    return idx !== -1 ? idx : availableMonths.length - 1;
+  }
+
+  let currentIndex = closestAvailableIndex(now.getFullYear(), now.getMonth() + 1);
+
+  function currentMonth() {
+    return availableMonths[currentIndex] ?? null;
+  }
+
+  function renderCalendar() {
+    if (availableMonths.length === 0) return;
+    const cur = currentMonth();
+    let anyCardVisible = false;
+
+    monthGroups.forEach((group) => {
+      const groupYear = Number(group.dataset.year);
+      const groupMonth = Number(group.dataset.month);
+
+      const visible = viewMode === 'year'
+        ? Boolean(cur) && groupYear === cur!.year
+        : Boolean(cur) && groupYear === cur!.year && groupMonth === cur!.month;
+      group.classList.toggle('hidden', !visible);
+
+      const cards = Array.from(group.querySelectorAll<HTMLElement>('.deadline-card'));
+      cards.forEach((card) => {
+        const match = visible && cardMatchesFilters(card);
+        card.classList.toggle('hidden', !match);
+        if (match) anyCardVisible = true;
+      });
+    });
+
+    kalEmpty?.classList.toggle('hidden', anyCardVisible);
+
+    if (kalLabel) {
+      kalLabel.textContent = cur ? (viewMode === 'year' ? String(cur.year) : monthLabel(cur.year, cur.month)) : '—';
+    }
+    if (yearSelect && cur) yearSelect.value = String(cur.year);
+  }
+
+  document.getElementById('kal-prev')?.addEventListener('click', () => {
+    if (viewMode === 'year') {
+      const cur = currentMonth();
+      if (!cur) return;
+      const idx = availableMonths.findIndex((m) => m.year === cur.year - 1);
+      if (idx !== -1) currentIndex = idx;
+    } else if (currentIndex > 0) {
+      currentIndex -= 1;
+    }
+    renderCalendar();
+  });
+
+  document.getElementById('kal-next')?.addEventListener('click', () => {
+    if (viewMode === 'year') {
+      const cur = currentMonth();
+      if (!cur) return;
+      const idx = availableMonths.findIndex((m) => m.year === cur.year + 1);
+      if (idx !== -1) currentIndex = idx;
+    } else if (currentIndex < availableMonths.length - 1) {
+      currentIndex += 1;
+    }
+    renderCalendar();
+  });
+
+  document.getElementById('kal-today')?.addEventListener('click', () => {
+    currentIndex = closestAvailableIndex(now.getFullYear(), now.getMonth() + 1);
+    renderCalendar();
+  });
+
+  yearSelect?.addEventListener('change', () => {
+    const year = Number(yearSelect.value);
+    const idx = availableMonths.findIndex((m) => m.year === year);
+    if (idx !== -1) currentIndex = idx;
+    renderCalendar();
+  });
+
+  viewToggle?.addEventListener('click', () => {
+    viewMode = viewMode === 'month' ? 'year' : 'month';
+    viewToggle.setAttribute('aria-pressed', String(viewMode === 'year'));
+    viewToggle.textContent = viewMode === 'year' ? 'Toon per maand' : 'Toon heel jaar';
+    renderCalendar();
+  });
+
+  function renderAll() {
+    applyDaysBadges();
+    renderNextDeadline();
+    renderThisMonth();
+    renderCalendar();
+  }
+
+  taxTypeButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeTaxType = btn.dataset.taxtypeFilter ?? '';
+      setActive(taxTypeButtons, 'taxtypeFilter', activeTaxType);
+      renderAll();
+    });
+  });
+
+  audienceButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeAudience = btn.dataset.audienceFilter ?? '';
+      setActive(audienceButtons, 'audienceFilter', activeAudience);
+      renderAll();
+    });
+  });
+
+  renderAll();
+</script>
