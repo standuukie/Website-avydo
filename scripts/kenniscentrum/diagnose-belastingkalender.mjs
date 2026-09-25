@@ -33,24 +33,15 @@ async function part1PdfText() {
   const buf = Buffer.from(await pdfRes.arrayBuffer());
   console.log(`PDF-grootte: ${buf.length} bytes`);
 
-  let pdfParseMod;
   try {
-    pdfParseMod = require('pdf-parse/lib/pdf-parse.js');
+    const { PDFParse } = require('pdf-parse');
+    const parser = new PDFParse({ data: buf });
+    const result = await parser.getText();
+    console.log('\n===== PDF-TEKST =====');
+    console.log(result.text);
   } catch (err) {
-    console.log('require(pdf-parse/lib/pdf-parse.js) faalde:', err.message);
-    try {
-      pdfParseMod = require('pdf-parse');
-    } catch (err2) {
-      console.log('require(pdf-parse) faalde ook:', err2.message);
-      return;
-    }
+    console.log('PDF-tekstextractie mislukt:', err.message);
   }
-  console.log('typeof pdfParseMod:', typeof pdfParseMod, Object.keys(pdfParseMod || {}));
-  const pdfParse = typeof pdfParseMod === 'function' ? pdfParseMod : pdfParseMod.default;
-  console.log('typeof pdfParse:', typeof pdfParse);
-  const data = await pdfParse(buf);
-  console.log('\n===== PDF-TEKST =====');
-  console.log(data.text);
 }
 
 async function part2FindIbDeadline() {
@@ -108,7 +99,11 @@ async function part2FindIbDeadline() {
 }
 
 async function main() {
-  await part1PdfText();
+  try {
+    await part1PdfText();
+  } catch (err) {
+    console.log('Deel 1 (PDF) mislukt:', err.message);
+  }
   await part2FindIbDeadline();
 }
 
