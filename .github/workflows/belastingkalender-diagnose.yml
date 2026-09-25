@@ -13,4 +13,5 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm install --no-save pdf-parse
       - run: node scripts/kenniscentrum/diagnose-belastingkalender.mjs
