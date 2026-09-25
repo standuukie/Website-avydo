@@ -8,6 +8,8 @@ export const categories = [
   'Wet- en regelgeving',
   'Subsidies',
   'Financiën',
+  'Digitalisering',
+  'Duurzaamheid',
 ] as const;
 
 export const priorities = ['belangrijk', 'actueel', 'praktisch'] as const;

@@ -146,7 +146,7 @@ export function parseFeedItems(xmlText) {
 // <news:news><news:title>...</news:title>
 // <news:publication_date>...</news:publication_date></news:news></url>...
 // Bevat geen samenvattingstekst — die wordt apart per artikel opgehaald
-// (zie fetchArticleDescription) zodat we nooit een samenvatting verzinnen.
+// (zie fetchArticlePageMeta) zodat we nooit een samenvatting verzinnen.
 export function parseSitemapNewsItems(xmlText) {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   const doc = parser.parse(xmlText);
@@ -181,14 +181,33 @@ export function extractMetaDescription(html) {
   return decoded || null;
 }
 
-async function fetchArticleDescription(url) {
+// Leest de ministerie-toewijzing van een rijksoverheid.nl-artikelpagina uit
+// de echte breadcrumb-link naar /ministeries/<slug> (nooit verzonnen — als
+// de link er niet is, wordt null teruggegeven). Gebruikt om publicaties van
+// een specifiek ministerie (bv. Financiën) als relevant te kunnen
+// markeren, ook wanneer de trefwoordfilter geen treffer geeft.
+// Alleen slugs die daadwerkelijk live geverifieerd zijn tegen een echte
+// rijksoverheid.nl-artikelpagina staan hier; andere ministeries worden pas
+// toegevoegd nadat hun URL-slug op dezelfde manier is bevestigd.
+const MINISTRY_NAMES = {
+  'ministerie-van-financien': 'Ministerie van Financiën',
+};
+
+export function extractMinistryTag(html) {
+  const match = html.match(/href="\/ministeries\/([a-z0-9-]+)"/i);
+  if (!match) return null;
+  const slug = match[1].toLowerCase();
+  return MINISTRY_NAMES[slug] ?? null;
+}
+
+async function fetchArticlePageMeta(url) {
   try {
     const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!res.ok) return null;
+    if (!res.ok) return { description: null, ministry: null };
     const html = await res.text();
-    return extractMetaDescription(html);
+    return { description: extractMetaDescription(html), ministry: extractMinistryTag(html) };
   } catch {
-    return null;
+    return { description: null, ministry: null };
   }
 }
 
@@ -459,10 +478,11 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
     if (existingUrls.has(item.link)) continue;
 
     // Sitemap-items hebben geen samenvattingstekst: de artikelpagina zelf
-    // wordt opgehaald voor de meta-description. Een probleem bij één
-    // artikel (pagina niet bereikbaar, geen description) slaat alleen dat
-    // artikel over, niet de hele bron.
-    const description = await fetchArticleDescription(item.link);
+    // wordt opgehaald voor de meta-description (en, indien geconfigureerd,
+    // de ministerie-toewijzing). Een probleem bij één artikel (pagina niet
+    // bereikbaar, geen description) slaat alleen dat artikel over, niet de
+    // hele bron.
+    const { description, ministry } = await fetchArticlePageMeta(item.link);
     if (!description || description.length < 20) {
       log(`  - overgeslagen (geen samenvattingstekst op bron-pagina): ${item.link}`);
       continue;
@@ -472,7 +492,8 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
 
     if (source.requireKeywordMatch) {
       const scores = scoreCategories(`${enrichedItem.title} ${enrichedItem.description}`);
-      if (Object.keys(scores).length === 0) continue;
+      const ministryMatch = source.ministryBypass && ministry === source.ministryBypass;
+      if (Object.keys(scores).length === 0 && !ministryMatch) continue;
     }
     stages.relevant += 1;
 

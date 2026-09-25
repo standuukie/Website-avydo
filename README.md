@@ -46,17 +46,24 @@ Zie `scripts/kenniscentrum/sources.config.mjs` voor de volledige, becommentariee
 | Bron | Type | Bron-URL | Categorie |
 |---|---|---|---|
 | Belastingdienst (Actueel zakelijk) | RSS | `nieuwsfeed_actueel_zakelijk.xml` | Belastingen |
-| Rijksoverheid | Google News-sitemap | `rijksoverheid.nl/news/sitemap.xml` | gemengd (streng gefilterd op brede mkb-trefwoorden) |
+| Rijksoverheid | Google News-sitemap | `rijksoverheid.nl/news/sitemap.xml` | gemengd (streng gefilterd op brede mkb-trefwoorden; publicaties van het Ministerie van Financiën tellen altijd mee) |
+| MKB-Nederland | RSS (eigen nieuwsfeed) | `mkb.nl/rss/nieuws-mkb-nederland` | Ondernemen |
 
 Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL rechtstreeks live is getest (niet via een zoekmachine); `inferred` betekent dat de URL een bevestigd patroon volgt maar niet 1-op-1 live is geverifieerd. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed/sitemap wordt overgeslagen (nooit verzonnen), en de uitkomst per bron — inclusief de stadia *opgehaald → geparsed → relevant → gepubliceerd* — is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary") en in de jobs-log.
 
 **Bron-types** (veld `type` in `sources.config.mjs`):
 - `rss`: een RSS/Atom-feed met title/link/description/pubDate per item.
-- `sitemap`: een Google News-sitemap (`xmlns:news`), die alleen recente artikelen bevat (titel, publicatiedatum, canonieke URL) zonder samenvattingstekst. Voor elk nieuw artikel wordt de paginabron zelf opgehaald om de `meta description`/`og:description` te lezen als brontekst voor de samenvatting.
+- `sitemap`: een Google News-sitemap (`xmlns:news`), die alleen recente artikelen bevat (titel, publicatiedatum, canonieke URL) zonder samenvattingstekst. Voor elk nieuw artikel wordt de paginabron zelf opgehaald om de `meta description`/`og:description` te lezen als brontekst voor de samenvatting, en (bij de Rijksoverheid-bron) de breadcrumb-link naar `/ministeries/<slug>` om ministerie-specifieke publicaties (Financiën) altijd als relevant te markeren, ook zonder trefwoordtreffer (`ministryBypass`-veld).
 
 **Waarom Rijksoverheid een sitemap gebruikt in plaats van RSS**: rijksoverheid.nl is medio 2026 overgestapt op een nieuw technisch platform, waarbij de oude RSS-infrastructuur op `feeds.rijksoverheid.nl` buiten gebruik is geraakt (het domein resolvet niet meer — dit was structureel de oorzaak dat er nooit Rijksoverheid-artikelen verschenen, ook al werkte de Belastingdienst-feed in dezelfde runs prima). `rijksoverheid.nl/news/sitemap.xml` is live geverifieerd als werkende, officiële vervanging.
 
 Om te voorkomen dat één bron structureel (bijna) alle artikelen levert, geldt naast het totale `maxArticlesPerRun` ook een `maxArticlesPerSourcePerRun`-plafond per bron per run.
+
+**Onderzocht maar niet geïntegreerd** (elk daadwerkelijk live getest, niet via een zoekmachine of giswerk — zie de uitgebreide toelichting in `sources.config.mjs`):
+- **KVK** (`kvk.nl/overzicht/`): geen RSS of sitemap die het nieuwsoverzicht dekt; de pagina haalt content client-side op bij een intern, niet-publiek Bloomreach-CMS-endpoint. Geen officiële methode beschikbaar zonder hun interne SPA-backend te reverse-engineeren.
+- **NBA** (`nba.nl/nieuws/`): geen RSS, de sitemap bevat geen individuele nieuwsartikelen, en de indexpagina levert geen server-gerenderde links op om te parsen.
+- **FD** (`fd.nl/economie`): heeft een technisch werkende RSS-feed, maar zowel de feed zelf ("intended solely for personal, non-commercial use") als `fd.nl/robots.txt` ("Prohibited uses include... any commercial purposes") sluiten gebruik op een commerciële website expliciet uit. Een juridische, geen technische blokkade.
+- **Gemeente Venray** (`venray.nl/nieuwsoverzicht`): geen RSS of nieuws-specifieke sitemap (de algemene sitemap maakt geen onderscheid tussen nieuwsartikelen en statische pagina's), en de bot-bescherming van de site blokkeerde herhaaldelijk verzoeken, ook met een browser-useragent.
 
 ### Bronnen toevoegen, verwijderen of aan/uitzetten
 
