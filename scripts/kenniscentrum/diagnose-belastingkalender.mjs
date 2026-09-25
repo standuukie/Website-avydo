@@ -35,12 +35,19 @@ async function part1PdfText() {
 
   let pdfParseMod;
   try {
-    pdfParseMod = require('pdf-parse');
-  } catch {
-    console.log('pdf-parse niet geïnstalleerd.');
-    return;
+    pdfParseMod = require('pdf-parse/lib/pdf-parse.js');
+  } catch (err) {
+    console.log('require(pdf-parse/lib/pdf-parse.js) faalde:', err.message);
+    try {
+      pdfParseMod = require('pdf-parse');
+    } catch (err2) {
+      console.log('require(pdf-parse) faalde ook:', err2.message);
+      return;
+    }
   }
+  console.log('typeof pdfParseMod:', typeof pdfParseMod, Object.keys(pdfParseMod || {}));
   const pdfParse = typeof pdfParseMod === 'function' ? pdfParseMod : pdfParseMod.default;
+  console.log('typeof pdfParse:', typeof pdfParse);
   const data = await pdfParse(buf);
   console.log('\n===== PDF-TEKST =====');
   console.log(data.text);
