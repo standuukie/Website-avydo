@@ -3,13 +3,15 @@
 interface ImportMetaEnv {
   /**
    * Server-side only. Kiest de providerketen voor de AI-assistent
-   * (src/lib/ai-providers/index.ts): "free" (standaard, Gemini → Groq),
-   * "free-with-paid-fallback" (+ Anthropic als laatste redmiddel), of één
-   * losse provider-id ("gemini" | "groq" | "anthropic") om te pinnen.
+   * (src/lib/ai-providers/index.ts): "free" (standaard, alleen Groq —
+   * Gemini's gratis tier mag niet gebruikt worden voor EER-gebruikers,
+   * zie README), "free-with-paid-fallback" (Groq + Anthropic als laatste
+   * redmiddel), of één losse provider-id ("gemini" | "groq" | "anthropic")
+   * om te pinnen.
    */
   readonly AI_PROVIDER?: string;
 
-  /** Server-side only. API-sleutel voor Google Gemini (gratis tier, geen creditcard nodig). Zie README. */
+  /** Server-side only. API-sleutel voor Google Gemini. Niet in de standaardketen — zie README ("Incident"). */
   readonly GEMINI_API_KEY?: string;
   /** Server-side only. Override van het standaard Gemini-modelalias ("gemini-flash-latest"). */
   readonly GEMINI_MODEL?: string;

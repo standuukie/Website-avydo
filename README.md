@@ -143,36 +143,47 @@ De AI-assistent gebruikt **standaard uitsluitend gratis AI-providers**, zonder c
 
 | Provider | Rol | Model (standaard) | Env-var(s) |
 |---|---|---|---|
-| **Google Gemini** | Primair | `gemini-flash-latest` (officiële Google-alias, wijst automatisch naar het actuele Flash-model) | `GEMINI_API_KEY`, optioneel `GEMINI_MODEL` |
-| **Groq** | Fallback, als Gemini faalt/geen quota meer heeft | `llama-3.3-70b-versatile` | `GROQ_API_KEY`, optioneel `GROQ_MODEL` |
+| **Groq** | Primair (standaard) | `llama-3.3-70b-versatile` | `GROQ_API_KEY`, optioneel `GROQ_MODEL` |
+| **Google Gemini** | Beschikbaar, **niet in de standaardketen** (zie incident hieronder) | `gemini-flash-latest` (officiële Google-alias) | `GEMINI_API_KEY`, optioneel `GEMINI_MODEL` |
 | **Anthropic Claude** | Optioneel, **standaard uitgeschakeld** | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY`, optioneel `ANTHROPIC_MODEL` |
 
-**Waarom Gemini als primaire keuze** (vergeleken met Groq, OpenRouter en Vercel AI Gateway, onderzocht september 2026):
-- Een daadwerkelijk gratis API-sleutel via Google AI Studio, **zonder creditcard**, met een ruime gratis-quota (orde van grootte 15 requests/minuut, 1.500 requests/dag, 1M tokens/minuut — deze cijfers zijn door Google zelf gepubliceerd en kunnen per model licht verschillen; controleer de actuele waarden op [ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits) omdat dit type limiet vaker wijzigt dan de rest van deze documentatie).
-- Sterke Nederlandstalige kwaliteit, geschikt voor het uitleggen van fiscale/accountancy-onderwerpen.
-- Ondersteunt **gedwongen function calling** (`toolConfig.functionCallingConfig.mode: "ANY"`), functioneel gelijk aan Anthropic's `tool_choice`: het model *moet* de opgegeven tool aanroepen, en de server valideert de output alsnog altijd zelf (zie hieronder).
-- **Geverifieerd**: tijdens ontwikkeling is een echte (ongeldige) aanroep naar `generativelanguage.googleapis.com` gedaan; Google's API accepteerde het verzoekformaat en gaf een specifieke, correcte authenticatiefout terug (`API_KEY_INVALID`) &mdash; dit bevestigt dat de requestopbouw (URL, headers, JSON-vorm) klopt tegen de echte, actuele API.
+#### Incident (25-9-2026): "De assistent kon nu niet antwoorden" na het toevoegen van GEMINI_API_KEY
 
-**Waarom Groq als fallback** (en niet als primaire keuze): eveneens daadwerkelijk gratis zonder creditcard, met eigen or model afhankelijke limieten (orde van grootte 30 requests/minuut; zie [console.groq.com](https://console.groq.com/docs/rate-limits) voor de actuele cijfers per model). Twee onafhankelijke gratis providers na elkaar betekent dat een storing of uitgeputte quota bij Gemini niet meteen de hele assistent platlegt. Ondersteunt eveneens een gedwongen `tool_choice`.
+Na het toevoegen van `GEMINI_API_KEY` op Vercel bleef de assistent deze foutmelding geven. Onderzoek (zie ook de code-comments in `src/lib/ai-providers/gemini.ts` en `index.ts`) wees uit dat de **technische integratie zelf correct is**, maar dat Gemini's gratis tier voor déze specifieke toepassing niet gebruikt mag worden:
+
+- **Requestopbouw geverifieerd**: een live testaanroep (met een bewust ongeldige sleutel) naar `generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent` met de `x-goog-api-key`-header gaf de specifieke fout `API_KEY_INVALID` terug — geen route-, model- of schemafout. Endpoint, modelalias en tool-schema kloppen dus tegen de echte, actuele API.
+- **Nieuwe sleutelformaat gecontroleerd**: Google migreert sinds mei 2026 naar "auth keys" (`AQ.Ab…`, i.p.v. het oude `AIzaSy…`-formaat) en accepteert sinds september 2026 geen oude "standard keys" meer. Beide sleuteltypes gebruiken echter dezelfde `x-goog-api-key`-header (nooit `?key=` in de URL) — onze requestmethode was hier al mee compatibel, dit was niet de oorzaak.
+- **Structured output/function calling gecontroleerd**: ons tool-schema gebruikt uitsluitend `type`/`properties`/`items`/`required` — geen van de velden waarvan bekend is dat Gemini ze afwijst (`$ref`, `$schema`, `exclusiveMinimum`/`exclusiveMaximum`, type-arrays). Ook hier geen probleem gevonden.
+- **Waarschijnlijke daadwerkelijke oorzaak**: Google's *Gemini API Additional Terms of Service* staan het gebruik van de **gratis** tier alleen toe wanneer de applicatie geen gebruikers bedient in de Europese Economische Ruimte (EER), Zwitserland of het Verenigd Koninkrijk — letterlijk: *"You may use only Paid Services when making API Clients available to users in the European Economic Area, Switzerland, or the United Kingdom."* (bron: [ai.google.dev/gemini-api/terms](https://ai.google.dev/gemini-api/terms); actief besproken op Google's eigen AI Developer Forum). Avydo bedient Nederlandse mkb-ondernemers — per definitie EER-gebruikers. Dat betekent dat de gratis Gemini-tier voor deze website contractueel niet is toegestaan, ongeacht of de sleutel en het verzoek verder technisch correct zijn; Google kan verzoeken vanuit een in Nederland geregistreerd AI Studio-project daardoor weigeren of beperken (doorgaans als een 403/permissie-achtige fout op accountniveau).
+
+**Doorgevoerde fix**: Gemini is uit de **standaard** providerketen gehaald. `AI_PROVIDER=free` (de standaardwaarde) gebruikt nu uitsluitend **Groq** — een gratis provider die de EER wél bedient onder zijn eigen voorwaarden (via Groq UK Limited voor EER/CH-klanten), zonder deze beperking. De Gemini-adapter zelf is **niet verwijderd**: hij blijft volledig werkend en bruikbaar via een expliciete keuze (zie hieronder) voor wie Google Cloud Billing inschakelt op het AI Studio-project — dat maakt het gebruik een *Paid Service*, waarmee de EER-beperking vervalt (en als bijkomend voordeel: Google gebruikt de gegevens dan niet meer om producten te verbeteren). Bij dit gebruiksvolume blijft dat doorgaans nog steeds vrijwel gratis, ook al is het technisch geen "gratis tier" meer.
+
+**Wat u eventueel nog moet doen**: niets verplicht — de assistent werkt nu met alleen `GROQ_API_KEY`. `GEMINI_API_KEY` mag desgewenst in Vercel blijven staan (wordt gewoon genegeerd in de standaardconfiguratie) of verwijderd worden. Wilt u Gemini alsnog gebruiken, schakel dan Google Cloud Billing in op het betreffende AI Studio-project en zet `AI_PROVIDER=gemini`.
+
+**Waarom Groq als (nu primaire) keuze** (vergeleken met Gemini, OpenRouter en Vercel AI Gateway, onderzocht september 2026): daadwerkelijk gratis zonder creditcard, met eigen, modelafhankelijke limieten (orde van grootte 30 requests/minuut; zie [console.groq.com](https://console.groq.com/docs/rate-limits) voor de actuele cijfers per model), bedient EER-klanten onder zijn eigen voorwaarden, en ondersteunt een gedwongen `tool_choice` voor dezelfde betrouwbare structured-outputgarantie als eerder bij Anthropic.
 
 **Waarom niet OpenRouter**: de gratis modellen daar zijn beperkt tot 20 requests/minuut én slechts 50 requests/dag (zonder ooit een creditcard toegevoegd te hebben), en de beschikbare gratis modellen wisselen periodiek &mdash; te instabiel en te krap voor een publieke pagina.
 **Waarom niet Vercel AI Gateway**: geeft $5 gratis krediet per maand, maar is daarmee een *krediet met een bodem* in plaats van een onvoorwaardelijk gratis tier; bij uitputting zou dit (afhankelijk van de Vercel-projectinstellingen) kunnen doorlopen in betaald verbruik, wat afwijkt van de "nooit ongemerkt kosten"-eis van dit project.
 
-Beide gratis providers worden aangeroepen met een rechtstreekse `fetch` (geen extra SDK-dependency), op dezelfde manier als de bestaande Anthropic-integratie dat al deed.
+Alle providers worden aangeroepen met een rechtstreekse `fetch` (geen extra SDK-dependency), op dezelfde manier als de bestaande Anthropic-integratie dat al deed.
 
 ### Provider-configuratie (`AI_PROVIDER`)
 
 ```
-AI_PROVIDER=free                     # standaard (ook als de variabele ontbreekt): Gemini → Groq, nooit betaald
-AI_PROVIDER=free-with-paid-fallback  # Gemini → Groq → Anthropic als allerlaatste, betaald redmiddel
-AI_PROVIDER=gemini                   # alleen Gemini (bv. om gericht te testen)
-AI_PROVIDER=groq                     # alleen Groq
-AI_PROVIDER=anthropic                # alleen Anthropic (het oorspronkelijke gedrag vóór deze wijziging)
+AI_PROVIDER=free                     # standaard (ook als de variabele ontbreekt): alleen Groq, nooit betaald
+AI_PROVIDER=free-with-paid-fallback  # Groq → Anthropic als allerlaatste, betaald redmiddel
+AI_PROVIDER=gemini                   # alleen Gemini (bv. na het inschakelen van Google Cloud Billing)
+AI_PROVIDER=groq                     # alleen Groq (gelijk aan de standaard)
+AI_PROVIDER=anthropic                # alleen Anthropic
 ```
 
 Een onbekende of lege waarde valt altijd terug op de veilige standaard (`free`). De keten wordt bepaald in `src/lib/ai-providers/index.ts` (`resolveProviderChain()`); elke provider daarin is een losstaande adapter die dezelfde `AiProvider`-interface implementeert (`src/lib/ai-providers/types.ts`), zodat een nieuwe provider toevoegen of de standaardkeuze wijzigen geen wijzigingen elders vereist (retrieval, promptopbouw, brontoewijzing-validatie en de frontend blijven ongewijzigd, ongeacht welke provider actief is).
 
-**Bestaande Anthropic-integratie is behouden, niet verwijderd** &mdash; alleen verplaatst naar `src/lib/ai-providers/anthropic.ts` en niet meer standaard actief. Wie later (weer) naar Anthropic wil overschakelen, zet `AI_PROVIDER=anthropic` (of `free-with-paid-fallback` voor een gratis-eerst-met-betaald-vangnet-opstelling) en de bestaande `ANTHROPIC_API_KEY`.
+**Bestaande Anthropic-integratie is behouden, niet verwijderd** &mdash; alleen verplaatst naar `src/lib/ai-providers/anthropic.ts` en niet meer standaard actief. Wie later (weer) naar Anthropic wil overschakelen, zet `AI_PROVIDER=anthropic` (of `free-with-paid-fallback`) en de bestaande `ANTHROPIC_API_KEY`.
+
+### Diagnose bij een "kon niet antwoorden"-melding
+
+`src/lib/ai-providers/index.ts` logt bij elke mislukte poging een veilige regel naar de servelogs (Vercel &rarr; project &rarr; Deployments &rarr; de betreffende deployment &rarr; Functions &rarr; Logs, of `vercel logs`): de provider-id plus de HTTP-status en (ingekorte) responstekst van de provider zelf &mdash; **nooit** de API-sleutel. Bij "geen enkele provider geconfigureerd" logt het bovendien of `GEMINI_API_KEY`/`GROQ_API_KEY`/`ANTHROPIC_API_KEY` als aanwezig herkend worden (alleen `true`/`false`), zodat direct zichtbaar is of een sleutel simpelweg ontbreekt, verkeerd genoemd is, of in de verkeerde Vercel-omgeving (Preview i.p.v. Production) staat.
 
 ### Serverless architectuur op Vercel
 

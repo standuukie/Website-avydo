@@ -1,19 +1,43 @@
-// Google Gemini-adapter (primaire, gratis provider).
+// Google Gemini-adapter — beschikbaar, maar NIET meer in de standaard
+// gratis providerketen (zie index.ts, resolveProviderChain).
 //
-// Waarom Gemini als primaire provider: Google AI Studio geeft een
-// daadwerkelijk gratis API-sleutel zonder creditcard, met een ruime
+// BELANGRIJK: Google's Gemini API Additional Terms of Service staan de
+// GRATIS tier alleen toe als de applicatie geen gebruikers bedient in de
+// Europese Economische Ruimte, Zwitserland of het VK
+// ("You may use only Paid Services when making API Clients available to
+// users in the European Economic Area, Switzerland, or the United
+// Kingdom" — ai.google.dev/gemini-api/terms). Avydo bedient Nederlandse
+// mkb-ondernemers, dus de gratis tier is voor déze toepassing
+// contractueel niet toegestaan. Google kan verzoeken vanuit een
+// EER-geregistreerd account/project daardoor weigeren of beperken, ook
+// als sleutel, endpoint, model en requestvorm verder correct zijn.
+//
+// Deze adapter blijft functioneel intact voor wie Google Cloud Billing
+// inschakelt op het AI Studio-project (dat maakt het gebruik een "Paid
+// Service", waarmee de EER-beperking vervalt) en dan expliciet
+// AI_PROVIDER=gemini (of "free-with-paid-fallback", na aanpassing van de
+// keten in index.ts) instelt. Zie README voor de volledige toelichting.
+//
+// Verder ongewijzigd: Google AI Studio geeft een daadwerkelijk gratis
+// API-sleutel zonder creditcard (voor niet-EER-gebruik), met een ruime
 // gratis-tier-quota (in de orde van 15 requests/minuut en 1500
-// requests/dag, afhankelijk van het model — zie README voor de actuele
-// cijfers en bron). Het model ondersteunt gedwongen function calling
+// requests/dag, afhankelijk van het model — zie README). Het model
+// ondersteunt gedwongen function calling
 // (toolConfig.functionCallingConfig.mode = "ANY"), wat dezelfde
-// betrouwbare, valideerbare structured-output-garantie geeft als eerder
-// bij Anthropic: het model MOET de opgegeven tool aanroepen, en de
+// betrouwbare, valideerbare structured-output-garantie geeft als bij
+// Anthropic/Groq: het model MOET de opgegeven tool aanroepen, en de
 // server valideert de output alsnog zelf (zie kenniscentrum-chat.ts).
+// De requestopbouw hieronder (endpoint, "x-goog-api-key"-header, model-
+// alias, tool-schema) is live tegen de echte API geverifieerd: een
+// (opzettelijk) ongeldige sleutel gaf de verwachte, specifieke
+// "API_KEY_INVALID"-fout terug in plaats van een generieke of
+// route-/schemafout — dat bevestigt dat dit deel van de integratie
+// technisch correct is.
 //
 // Let op (privacy, zie ook README): bij gebruik van de gratis tier mag
 // Google in-/output gebruiken om producten te verbeteren (na anonimisering
-// vóór menselijke review). Dit is een bewuste, gedocumenteerde afweging
-// voor de gratis fase van dit project.
+// vóór menselijke review). Bij een Paid Service (billing ingeschakeld)
+// geldt dit niet.
 import type { AiProvider, ProviderCallResult } from './types';
 
 // "gemini-flash-latest" is een door Google onderhouden alias die altijd
