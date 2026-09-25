@@ -113,6 +113,12 @@ const structuredData = {
           </dl>
           <a href="/kenniscentrum" class="btn-outline mt-6 w-full">Naar het kenniscentrum</a>
         </div>
+
+        <div class="card p-6 mt-6 bg-ink-900 border-ink-800">
+          <h2 class="font-display text-base font-semibold text-white">Heb je hier nog een vraag over?</h2>
+          <p class="mt-2 text-sm text-ink-300 leading-relaxed">Onze AI-assistent gebruikt dit artikel als context voor je vraag.</p>
+          <a href={`/kenniscentrum/ai-assistent?artikel=${article.slug}`} class="btn-ghost-light mt-4 w-full">Vraag het aan onze AI-assistent</a>
+        </div>
       </aside>
     </div>
   </section>

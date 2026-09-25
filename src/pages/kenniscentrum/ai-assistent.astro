@@ -1,0 +1,388 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import PageHero from '@/components/PageHero.astro';
+import CTASection from '@/components/CTASection.astro';
+
+const allArticles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
+const articleIndex = allArticles.map((a) => ({ slug: a.slug, title: a.data.title }));
+
+const suggestedQuestions = [
+  'Wanneer moet ik btw-aangifte doen?',
+  'Welke kosten zijn aftrekbaar?',
+  'Wat is het verschil tussen een eenmanszaak en een BV?',
+  'Wat moet ik als werkgever regelen?',
+  'Wat verandert er momenteel voor ondernemers?',
+];
+---
+
+<BaseLayout
+  title="AI-assistent voor ondernemers"
+  description="Stel vragen over belastingen, accountancy en ondernemen aan de AI-assistent van Avydo."
+  path="/kenniscentrum/ai-assistent"
+>
+  <PageHero
+    eyebrow="Kenniscentrum"
+    title="AI-assistent voor ondernemers"
+    intro="Stel je vraag over belastingen, accountancy of ondernemen. De assistent zoekt in het Kenniscentrum, de Belastingkalender en officiële bronnen, en toont altijd waar het antwoord op gebaseerd is."
+    crumbs={[{ label: 'Kenniscentrum', href: '/kenniscentrum' }, { label: 'AI-assistent' }]}
+  />
+
+  <section class="section pb-0">
+    <div class="container max-w-content">
+      <div class="rounded-md border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 leading-relaxed">
+        <strong class="font-semibold">Let op:</strong> deel geen BSN, wachtwoorden, volledige bankgegevens of andere vertrouwelijke gegevens in dit gesprek. Dit gesprek wordt niet permanent opgeslagen en verdwijnt zodra je de pagina verlaat. De assistent geeft algemene informatie, geen persoonlijk fiscaal of juridisch advies.
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container max-w-content">
+      <div id="article-context-banner" class="hidden mb-5 rounded-md border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800 flex items-center justify-between gap-3">
+        <span id="article-context-text"></span>
+        <button type="button" id="article-context-clear" class="text-xs font-semibold underline shrink-0">Context wissen</button>
+      </div>
+
+      <div class="rounded-lg border border-ink-100 bg-white shadow-card flex flex-col" style="min-height: 32rem;">
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4" role="log" aria-live="polite" aria-relevant="additions" style="max-height: 60vh;">
+          <div id="chat-empty-state" class="text-center py-10">
+            <p class="text-lg font-display font-semibold text-ink-900">Waar kan ik je mee helpen?</p>
+            <p class="mt-2 text-sm text-ink-500">Stel bijvoorbeeld een van deze vragen, of typ je eigen vraag hieronder.</p>
+            <div class="mt-5 flex flex-wrap justify-center gap-2">
+              {suggestedQuestions.map((q) => (
+                <button type="button" class="suggested-question filter-chip" data-question={q}>{q}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <form id="chat-form" class="border-t border-ink-100 p-4 md:p-5">
+          <label for="chat-input" class="sr-only">Stel je vraag</label>
+          <div class="flex flex-col sm:flex-row gap-2.5">
+            <textarea
+              id="chat-input"
+              name="message"
+              rows="2"
+              maxlength="600"
+              placeholder="Stel je vraag..."
+              class="flex-1 rounded border border-ink-200 px-3.5 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-colors resize-none"
+            ></textarea>
+            <button type="submit" id="chat-submit" class="btn-primary shrink-0 sm:self-end">Vraag stellen</button>
+          </div>
+          <p id="chat-status" class="mt-2 text-xs text-ink-500" aria-live="polite"></p>
+        </form>
+      </div>
+
+      <p class="mt-6 text-xs text-ink-500 leading-relaxed max-w-2xl">
+        De AI-assistent geeft algemene informatie op basis van het Avydo Kenniscentrum, de Belastingkalender en officiële bronnen zoals de Belastingdienst. Bij twijfel of onvoldoende informatie zegt de assistent dat eerlijk, in plaats van te gokken. Voor advies toegespitst op uw situatie kunt u <a href="/contact" class="underline hover:text-brand-600">contact opnemen met Avydo</a>.
+      </p>
+    </div>
+  </section>
+
+  <CTASection
+    title="Bespreek uw situatie met Avydo"
+    intro="Voor advies toegespitst op uw eigen onderneming staat het team van Avydo voor u klaar."
+    showBrochure={false}
+  />
+
+  <script type="application/json" id="article-index" set:html={JSON.stringify(articleIndex)} />
+</BaseLayout>
+
+<style>
+  .filter-chip {
+    @apply rounded-full border border-ink-200 px-3.5 py-1.5 text-sm font-medium text-ink-700 hover:border-brand-300 hover:text-brand-600 transition-colors;
+  }
+  .chat-bubble-user {
+    @apply ml-auto max-w-[85%] rounded-lg bg-brand-600 text-white px-4 py-2.5 text-sm leading-relaxed;
+  }
+  .chat-bubble-assistant {
+    @apply mr-auto max-w-[90%] rounded-lg bg-ink-50 border border-ink-100 px-4 py-3.5 text-sm leading-relaxed text-ink-800;
+  }
+</style>
+
+<script>
+  interface ChatHistoryItem {
+    role: 'user' | 'assistant';
+    text: string;
+  }
+
+  interface ChatSuccessResponse {
+    ok: true;
+    shortAnswer: string;
+    explanation: string;
+    note: string;
+    insufficientInfo: boolean;
+    personalAdviceNeeded: boolean;
+    sources: Array<{ name: string; title: string; url: string }>;
+  }
+
+  interface ChatErrorResponse {
+    ok: false;
+    code: string;
+    error: string;
+  }
+
+  const messagesEl = document.getElementById('chat-messages') as HTMLElement;
+  const emptyStateEl = document.getElementById('chat-empty-state');
+  const formEl = document.getElementById('chat-form') as HTMLFormElement;
+  const inputEl = document.getElementById('chat-input') as HTMLTextAreaElement;
+  const submitEl = document.getElementById('chat-submit') as HTMLButtonElement;
+  const statusEl = document.getElementById('chat-status');
+  const contextBanner = document.getElementById('article-context-banner');
+  const contextText = document.getElementById('article-context-text');
+  const contextClear = document.getElementById('article-context-clear');
+
+  const articleIndexEl = document.getElementById('article-index');
+  const articleIndex: Array<{ slug: string; title: string }> = articleIndexEl ? JSON.parse(articleIndexEl.textContent || '[]') : [];
+
+  const history: ChatHistoryItem[] = [];
+  const MAX_HISTORY = 8;
+  let articleSlug: string | null = new URLSearchParams(window.location.search).get('artikel');
+  let isSending = false;
+
+  function updateArticleBanner() {
+    if (!contextBanner || !contextText) return;
+    if (!articleSlug) {
+      contextBanner.classList.add('hidden');
+      return;
+    }
+    const found = articleIndex.find((a) => a.slug === articleSlug);
+    contextText.textContent = found
+      ? `Je stelt een vraag over: "${found.title}"`
+      : 'Je stelt een vraag over een specifiek Kenniscentrum-artikel.';
+    contextBanner.classList.remove('hidden');
+  }
+  updateArticleBanner();
+
+  contextClear?.addEventListener('click', () => {
+    articleSlug = null;
+    updateArticleBanner();
+    const url = new URL(window.location.href);
+    url.searchParams.delete('artikel');
+    window.history.replaceState(null, '', url.toString());
+  });
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function addUserBubble(text: string) {
+    emptyStateEl?.classList.add('hidden');
+    const el = document.createElement('div');
+    el.className = 'chat-bubble-user';
+    el.textContent = text;
+    messagesEl.appendChild(el);
+    scrollToBottom();
+  }
+
+  function addParagraphs(container: HTMLElement, text: string) {
+    text
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((p) => {
+        const para = document.createElement('p');
+        para.className = 'mt-2 first:mt-0';
+        para.textContent = p;
+        container.appendChild(para);
+      });
+  }
+
+  function addAssistantMessage(data: ChatSuccessResponse) {
+    emptyStateEl?.classList.add('hidden');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-bubble-assistant';
+
+    if (data.insufficientInfo) {
+      const warn = document.createElement('p');
+      warn.className = 'font-semibold text-ink-900';
+      warn.textContent = 'Ik kan dit op basis van de beschikbare informatie niet betrouwbaar beantwoorden.';
+      wrapper.appendChild(warn);
+
+      const links = document.createElement('p');
+      links.className = 'mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm';
+      const bdLink = document.createElement('a');
+      bdLink.href = 'https://www.belastingdienst.nl';
+      bdLink.target = '_blank';
+      bdLink.rel = 'noopener noreferrer';
+      bdLink.className = 'font-semibold text-brand-600 hover:underline';
+      bdLink.textContent = 'Bekijk de officiële informatie van de Belastingdienst';
+      links.appendChild(bdLink);
+      const contactLink = document.createElement('a');
+      contactLink.href = '/contact';
+      contactLink.className = 'font-semibold text-brand-600 hover:underline';
+      contactLink.textContent = 'Bespreek uw situatie met Avydo';
+      links.appendChild(contactLink);
+      wrapper.appendChild(links);
+
+      if (data.shortAnswer || data.explanation) {
+        const hint = document.createElement('p');
+        hint.className = 'mt-3 pt-3 border-t border-ink-200 text-xs text-ink-500';
+        hint.textContent = 'Indicatie (niet volledig gecontroleerd):';
+        wrapper.appendChild(hint);
+        const indicative = document.createElement('div');
+        indicative.className = 'text-xs text-ink-500 italic';
+        addParagraphs(indicative, [data.shortAnswer, data.explanation].filter(Boolean).join('\n'));
+        wrapper.appendChild(indicative);
+      }
+    } else {
+      if (data.shortAnswer) {
+        const short = document.createElement('p');
+        short.className = 'font-semibold text-ink-900';
+        short.textContent = data.shortAnswer;
+        wrapper.appendChild(short);
+      }
+      if (data.explanation) {
+        const explanation = document.createElement('div');
+        addParagraphs(explanation, data.explanation);
+        wrapper.appendChild(explanation);
+      }
+      if (data.note) {
+        const note = document.createElement('p');
+        note.className = 'mt-3 rounded bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900';
+        note.textContent = `Let op: ${data.note}`;
+        wrapper.appendChild(note);
+      }
+    }
+
+    if (data.personalAdviceNeeded) {
+      const advice = document.createElement('div');
+      advice.className = 'mt-3 pt-3 border-t border-ink-200';
+      const adviceText = document.createElement('p');
+      adviceText.className = 'text-xs text-ink-600';
+      adviceText.textContent = 'Dit hangt af van uw persoonlijke situatie.';
+      advice.appendChild(adviceText);
+      const adviceLink = document.createElement('a');
+      adviceLink.href = '/contact';
+      adviceLink.className = 'mt-1 inline-block text-xs font-semibold text-brand-600 hover:underline';
+      adviceLink.textContent = 'Bespreek uw situatie met Avydo';
+      advice.appendChild(adviceLink);
+      wrapper.appendChild(advice);
+    }
+
+    if (data.sources.length > 0) {
+      const sourcesWrap = document.createElement('div');
+      sourcesWrap.className = 'mt-3 pt-3 border-t border-ink-200';
+      const label = document.createElement('p');
+      label.className = 'text-xs font-semibold text-ink-500 uppercase tracking-wide';
+      label.textContent = data.sources.length === 1 ? 'Bron' : 'Bronnen';
+      sourcesWrap.appendChild(label);
+      const list = document.createElement('ul');
+      list.className = 'mt-1.5 space-y-1';
+      data.sources.forEach((s) => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = s.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.className = 'text-sm font-semibold text-brand-600 hover:underline';
+        a.textContent = `${s.name} — ${s.title}`;
+        li.appendChild(a);
+        list.appendChild(li);
+      });
+      sourcesWrap.appendChild(list);
+      wrapper.appendChild(sourcesWrap);
+    }
+
+    messagesEl.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function addErrorMessage(text: string) {
+    emptyStateEl?.classList.add('hidden');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-bubble-assistant';
+    const p = document.createElement('p');
+    p.textContent = text;
+    wrapper.appendChild(p);
+    const links = document.createElement('p');
+    links.className = 'mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm';
+    const bdLink = document.createElement('a');
+    bdLink.href = 'https://www.belastingdienst.nl';
+    bdLink.target = '_blank';
+    bdLink.rel = 'noopener noreferrer';
+    bdLink.className = 'font-semibold text-brand-600 hover:underline';
+    bdLink.textContent = 'Officiële informatie van de Belastingdienst';
+    links.appendChild(bdLink);
+    const contactLink = document.createElement('a');
+    contactLink.href = '/contact';
+    contactLink.className = 'font-semibold text-brand-600 hover:underline';
+    contactLink.textContent = 'Neem contact op met Avydo';
+    links.appendChild(contactLink);
+    wrapper.appendChild(links);
+    messagesEl.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  async function sendQuestion(question: string) {
+    if (isSending) return;
+    const trimmed = question.trim();
+    if (!trimmed) {
+      if (statusEl) statusEl.textContent = 'Stel eerst een vraag.';
+      return;
+    }
+    if (trimmed.length > 600) {
+      if (statusEl) statusEl.textContent = 'Je vraag is te lang (max. 600 tekens).';
+      return;
+    }
+
+    isSending = true;
+    submitEl.disabled = true;
+    if (statusEl) statusEl.textContent = 'Bezig met zoeken naar een antwoord…';
+
+    addUserBubble(trimmed);
+    // Belangrijk: de historie die naar de server gaat bevat alleen
+    // VOORGAANDE beurten. De huidige vraag wordt apart als "message"
+    // meegestuurd en pas ná de aanvraag aan de historie toegevoegd —
+    // anders zou de laatste "user"-rol dubbel voorkomen (message + laatste
+    // historie-item), wat de vereiste afwisseling user/assistant van de
+    // Anthropic-API doorbreekt.
+    const historyForRequest = history.slice(-MAX_HISTORY);
+
+    try {
+      const res = await fetch('/api/kenniscentrum-chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmed,
+          history: historyForRequest,
+          articleSlug: articleSlug ?? undefined,
+        }),
+      });
+      const data: ChatSuccessResponse | ChatErrorResponse = await res.json();
+      history.push({ role: 'user', text: trimmed });
+      if (data.ok) {
+        addAssistantMessage(data);
+        history.push({ role: 'assistant', text: data.shortAnswer || data.explanation || '' });
+      } else {
+        addErrorMessage(data.error);
+      }
+    } catch {
+      addErrorMessage('De assistent kon nu niet antwoorden. Probeer het opnieuw, of neem contact op met Avydo.');
+    } finally {
+      isSending = false;
+      submitEl.disabled = false;
+      if (statusEl) statusEl.textContent = '';
+      inputEl.value = '';
+      inputEl.focus();
+    }
+  }
+
+  formEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    sendQuestion(inputEl.value);
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendQuestion(inputEl.value);
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.suggested-question').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sendQuestion(btn.dataset.question ?? '');
+    });
+  });
+</script>

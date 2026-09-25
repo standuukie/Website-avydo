@@ -92,9 +92,13 @@ Optioneel kan een betere, meer toegespitste samenvatting worden gegenereerd door
 
 | Variabele | Verplicht | Waar instellen | Doel |
 |---|---|---|---|
-| `ANTHROPIC_API_KEY` | Nee | GitHub &rarr; repository Secrets (Actions) | Betere AI-samenvatting. Zonder deze key werkt alles gewoon, met de extractieve samenvatting. |
+| `ANTHROPIC_API_KEY` | Nee (aanbevolen) | GitHub &rarr; repository Secrets (Actions) **én** Vercel &rarr; Project Settings &rarr; Environment Variables | Betere AI-samenvatting in de nieuwsengine, en de AI-assistent (`/kenniscentrum/ai-assistent`). |
 
-Er zijn **geen** environment variables nodig op Vercel voor het Kenniscentrum zelf: de content wordt al als bestand meegeleverd bij het builden, Vercel hoeft niets op te halen. Sleutels staan nergens in de frontend of in git &mdash; alleen als GitHub Actions secret, alleen gebruikt binnen de workflow.
+Dezelfde sleutel wordt op twee plekken gebruikt, maar altijd uitsluitend server-side:
+- In GitHub Actions (workflow "Kenniscentrum bijwerken") voor een optioneel betere samenvatting bij het ophalen van nieuwe artikelen. Zonder deze key werkt alles gewoon, met de extractieve samenvatting.
+- Op Vercel, gelezen door `src/pages/api/kenniscentrum-chat.ts` (een serverless function, zie hieronder) voor de AI-assistent. **Zonder deze key op Vercel toont de assistent een nette "momenteel niet beschikbaar"-melding** in plaats van te crashen; de rest van de website blijft gewoon werken.
+
+Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/environment variable, alleen server-side gelezen.
 
 ### Fallback en betrouwbaarheid
 
@@ -114,6 +118,42 @@ Er zijn **geen** environment variables nodig op Vercel voor het Kenniscentrum ze
 ### Handmatig een run starten
 
 GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; **Run workflow**. Of lokaal: `npm run kenniscentrum:fetch` (schrijft direct naar `src/content/kenniscentrum/`).
+
+## Kenniscentrum: AI-assistent
+
+`/kenniscentrum/ai-assistent` is een chatinterface waarmee bezoekers vragen kunnen stellen over belastingen, accountancy en ondernemen. Vanaf een artikelpagina kan via "Vraag het aan onze AI-assistent" ook een vraag over dát specifieke artikel gesteld worden (`?artikel=<slug>`).
+
+### Architectuur (RAG, geen los model)
+
+De assistent verzint nooit zelf fiscale feiten. Elke vraag doorloopt:
+
+1. **Retrieval** (`src/lib/ai-assistent.ts`, `retrieveContext()`): een lichte, trefwoord-gebaseerde zoekfunctie over de **bestaande** databronnen &mdash; de Kenniscentrum-contentcollectie (`getCollection('kenniscentrum')`), de Belastingkalender-dataset (`src/data/belastingkalender.ts`) en een klein stukje Avydo-contactinformatie. Er is bewust **geen** aparte nieuws- of vectordatabase toegevoegd.
+2. De gevonden bronnen (elk met een echte, al bestaande URL) worden als genummerde lijst meegegeven aan het taalmodel.
+3. Het model antwoordt via een **gedwongen tool-call** (structured output, geen vrije tekst) met velden als `kortAntwoord`, `toelichting`, `letOp`, `gebruikteBronIds`, `onvoldoendeInformatie` en `verwijstNaarPersoonlijkAdvies`.
+4. **Server-side validatie**: elke `gebruikteBronIds`-verwijzing die niet in de daadwerkelijk opgehaalde bronnenlijst voorkomt, wordt genegeerd. Zo kan een verzonnen bron of URL nooit bij de bezoeker terechtkomen. Zijn er helemaal geen bronnen gevonden, dan wordt `onvoldoendeInformatie` altijd geforceerd op `true`, ongeacht wat het model zelf teruggeeft.
+
+De volledige systeemprompt (stijl, brongebruik, privacy/veiligheidsregels) staat in `src/pages/api/kenniscentrum-chat.ts`.
+
+### Gebruikte AI-provider
+
+Anthropic Claude (`claude-haiku-4-5-20251001`), via dezelfde `ANTHROPIC_API_KEY` als de nieuwsengine hierboven &mdash; bewust geen nieuwe provider toegevoegd. De aanroep gebeurt met een rechtstreekse `fetch` naar de Anthropic Messages API (zelfde patroon als `aiSummary()` in `fetch-articles.mjs`), dus geen extra SDK-dependency.
+
+### Serverless architectuur op Vercel
+
+De site is en blijft grotendeels **statisch** (`output: 'hybrid'` in `astro.config.mjs`): alle bestaande pagina's worden nog steeds als statische HTML gebouwd, precies zoals voorheen. Alleen `src/pages/api/kenniscentrum-chat.ts` heeft `export const prerender = false` en draait als Vercel serverless function (via de `@astrojs/vercel/serverless`-adapter), omdat die route de `ANTHROPIC_API_KEY` server-side nodig heeft en dus niet vooraf gebouwd kan worden. De API-sleutel wordt uitsluitend binnen deze route gelezen (`import.meta.env.ANTHROPIC_API_KEY`) en komt nooit in de browser of in de HTML terecht &mdash; de frontend praat alleen met `/api/kenniscentrum-chat`, nooit rechtstreeks met Anthropic.
+
+Lokaal testen van de API-route kan met `npm run dev` (Astro's eigen dev-server voert server-routes direct uit); `npm run preview` serveert alleen de statische bestanden en draait de API-route niet.
+
+### Misbruikbescherming
+
+- Maximale vraaglengte (600 tekens, zowel client- als server-side afgedwongen), maximale gespreksgeschiedenis (laatste 8 berichten) en een `max_tokens`-limiet op de AI-aanroep.
+- Eenvoudige, in-memory rate limiting per IP-adres (standaard 12 aanvragen per 5 minuten) plus een globale limiet per serverless-instance, in `src/pages/api/kenniscentrum-chat.ts`. Dit is bewust géén externe store (Vercel KV/Upstash e.d.) om geen nieuwe infrastructuur-afhankelijkheid toe te voegen; de teller leeft alleen zolang een serverless-instance warm is. Bij veel verkeer is een gedeelde store de logische vervolgstap.
+
+### Privacy
+
+- Gesprekken worden **niet permanent opgeslagen**: de geschiedenis leeft alleen in het geheugen van de browsertab (een gewone JavaScript-variabele) en is na een paginaverversing verdwenen. Er is geen database, geen cookie en geen localStorage voor chatinhoud.
+- De pagina waarschuwt expliciet om geen BSN, wachtwoorden, bankgegevens of andere vertrouwelijke gegevens te delen.
+- Externe artikeltekst die als context wordt meegegeven, wordt in de prompt expliciet als *data* behandeld (binnen een `<bronnen>`-blok), nooit als instructie &mdash; de systeemprompt instrueert het model om een "opdracht" die ergens in een artikel zou staan te negeren.
 
 ## Overig nog te koppelen
 

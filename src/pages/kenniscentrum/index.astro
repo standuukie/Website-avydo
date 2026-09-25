@@ -62,13 +62,19 @@ const INITIAL_VISIBLE = 9;
 
       <section class="section pb-0">
         <div class="container max-w-content">
-          <div class="rounded-lg border border-brand-200 bg-brand-50 p-5 md:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
+          <div class="grid sm:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-brand-200 bg-brand-50 p-5 md:p-6 flex flex-col h-full">
               <p class="eyebrow">Nieuw in het Kenniscentrum</p>
               <h2 class="mt-1 text-lg font-display font-semibold text-ink-900">Belastingkalender</h2>
-              <p class="mt-1 text-sm text-ink-600 leading-relaxed max-w-xl">Bekijk in één oogopslag de eerstvolgende btw-, loonheffingen- en vennootschapsbelastingdeadlines voor uw onderneming.</p>
+              <p class="mt-1 text-sm text-ink-600 leading-relaxed flex-1">Bekijk in één oogopslag de eerstvolgende btw-, loonheffingen- en vennootschapsbelastingdeadlines voor uw onderneming.</p>
+              <a href="/belastingkalender" class="btn-primary mt-4 self-start">Bekijk de belastingkalender</a>
             </div>
-            <a href="/belastingkalender" class="btn-primary shrink-0">Bekijk de belastingkalender</a>
+            <div class="rounded-lg border border-ink-800 bg-ink-900 p-5 md:p-6 flex flex-col h-full">
+              <p class="eyebrow text-brand-300">Een fiscale of financiële vraag?</p>
+              <h2 class="mt-1 text-lg font-display font-semibold text-white">Stel je vraag aan onze AI-assistent</h2>
+              <p class="mt-1 text-sm text-ink-300 leading-relaxed flex-1">Krijg direct een antwoord op basis van het Kenniscentrum en officiële bronnen, met bronvermelding.</p>
+              <a href="/kenniscentrum/ai-assistent" class="btn-ghost-light mt-4 self-start">Stel je vraag</a>
+            </div>
           </div>
         </div>
       </section>
