@@ -86,13 +86,13 @@ export const btwItems: KnowledgeItem[] = [
     title: 'Kleineondernemersregeling (KOR)',
     category: 'Btw',
     content:
-      'De kleineondernemersregeling (KOR) is een vrijstelling van btw voor kleine ondernemers die in Nederland zijn gevestigd en onder een bepaalde jaaromzetgrens blijven. Bij deelname aan de KOR brengt een ondernemer geen btw in rekening aan klanten, maar mag daardoor ook geen btw op zakelijke kosten en investeringen terugvragen (voorbelasting). Deelname is niet verplicht en heeft gevolgen die per situatie kunnen verschillen (bijvoorbeeld voor klanten die zelf wel btw willen aftrekken) — de actuele omzetgrens en voorwaarden staan bij de Belastingdienst; Avydo kan meedenken of de KOR in uw situatie voordelig is.',
+      'De kleineondernemersregeling (KOR) is een vrijstelling van btw, bedoeld voor kleine ondernemers die in Nederland zijn gevestigd en onder een bepaalde jaaromzetgrens blijven; de actuele grens en voorwaarden staan bij de Belastingdienst en kunnen wijzigen, dus controleer die daar. Bij deelname brengt u geen btw in rekening aan klanten en hoeft u ook geen btw-aangifte meer te doen. Daar staat tegenover dat u dan ook géén btw op zakelijke kosten en investeringen kunt terugvragen (voorbelasting), en dat afmelden voor de KOR niet van vandaag op morgen kan: dit moet vooraf worden aangemeld en gaat pas in vanaf het begin van een aangiftetijdvak. De KOR gaat uitsluitend over btw en zegt niets over de inkomsten- of vennootschapsbelasting, die u gewoon blijft betalen over de winst. Of deelname voordelig is, verschilt per situatie: het kan nadelig zijn als u veel zakelijke investeringen doet (waarvan u dan geen btw terugkrijgt), en levert doorgaans geen prijsvoordeel op bij klanten die zelf btw-plichtige ondernemers zijn, omdat die de btw op een gewone factuur toch al hadden kunnen terugvragen. Avydo kan meedenken of de KOR in uw situatie voordelig is.',
     targetAudience: ['zzp', 'mkb-ondernemer'],
     sourceName: 'Belastingdienst',
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/hoe_werkt_de_btw/kleineondernemersregeling/wat-betekent-meedoen-met-de-kleineondernemersregeling/',
     lastVerified: '2026-09-28',
-    tags: ['kor', 'kleineondernemersregeling', 'kleine ondernemersregeling', 'btw vrijstelling'],
+    tags: ['kor', 'kleineondernemersregeling', 'kleine ondernemersregeling', 'btw vrijstelling', 'kor voordelig'],
     priority: 3,
   },
   {
@@ -114,12 +114,12 @@ export const btwItems: KnowledgeItem[] = [
     title: 'Btw bij zakelijke kosten en diensten',
     category: 'Btw',
     content:
-      'Over zakelijke kosten en aangeschafte diensten wordt in de regel btw in rekening gebracht, die als voorbelasting kan worden teruggevraagd voor zover de kosten zakelijk gebruikt worden. Bij diensten aan het buitenland (bijvoorbeeld aan een andere ondernemer binnen de EU) gelden vaak afwijkende regels, zoals de verleggingsregeling, waarbij de btw-heffing verschuift naar de afnemer. Deze internationale en gemengd zakelijk/privé-situaties zijn vaak maatwerk — raadpleeg de Belastingdienst of Avydo bij twijfel over een specifieke kostenpost.',
+      'Let op: dit gaat specifiek over de btw op zakelijke kosten, niet over de vraag of een kostenpost meetelt in de fiscale winstberekening voor de inkomsten- of vennootschapsbelasting (zie het kennisitem "Zakelijke kosten versus privékosten") — dit zijn twee losstaande beoordelingen, die overigens vaak wel dezelfde uitkomst hebben. Over zakelijke kosten en aangeschafte diensten wordt in de regel btw in rekening gebracht, die als voorbelasting kan worden teruggevraagd voor zover de kosten daadwerkelijk zakelijk gebruikt worden; bij gemengd zakelijk/privé-gebruikte kosten (bijvoorbeeld een auto of telefoon) mag doorgaans alleen het zakelijke deel worden teruggevraagd, en gelden specifieke correctieregels. Bij diensten aan het buitenland (bijvoorbeeld aan een andere ondernemer binnen de EU) gelden vaak afwijkende regels, zoals de verleggingsregeling, waarbij de btw-heffing verschuift naar de afnemer. Deze gemengde en internationale situaties zijn vaak maatwerk — raadpleeg de Belastingdienst of Avydo bij twijfel over een specifieke kostenpost.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl: 'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/hoe_werkt_de_btw/',
     lastVerified: '2026-09-28',
-    tags: ['btw zakelijke kosten', 'btw diensten', 'btw verleggen', 'btw buitenland'],
+    tags: ['btw zakelijke kosten', 'btw diensten', 'btw verleggen', 'btw buitenland', 'gemengde kosten btw'],
     priority: 2,
   },
 ];

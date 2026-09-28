@@ -3,15 +3,23 @@ import type { KnowledgeItem } from './types';
 export const ondernemingsvormenItems: KnowledgeItem[] = [
   {
     id: 'onderneming-starten',
-    title: 'Een onderneming starten',
+    title: 'Een onderneming starten: praktische startcheck',
     category: 'Ondernemingsvormen',
     content:
-      'Wie in Nederland een onderneming start, moet zich inschrijven bij de Kamer van Koophandel (KVK) en krijgt daarna te maken met verplichtingen rond administratie en belastingen. Voor het starten is het belangrijk vooraf een rechtsvorm te kiezen (bijvoorbeeld eenmanszaak of BV) en te weten welke belastingen gaan gelden (zoals inkomstenbelasting of vennootschapsbelasting, en meestal btw).',
+      'Wie in Nederland een onderneming start, krijgt met een aantal vaste, samenhangende stappen te maken. Eerst een rechtsvorm kiezen (bijvoorbeeld eenmanszaak, VOF of BV), die bepaalt hoe u aansprakelijk bent en welke belastingen gaan gelden. Daarna inschrijving bij de Kamer van Koophandel (KVK) in het Handelsregister, waarna uw gegevens automatisch bij de Belastingdienst terechtkomen voor de belastingregistratie (doorgaans inkomsten- of vennootschapsbelasting, en meestal ook btw). Vanaf de start geldt een administratieplicht: een sluitende, tijdig bijgewerkte administratie is nodig voor de belastingaangiften en voor correct factureren volgens de btw-factuurvereisten. Een zakelijke bankrekening is niet voor elke rechtsvorm verplicht, maar wordt in de praktijk sterk aangeraden om zakelijk en privé gescheiden te houden. Afhankelijk van de aard van de onderneming kunnen daarnaast bedrijfsverzekeringen relevant zijn, en zodra er personeel bijkomt, gelden aparte werkgeversverplichtingen. Voor de volledige, actuele stappenlijst is de KVK de aangewezen bron.',
     targetAudience: ['zzp', 'mkb-ondernemer'],
     sourceName: 'KVK',
     sourceUrl: 'https://ondernemersplein.kvk.nl/bedrijf-starten/voorbereiden/eigen-bedrijf-starten-10-belangrijke-stappen',
     lastVerified: '2026-09-28',
-    tags: ['onderneming starten', 'starten', 'startende ondernemer', 'bedrijf beginnen'],
+    tags: [
+      'onderneming starten',
+      'starten',
+      'startende ondernemer',
+      'bedrijf beginnen',
+      'bedrijf starten',
+      'wat moet ik regelen',
+      'startcheck',
+    ],
     priority: 3,
   },
   {
@@ -85,12 +93,25 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Verschil tussen een eenmanszaak en een BV',
     category: 'Ondernemingsvormen',
     content:
-      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door in de aansprakelijkheid (bij een eenmanszaak is de ondernemer in privé aansprakelijk, bij een BV in beginsel de BV zelf), in de belastingheffing (een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met loonheffing over het loon van de directeur-grootaandeelhouder) en in de administratieve verplichtingen (een BV moet onder meer een jaarrekening deponeren). Welke rechtsvorm in een concrete situatie fiscaal en juridisch het beste past, hangt af van onder meer de verwachte winst, risico\'s en persoonlijke voorkeuren — Avydo kan dit voor uw situatie doorrekenen.',
+      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door op meerdere vlakken. Aansprakelijkheid: bij een eenmanszaak bent u in privé aansprakelijk voor zakelijke schulden, bij een BV is in beginsel de BV zelf aansprakelijk. Belastingheffing: een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met daarnaast loonheffing over het loon van de directeur-grootaandeelhouder (DGA) en mogelijk dividendbelasting bij een winstuitkering. Administratie: een BV heeft aanvullende verplichtingen, zoals het jaarlijks deponeren van een jaarrekening bij de KVK, die een eenmanszaak niet kent. Oprichting en complexiteit: een eenmanszaak richt u eenvoudig op via inschrijving bij de KVK, terwijl een BV wordt opgericht via een notariële akte, wat meer tijd en kosten met zich meebrengt. Een BV is niet automatisch fiscaal voordeliger dan een eenmanszaak — of dat in een concrete situatie zo is, hangt af van de hoogte van de winst, risico\'s en persoonlijke voorkeuren, en verschilt van geval tot geval. Avydo kan dit voor uw situatie doorrekenen.',
     targetAudience: ['zzp', 'bv-dga', 'mkb-ondernemer'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/starten/een-eenmanszaak-of-bv-als-rechtsvorm-kiezen/',
     lastVerified: '2026-09-28',
-    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'eenmanszaak versus bv'],
+    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'eenmanszaak versus bv', 'bv voordeliger', 'is een bv beter'],
     priority: 3,
+  },
+  {
+    id: 'bedrijfsverzekeringen',
+    title: 'Bedrijfsverzekeringen',
+    category: 'Ondernemingsvormen',
+    content:
+      'Welke verzekeringen een onderneming nodig heeft, verschilt per situatie: sommige zijn wettelijk verplicht (zoals een opstalverzekering bij een eigen bedrijfspand, en de verplichte sociale verzekeringen voor iedereen die in Nederland woont of werkt), andere zijn niet verplicht maar wel verstandig, zoals een bedrijfsaansprakelijkheidsverzekering (AVB, dekt schade die u, uw personeel of uw producten bij anderen veroorzaken) of een bedrijfsschadeverzekering (dekt doorlopende kosten bij bedrijfsonderbreking, bijvoorbeeld door brand). Zelfstandigen kunnen daarnaast hun eigen inkomen verzekeren, bijvoorbeeld met een arbeidsongeschiktheidsverzekering. Welke verzekeringen in uw situatie relevant zijn, hangt af van de aard van de onderneming en de risico\'s die u loopt.',
+    targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
+    sourceName: 'KVK',
+    sourceUrl: 'https://ondernemersplein.kvk.nl/soorten-verzekeringen/',
+    lastVerified: '2026-09-28',
+    tags: ['bedrijfsverzekeringen', 'verzekeringen ondernemer', 'aansprakelijkheidsverzekering', 'avb'],
+    priority: 1,
   },
 ];

@@ -53,6 +53,39 @@ const SAMPLE_ITEMS = [
     tags: ['managementinformatie'],
     priority: 1,
   },
+  {
+    id: 'verschil-eenmanszaak-en-bv',
+    title: 'Verschil tussen een eenmanszaak en een BV',
+    category: 'Ondernemingsvormen',
+    content:
+      'Een BV is een rechtspersoon, een eenmanszaak niet. Een BV is niet automatisch fiscaal voordeliger dan een eenmanszaak — dit hangt af van de winst en persoonlijke situatie.',
+    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'bv voordeliger', 'is een bv beter'],
+    priority: 3,
+  },
+  {
+    id: 'zakelijke-versus-prive-kosten',
+    title: 'Zakelijke kosten versus privékosten',
+    category: 'Inkomstenbelasting',
+    content: 'Gemengde kosten zoals een telefoon zijn deels aftrekbaar. Een privételefoon is niet zonder meer volledig aftrekbaar.',
+    tags: ['zakelijke kosten', 'privékosten', 'privételefoon aftrekken', 'gemengde kosten'],
+    priority: 3,
+  },
+  {
+    id: 'voorlopige-aanslag',
+    title: 'Voorlopige aanslag',
+    category: 'Inkomstenbelasting',
+    content: 'Een voorlopige aanslag is een schatting van de te betalen belasting over het lopende jaar.',
+    tags: ['voorlopige aanslag', 'belasting vooraf betalen'],
+    priority: 2,
+  },
+  {
+    id: 'werknemer-aannemen',
+    title: 'Een werknemer aannemen',
+    category: 'Personeel',
+    content: 'Bij het aannemen van de eerste werknemer wordt u werkgever en stelt u een arbeidsovereenkomst op.',
+    tags: ['werknemer aannemen', 'personeel aannemen', 'eerste werknemer', 'werkgever worden'],
+    priority: 3,
+  },
 ];
 
 test('tokenize verwijdert stopwoorden en korte woorden', () => {
@@ -81,6 +114,29 @@ test('retrieveKnowledgeItems respecteert de maxItems-limiet', () => {
 test('retrieveKnowledgeItems geeft nooit een item terug zonder enige trefwoordtreffer', () => {
   const results = retrieveKnowledgeItems('Wat is de KOR?', SAMPLE_ITEMS);
   assert.ok(!results.some((r) => r.id === 'eenmanszaak'));
+});
+
+// Dekt de volledige testset uit de opdracht ("Verbeter de inhoudelijke
+// kwaliteit..."): voor elke vraag moet minimaal het verwachte kennisitem
+// gevonden worden. Dit toont aan dat de retrieval-laag relevante context
+// aanlevert — de kwaliteit van het uiteindelijke, door Groq gegenereerde
+// antwoord (structuur, toon, geen ongefundeerde claims) kan vanuit deze
+// sandbox niet end-to-end getest worden (geen live Groq-toegang), en wordt
+// afgedwongen via de systeemprompt in kenniscentrum-chat.ts.
+test('retrieveKnowledgeItems vindt het juiste kennisitem voor elke verplichte testvraag', () => {
+  const cases = [
+    ['Wat is het verschil tussen een eenmanszaak en een BV?', 'verschil-eenmanszaak-en-bv'],
+    ['Wat is de KOR en wanneer kan ik daar gebruik van maken?', 'kor'],
+    ['Wanneer moet ik btw-aangifte doen?', 'btw-aangifte'],
+    ['Hoeveel belasting moet ik betalen?', 'voorlopige-aanslag'],
+    ['Is een BV altijd voordeliger dan een eenmanszaak?', 'verschil-eenmanszaak-en-bv'],
+    ['Kan ik mijn privételefoon zakelijk aftrekken?', 'zakelijke-versus-prive-kosten'],
+    ['Ik wil mijn eerste werknemer aannemen. Wat moet ik regelen?', 'werknemer-aannemen'],
+  ];
+  for (const [question, expectedId] of cases) {
+    const results = retrieveKnowledgeItems(question, SAMPLE_ITEMS);
+    assert.ok(results.some((r) => r.id === expectedId), `verwachtte "${expectedId}" voor "${question}", kreeg ${results.map((r) => r.id)}`);
+  }
 });
 
 // Regressie: een geheel onderwerpsvreemde vraag die toevallig één generiek,
@@ -186,4 +242,25 @@ test('geen kennisitem bevat een euroteken of procentteken in de content (geen ha
       assert.ok(!/\d+\s*%/.test(content), `${file}: content bevat een percentage — verwijs naar de officiële bron in plaats van een cijfer te noemen`);
     }
   }
+});
+
+// Regressie: dit borgt dat de inhoudelijke verbetering van personeel.ts
+// (opdracht: "controleer of de knowledge base voldoende informatie bevat
+// over ... arbeidsovereenkomst ... pensioen/arbo-regels") daadwerkelijk in
+// de repository staat, met een betrouwbare bron — en blijft dat ook
+// bewaken bij toekomstige wijzigingen.
+test('personeel.ts bevat kennisitems over arbeidsovereenkomst, pensioen en arbeidsomstandigheden', () => {
+  const files = readKnowledgeFiles();
+  const personeel = files.find((f) => f.file === 'personeel.ts');
+  assert.ok(personeel, 'src/data/ai-knowledge/personeel.ts ontbreekt');
+  for (const expectedId of ['arbeidsovereenkomst', 'pensioen-werknemers', 'arbeidsomstandigheden']) {
+    assert.ok(personeel.text.includes(`id: '${expectedId}'`), `personeel.ts mist het kennisitem "${expectedId}"`);
+  }
+});
+
+test('de kennisbank bevat in totaal minstens 45 items, verdeeld over minstens 6 onderwerpbestanden', () => {
+  const files = readKnowledgeFiles();
+  assert.ok(files.length >= 6, 'verwacht minstens 6 onderwerpbestanden in src/data/ai-knowledge/');
+  const totalItems = files.reduce((sum, { text }) => sum + [...text.matchAll(/\bid:\s*'/g)].length, 0);
+  assert.ok(totalItems >= 45, `verwacht minstens 45 kennisitems in totaal, telde er ${totalItems}`);
 });
