@@ -18,7 +18,7 @@ interface ImportMetaEnv {
 
   /** Server-side only. API-sleutel voor Groq (gratis tier, geen creditcard nodig). Zie README. */
   readonly GROQ_API_KEY?: string;
-  /** Server-side only. Override van het standaard Groq-model ("llama-3.3-70b-versatile"). */
+  /** Server-side only. Override van het standaard Groq-model ("openai/gpt-oss-20b"). Controleer console.groq.com/docs/deprecations voor wijzigingen voordat u dit overschrijft. */
   readonly GROQ_MODEL?: string;
 
   /**

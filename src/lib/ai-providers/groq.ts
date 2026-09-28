@@ -1,20 +1,30 @@
-// Groq-adapter (secundaire, gratis fallback-provider).
+// Groq-adapter (standaard, gratis provider — zie index.ts).
 //
-// Waarom Groq als fallback: net als Gemini biedt Groq een daadwerkelijk
-// gratis API-sleutel zonder creditcard, met eigen (lagere maar nog steeds
-// bruikbare) gratis-tier-limieten die volledig onafhankelijk zijn van
-// Google — zo vallen beide providers niet tegelijk uit bij bijvoorbeeld
-// een storing of een uitgeputte quota bij één van de twee. Groq's API is
+// Waarom Groq: een daadwerkelijk gratis API-sleutel zonder creditcard, met
+// eigen gratis-tier-limieten, zonder de EER-beperking die Google's Gemini
+// gratis tier voor deze site oplegt (zie index.ts/gemini.ts). Groq's API is
 // OpenAI-compatibel en ondersteunt een gedwongen tool_choice, wat dezelfde
 // betrouwbare structured-outputgarantie geeft.
+//
+// LET OP (incident 28-9-2026): het voormalige standaardmodel
+// "llama-3.3-70b-versatile" is door Groq gedecommissioneerd op 16-8-2026
+// (aangekondigd 17-6-2026); sindsdien geeft elk verzoek met dat modelnaam
+// een 404 "model does not exist" terug, wat bij de gebruiker verscheen als
+// "De assistent kon nu niet antwoorden" (upstream_error), ook mét een
+// correct geconfigureerde GROQ_API_KEY. Groq's eigen aanbevolen vervanger
+// is "openai/gpt-oss-120b"; hier is bewust gekozen voor het kleinere
+// "openai/gpt-oss-20b", omdat dat op moment van schrijven het enige van de
+// twee is dat door alle geraadpleegde bronnen zonder voorbehoud als
+// onderdeel van Groq's gratis, creditcard-loze tier wordt bevestigd
+// (ondersteunt function calling/tool_choice). Controleer bij een
+// toekomstige wijziging van GROQ_MODEL altijd eerst console.groq.com/docs/models
+// en console.groq.com/docs/deprecations op de actuele status, vóór het
+// instellen van een ander model — zowel voor geldigheid als voor de
+// gratis/betaald-status (i.v.m. de "nooit ongemerkt kosten"-eis).
 import type { AiProvider, ProviderCallResult } from './types';
 
-// Override met de GROQ_MODEL-env-var indien gewenst. 70B-versie gekozen
-// (i.p.v. de kleinere/snellere 8B-variant) omdat deze provider alleen als
-// fallback dient (dus minder gevoelig voor het hogere quotumverbruik van
-// het grotere model) en een merkbaar betere Nederlandstalige kwaliteit
-// geeft voor fiscale uitleg.
-const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+// Override met de GROQ_MODEL-env-var indien gewenst.
+const DEFAULT_MODEL = 'openai/gpt-oss-20b';
 
 export const groqProvider: AiProvider = {
   id: 'groq',
