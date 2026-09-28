@@ -68,7 +68,12 @@ export const groqProvider: AiProvider = {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        return { ok: false, error: `Groq API ${res.status}: ${text.slice(0, 300)}`, providerId: 'groq' };
+        // Modelnaam bewust in de foutmelding opgenomen (geen secret) zodat de
+        // Vercel-serverlogs direct laten zien welk model daadwerkelijk naar
+        // Groq is verstuurd — essentieel om een verouderde deployment of een
+        // GROQ_MODEL-env-var-override te kunnen onderscheiden van een echt
+        // ongeldig modelnaam in de code zelf.
+        return { ok: false, error: `Groq API ${res.status} (model="${model}"): ${text.slice(0, 300)}`, providerId: 'groq' };
       }
 
       const data = await res.json();
