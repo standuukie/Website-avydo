@@ -1,17 +1,19 @@
 // Retrieval-laag voor de Kenniscentrum-AI-assistent: zoekt relevante
-// context in de BESTAANDE contentstructuur (Kenniscentrum-artikelen,
-// Belastingkalender-dataset, Avydo-bedrijfsgegevens) op basis van
-// eenvoudige trefwoord-overlap. Geen aparte nieuwsdatabase, geen
-// vectordatabase — dit is een lichte, RAG-achtige aanpak die past bij de
-// omvang van de bestaande content (enkele tientallen artikelen).
+// context in de BESTAANDE contentstructuur (Avydo AI-kennisbank,
+// Kenniscentrum-artikelen, Belastingkalender-dataset, Avydo-
+// bedrijfsgegevens) op basis van eenvoudige trefwoord-overlap. Geen aparte
+// nieuwsdatabase, geen vectordatabase — dit is een lichte, RAG-achtige
+// aanpak die past bij de omvang van de bestaande content.
 //
 // Het resultaat van retrieveContext() is de ENIGE informatie die het
 // taalmodel mag gebruiken om feitelijke uitspraken op te baseren (zie de
 // systeemprompt in de API-route). Elke bron in de lijst heeft een echte,
 // al bestaande URL — er wordt hier niets verzonnen of samengesteld.
 import { getCollection } from 'astro:content';
+import { knowledgeBase } from '@/data/ai-knowledge';
 import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
+import { overlapScore, retrieveKnowledgeItems, tokenize } from './knowledge-match.mjs';
 
 export interface RetrievedSource {
   id: number;
@@ -21,30 +23,13 @@ export interface RetrievedSource {
   snippet: string;
 }
 
-const STOPWORDS = new Set([
-  'de', 'het', 'een', 'en', 'van', 'voor', 'op', 'in', 'is', 'wat', 'hoe', 'wanneer',
-  'moet', 'ik', 'mijn', 'als', 'dat', 'die', 'met', 'te', 'aan', 'of', 'dit', 'naar',
-  'uw', 'u', 'kan', 'kun', 'ben', 'zijn', 'er', 'bij', 'ook', 'om', 'nog', 'wel', 'niet',
-  'wij', 'we', 'jij', 'je', 'me', 'mij', 'over', 'per', 'tot', 'zo', 'maar', 'dan', 'nu',
-]);
-
-function tokenize(text: string): string[] {
-  const normalized = text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-  return (normalized.match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2 && !STOPWORDS.has(w));
-}
-
-function overlapScore(queryTokens: string[], text: string): number {
-  const tokens = new Set(tokenize(text));
-  let score = 0;
-  for (const q of queryTokens) if (tokens.has(q)) score += 1;
-  return score;
-}
-
 const MAX_ARTICLE_SOURCES = 4;
 const MAX_DEADLINE_SOURCES = 3;
+// Bewust laag gehouden (zie ook opdracht "voorkom irrelevante context"):
+// de kennisbank bestaat uit korte, algemene items, dus 3 relevante items
+// zijn ruim voldoende om een vraag te onderbouwen zonder de hoeveelheid
+// context (en dus de Groq-aanroeptijd/tokengebruik) onnodig te vergroten.
+const MAX_KNOWLEDGE_SOURCES = 3;
 const STALE_DEADLINE_DAYS = 400;
 
 export interface RetrieveOptions {
@@ -70,6 +55,22 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
         snippet: `${pinned.data.summary} ${pinned.data.relevance}`.slice(0, 700),
       });
     }
+  }
+
+  // Avydo AI-kennisbank (src/data/ai-knowledge/): algemene, gecontroleerde
+  // kennisitems over ondernemen/belastingen/accountancy. Vóór de losse
+  // Kenniscentrum-artikelen gezet omdat curated, evergreen uitleg voor een
+  // "wat is..."-vraag doorgaans een betrouwbaardere basis is dan een
+  // nieuwsartikel dat toevallig dezelfde trefwoorden bevat.
+  const knowledgeMatches = retrieveKnowledgeItems(query, knowledgeBase, { maxItems: MAX_KNOWLEDGE_SOURCES });
+  for (const item of knowledgeMatches) {
+    sources.push({
+      id: nextId++,
+      name: `Avydo kennisbank (bron: ${item.sourceName})`,
+      title: item.title,
+      url: item.sourceUrl,
+      snippet: item.content,
+    });
   }
 
   const scoredArticles = allArticles

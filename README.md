@@ -130,12 +130,28 @@ GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; *
 
 De assistent verzint nooit zelf fiscale feiten. Elke vraag doorloopt:
 
-1. **Retrieval** (`src/lib/ai-assistent.ts`, `retrieveContext()`): een lichte, trefwoord-gebaseerde zoekfunctie over de **bestaande** databronnen &mdash; de Kenniscentrum-contentcollectie (`getCollection('kenniscentrum')`), de Belastingkalender-dataset (`src/data/belastingkalender.ts`) en een klein stukje Avydo-contactinformatie. Er is bewust **geen** aparte nieuws- of vectordatabase toegevoegd.
+1. **Retrieval** (`src/lib/ai-assistent.ts`, `retrieveContext()`): een lichte, trefwoord-gebaseerde zoekfunctie over de **bestaande** databronnen &mdash; de Avydo AI-kennisbank (`src/data/ai-knowledge/`, zie hieronder), de Kenniscentrum-contentcollectie (`getCollection('kenniscentrum')`), de Belastingkalender-dataset (`src/data/belastingkalender.ts`) en een klein stukje Avydo-contactinformatie. Er is bewust **geen** aparte nieuws- of vectordatabase toegevoegd.
 2. De gevonden bronnen (elk met een echte, al bestaande URL) worden als genummerde lijst meegegeven aan het taalmodel.
 3. Het model antwoordt via een **gedwongen tool-call** (structured output, geen vrije tekst) met velden als `kortAntwoord`, `toelichting`, `letOp`, `gebruikteBronIds`, `onvoldoendeInformatie` en `verwijstNaarPersoonlijkAdvies`.
 4. **Server-side validatie**: elke `gebruikteBronIds`-verwijzing die niet in de daadwerkelijk opgehaalde bronnenlijst voorkomt, wordt genegeerd. Zo kan een verzonnen bron of URL nooit bij de bezoeker terechtkomen. Zijn er helemaal geen bronnen gevonden, dan wordt `onvoldoendeInformatie` altijd geforceerd op `true`, ongeacht wat het model zelf teruggeeft.
 
 De volledige systeemprompt (stijl, brongebruik, privacy/veiligheidsregels) staat in `src/pages/api/kenniscentrum-chat.ts`.
+
+### Avydo AI-kennisbank (`src/data/ai-knowledge/`)
+
+Naast de Kenniscentrum-nieuwsartikelen (actueel, tijdgebonden) en de Belastingkalender (deadlines) bevat `src/data/ai-knowledge/` een **statische, versiebeheerde kennisbank** met circa 40 algemene, veelgevraagde onderwerpen voor Nederlandse ondernemers en mkb-klanten van Avydo &mdash; bijvoorbeeld rechtsvormen, btw, de KOR, inkomsten- en vennootschapsbelasting, de DGA en personeel. Dit maakt het mogelijk dat de assistent ook evergreen "wat is..."/"wanneer moet ik..."-vragen goed beantwoordt, niet alleen vragen die toevallig aansluiten bij een recent nieuwsartikel.
+
+**Structuur**: per onderwerpcluster één bestand (`ondernemingsvormen.ts`, `administratie.ts`, `btw.ts`, `inkomstenbelasting.ts`, `bv-dga.ts`, `personeel.ts`), elk een array van `KnowledgeItem` (zie `types.ts`), gebundeld in `index.ts` tot één `knowledgeBase`-array. Elk item bevat: `id`, `title`, `category`, `content`, `targetAudience`, `sourceName`, `sourceUrl`, `lastVerified`, `tags`, `priority`.
+
+**Bronnen**: uitsluitend Belastingdienst, KVK/Ondernemersplein en Rijksoverheid (en waar relevant de NBA) &mdash; nooit blogs of andere secundaire bronnen. Elke `sourceUrl` is een daadwerkelijk gecontroleerde, bestaande pagina; er wordt nooit een URL verzonnen. Dit wordt automatisch getoetst door een test (zie hieronder).
+
+**Actualiteit**: de `content`-velden geven bewust **geen** belastingtarieven, drempelbedragen, percentages of deadlines &mdash; die wijzigen regelmatig en zouden verouderd kunnen raken zonder dat dit opvalt. In plaats daarvan legt `content` uit *hoe* iets werkt, en verwijst voor actuele cijfers naar `sourceUrl`. `lastVerified` (YYYY-MM-DD) registreert wanneer de content en URL voor het laatst gecontroleerd zijn; controleer dit periodiek opnieuw (bijvoorbeeld jaarlijks, of zodra een bezoeker een verouderd antwoord signaleert) en werk de datum bij na controle.
+
+**Een nieuw kennisitem toevoegen**: open het best passende bestand in `src/data/ai-knowledge/` (of maak een nieuw bestand met hetzelfde patroon, bijv. `subsidies.ts`), voeg een object toe dat voldoet aan `KnowledgeItem`, en importeer/spreid een nieuw bestand in `index.ts`. Er is verder **niets** aan te passen aan de retrieval of de RAG-integratie: elk item in `knowledgeBase` wordt automatisch meegenomen. Zie de uitgebreide toelichting bovenaan `src/data/ai-knowledge/index.ts`.
+
+**Retrieval**: `src/lib/knowledge-match.mjs` bevat de eigenlijke matchinglogica (`tokenize`, `overlapScore`, `retrieveKnowledgeItems`) &mdash; bewust een los, framework-onafhankelijk `.mjs`-bestand (geen `astro:content`-afhankelijkheid) zodat dezelfde, echte matchinglogica zowel door `ai-assistent.ts` (productie) als rechtstreeks door `npm run kenniscentrum:test` (`scripts/kenniscentrum/knowledge-retrieval.test.mjs`) gebruikt wordt, zonder dat daar een extra testdependency (ts-node/vitest) voor nodig is. Titel en tags wegen zwaarder mee dan de lopende tekst; een item scoort alleen mee bij minstens één trefwoordtreffer, en per vraag worden maximaal 3 kennisitems meegegeven aan het taalmodel (naast de bestaande limieten voor artikelen en deadlines) om de context compact te houden.
+
+**Persoonlijk advies**: kennisitems bevatten uitsluitend algemene, feitelijke uitleg. Of een specifieke vraag persoonlijk fiscaal advies vereist (bijvoorbeeld "welke rechtsvorm moet ík kiezen") wordt niet per kennisitem bepaald, maar door de systeemprompt in `kenniscentrum-chat.ts` (`verwijstNaarPersoonlijkAdvies`) &mdash; zo blijft dit onderscheid consistent, ongeacht welke bron(nen) voor een antwoord gebruikt zijn.
 
 ### Gebruikte AI-provider(s): gratis-eerst, providerneutraal
 
