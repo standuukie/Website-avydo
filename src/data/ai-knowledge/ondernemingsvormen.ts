@@ -79,6 +79,28 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     deterministicFallback: true,
   },
   {
+    id: 'bv-oprichten-stappen',
+    title: 'Een BV oprichten: de stappen',
+    category: 'Ondernemingsvormen',
+    content:
+      'Het oprichten van een BV verloopt in de kern via een notaris: deze stelt de oprichtingsakte op, waarin ook de statuten (de basisregels van de BV, zoals naam, doel, aandelenkapitaal en bestuur) zijn opgenomen, en verzorgt na ondertekening doorgaans ook de inschrijving bij de KVK en in het UBO-register. Voorafgaand maakt u met de notaris afspraken over onder meer de gewenste naam, het aantal aandelen en wie bestuurder(s) en aandeelhouder(s) worden. Na oprichting gelden voor een BV, anders dan voor bijvoorbeeld een eenmanszaak, aanvullende doorlopende verplichtingen, zoals het jaarlijks opstellen en deponeren van een jaarrekening. Notariskosten en de kosten voor de KVK-inschrijving verschillen per notaris; de KVK en uw notaris kunnen de actuele kosten en doorlooptijd aangeven. Avydo kan u ook helpen bij de fiscale en administratieve voorbereiding van een BV-oprichting.',
+    targetAudience: ['bv-dga', 'mkb-ondernemer'],
+    sourceName: 'KVK',
+    sourceUrl: 'https://www.kvk.nl/starten/de-besloten-vennootschap-bv/',
+    lastVerified: '2026-09-29',
+    tags: [
+      'bv oprichten',
+      'stappen bv oprichten',
+      'hoe richt ik een bv op',
+      'notaris bv',
+      'bv opzetten',
+      'oprichtingsakte',
+      'bv beginnen',
+      'welke stappen moet ik doorlopen bv',
+    ],
+    priority: 2,
+  },
+  {
     id: 'vof-en-maatschap',
     title: 'VOF en maatschap',
     category: 'Ondernemingsvormen',

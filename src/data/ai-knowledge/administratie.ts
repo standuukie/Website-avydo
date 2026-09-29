@@ -112,6 +112,19 @@ export const administratieItems: KnowledgeItem[] = [
     deterministicFallback: true,
   },
   {
+    id: 'documenten-voor-de-accountant',
+    title: 'Documenten voor uw accountant',
+    category: 'Administratie en accountancy',
+    content:
+      'Voor het opstellen van de jaarrekening en de belastingaangiften heeft uw accountant doorgaans toegang nodig tot de kern van uw administratie: inkoop- en verkoopfacturen, bankafschriften van alle zakelijke rekeningen, de kasadministratie (indien van toepassing), loonadministratie en loonstroken bij personeel, en eventuele leningsovereenkomsten of contracten met financiële gevolgen. Ook een overzicht van investeringen en aanschaffingen van bedrijfsmiddelen, gegevens over voorraad (indien relevant) en de btw-aangiften van het boekjaar zijn vaak nodig. Welke stukken exact nodig zijn en in welke vorm (digitaal via een boekhoudpakket of op andere wijze) verschilt per klant, per rechtsvorm en per accountantskantoor — bespreek dit vooraf met uw eigen accountant of adviseur, bijvoorbeeld met Avydo, zodat de aanlevering zo soepel mogelijk verloopt. Een sluitende, doorlopend bijgehouden administratie (zie het kennisitem over de administratieplicht) maakt deze jaarlijkse aanlevering aanzienlijk eenvoudiger dan achteraf alles verzamelen.',
+    targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
+    sourceName: 'KVK',
+    sourceUrl: 'https://ondernemersplein.kvk.nl/administratie-bijhouden-en-bewaren/',
+    lastVerified: '2026-09-29',
+    tags: ['documenten accountant', 'wat heeft accountant nodig', 'aanleveren jaarrekening', 'stukken voor jaarrekening', 'documenten aanleveren boekhouder'],
+    priority: 2,
+  },
+  {
     id: 'managementinformatie',
     title: 'Managementinformatie',
     category: 'Administratie en accountancy',
