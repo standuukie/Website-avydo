@@ -114,12 +114,21 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Bedrijfsverzekeringen',
     category: 'Ondernemingsvormen',
     content:
-      'Welke verzekeringen nodig of verstandig zijn, hangt af van uw activiteiten, personeel, bedrijfspand en risico\'s — er is geen vaste lijst die voor iedere ondernemer geldt. Daarbij zijn drie soorten te onderscheiden. Wettelijk verplicht: bijvoorbeeld een opstalverzekering bij een eigen bedrijfspand, en de verplichte sociale verzekeringen voor iedereen die in Nederland woont of werkt. Afhankelijk van sector/activiteit: sommige beroepen of sectoren kennen een verplichte of sterk gebruikelijke verzekering die niet voor elke onderneming geldt. Vrijwillig, om specifieke bedrijfsrisico\'s af te dekken: bijvoorbeeld een bedrijfsaansprakelijkheidsverzekering (AVB, dekt schade die u, uw personeel of uw producten bij anderen veroorzaken), een bedrijfsschadeverzekering (dekt doorlopende kosten bij bedrijfsonderbreking) of, voor zelfstandigen, een arbeidsongeschiktheidsverzekering. Of een specifieke verzekering voor een onderneming verplicht is, is dus geen algemene regel maar hangt af van het geval — dat is per verzekering en situatie apart te controleren.',
+      'Welke verzekeringen nodig of verstandig zijn, hangt af van uw activiteiten, personeel, bedrijfspand en risico\'s — de meeste bedrijfsverzekeringen zijn niet wettelijk verplicht. Vier categorieën zijn te onderscheiden. (1) Wettelijk verplicht, ongeacht de situatie: een WA-verzekering voor een bedrijfsauto (net als voor elk gemotoriseerd voertuig), en voor een beperkt aantal gereguleerde beroepen (zoals notaris, advocaat of accountant) een beroepsaansprakelijkheidsverzekering. (2) Verplicht afhankelijk van sector, beroep, een contract of financiering: een opstalverzekering voor een bedrijfspand is meestal geen algemene wettelijke plicht, maar wordt vaak wél geëist door de hypotheekverstrekker/bank bij financiering van het pand; een cao kan voor een sector aanvullende verzekeringen verplicht stellen. (3) Vrijwillige bedrijfsverzekeringen om specifieke risico\'s af te dekken: bijvoorbeeld een bedrijfsaansprakelijkheidsverzekering (AVB, dekt schade die u, uw personeel of uw producten bij anderen veroorzaken) of een bedrijfsschadeverzekering (dekt doorlopende kosten bij bedrijfsonderbreking). (4) Persoonlijke inkomensbescherming voor de ondernemer zelf, geen bedrijfsverzekering: met name een arbeidsongeschiktheidsverzekering (AOV), relevant omdat een zelfstandige — anders dan een werknemer — hier zelf verantwoordelijk voor is. Los hiervan geldt, zodra er personeel in dienst is, automatisch het wettelijke stelsel van werknemersverzekeringen via de loonheffingen; dat is geen zelf af te sluiten polis. Gebruik bij twijfel de KVK Verzekeringscheck of vraag Avydo om mee te denken.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://ondernemersplein.kvk.nl/soorten-verzekeringen/',
     lastVerified: '2026-09-29',
-    tags: ['bedrijfsverzekeringen', 'verzekeringen ondernemer', 'aansprakelijkheidsverzekering', 'avb', 'welke verzekeringen nodig'],
+    tags: [
+      'bedrijfsverzekeringen',
+      'verzekeringen ondernemer',
+      'aansprakelijkheidsverzekering',
+      'avb',
+      'welke verzekeringen nodig',
+      'welke verzekeringen heb ik nodig',
+      'opstalverzekering',
+      'arbeidsongeschiktheidsverzekering',
+    ],
     priority: 1,
   },
 ];

@@ -132,3 +132,34 @@ test('provider failure (upstream_error) en onvoldoende kennis (insufficientInfo)
   assert.match(text, /De assistent kan momenteel geen antwoord genereren\. Probeer het opnieuw\./, 'upstream_error mist de verwachte, van onvoldoendeInformatie onderscheiden tekst');
   assert.ok(!text.includes('kon nu niet antwoorden'), 'de oude, generieke foutmelding hoort niet meer in de route te staan');
 });
+
+// Regressie (2026-09-29, ronde 2): GLOBAL_RATE_LIMIT_MAX moet aansluiten bij
+// Groq's daadwerkelijke, publiek gedocumenteerde gratis-tier-limiet voor
+// openai/gpt-oss-20b (30 requests/minuut, site-breed per API-sleutel), met
+// een kleine marge — niet een los gekozen of blind verhoogd getal. Zie de
+// toelichting in kenniscentrum-chat.ts (RATE_LIMIT-sectie) voor de volledige
+// analyse (RPM én TPM) die tot deze waarde leidde.
+test('GLOBAL_RATE_LIMIT_MAX staat op of net onder Groq\'s eigen 30 requests/minuut-limiet, niet er ruim boven', () => {
+  const text = readFileSync(ROUTE_FILE, 'utf-8');
+  const match = text.match(/const GLOBAL_RATE_LIMIT_MAX = (\d+);/);
+  assert.ok(match, 'GLOBAL_RATE_LIMIT_MAX niet gevonden in de route');
+  const value = Number(match[1]);
+  assert.ok(value <= 30, `GLOBAL_RATE_LIMIT_MAX (${value}) staat boven Groq's eigen 30 requests/minuut-limiet — onze eigen limiter kan zo nooit vóór Groq's opaque 429 ingrijpen`);
+  assert.ok(value >= 20, `GLOBAL_RATE_LIMIT_MAX (${value}) lijkt onnodig laag voor een normaal gesprek van enkele vragen`);
+});
+
+// Simuleert het volledige 15-vragen testgesprek uit de kwaliteits-/
+// stabiliteitsronde, met realistische tussenpozen (een bezoeker die een
+// vraag typt, het antwoord leest en een vervolgvraag stelt) tegen de nieuwe,
+// aan Groq's eigen RPM-limiet uitgelijnde GLOBAL_RATE_LIMIT_MAX (28) — dit
+// bevestigt dat de verlaging van 60 naar 28 een normaal gesprek niet alsnog
+// blokkeert (het oorspronkelijke incident dat ronde 1 al oploste).
+test('een volledig 15-vragen testgesprek met realistische tussenpozen blokkeert niet op de (nu lagere) globale limiet', () => {
+  const globalLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 28 });
+  let now = 1_000_000;
+  for (let i = 0; i < 15; i++) {
+    assert.equal(globalLimiter.isLimited('global', now), false, `vraag ${i + 1} van het testgesprek zou niet geblokkeerd moeten worden`);
+    globalLimiter.record('global', now);
+    now += 20_000; // ~20 seconden tussen elke vraag/antwoord-beurt
+  }
+});

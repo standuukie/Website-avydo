@@ -55,6 +55,18 @@ export const groqProvider: AiProvider = {
           model,
           temperature: 0.3,
           max_tokens: maxOutputTokens,
+          // gpt-oss-20b is een redeneermodel: zonder deze parameter gebruikt
+          // Groq standaard "medium" redeneerinspanning, wat een substantieel
+          // deel van max_tokens aan onzichtbare redeneer-tokens kan
+          // opsouperen vóórdat de eigenlijke tool-call wordt geschreven —
+          // bij een korte, gestructureerde antwoordvorm zoals hier is dat
+          // zelden nodig, en het verhoogt het risico op een afgekapt/
+          // onvolledig tool-antwoord (zie 'Ongeldige JSON-output'/'Geen
+          // geldig tool-antwoord' hieronder) en verbruikt nodeloos budget
+          // van Groq's tokens-per-minuut-limiet. "low" laat het model nog
+          // steeds normaal redeneren, maar niet uitgebreider dan nodig voor
+          // deze taak.
+          reasoning_effort: 'low',
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
           tools: [
             {
@@ -95,8 +107,18 @@ export const groqProvider: AiProvider = {
 
       return { ok: true, input: parsedArgs as Record<string, unknown>, providerId: 'groq' };
     } catch (err) {
+      // err.name is hier bewust apart opgenomen (naast err.message): bij een
+      // afgebroken verzoek door FETCH_TIMEOUT_MS is dit altijd "AbortError",
+      // wat een echte timeout betrouwbaar onderscheidt van een andere
+      // netwerkfout (DNS/verbinding) voor de foutcategorisatie in index.ts —
+      // bevat geen gevoelige data, uitsluitend de technische foutnaam.
+      const isTimeout = err instanceof Error && err.name === 'AbortError';
       const message = err instanceof Error ? err.message : 'onbekende fout';
-      return { ok: false, error: `Netwerkfout of timeout bij aanroep Groq: ${message}`, providerId: 'groq' };
+      return {
+        ok: false,
+        error: isTimeout ? `Timeout bij aanroep Groq (limiet ${timeoutMs}ms): ${message}` : `Netwerkfout bij aanroep Groq: ${message}`,
+        providerId: 'groq',
+      };
     } finally {
       clearTimeout(timer);
     }

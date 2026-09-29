@@ -34,7 +34,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Gebruikelijk loon',
     category: 'BV en vennootschapsbelasting',
     content:
-      'De gebruikelijkloonregeling verplicht een DGA om zichzelf een loon toe te kennen dat gebruikelijk is voor het niveau en de duur van zijn of haar werkzaamheden voor de BV, ook als de DGA daar zelf voor zou kiezen geen of een laag loon op te nemen. De Belastingdienst toetst dit gebruikelijke loon onder meer aan het loon van vergelijkbare functies en aan het loon van de meestverdienende werknemer binnen de BV, met een wettelijk vastgesteld minimumbedrag. Het actuele minimumbedrag en de rekenregels wijzigen regelmatig — raadpleeg de Belastingdienst voor de geldende cijfers, of bespreek uw specifieke situatie met Avydo.',
+      'De gebruikelijkloonregeling verplicht een DGA om zichzelf een loon toe te kennen dat gebruikelijk is voor het niveau en de duur van zijn of haar werkzaamheden voor de BV, ook als de DGA daar zelf voor zou kiezen geen of een laag loon op te nemen — het loon is dus niet vrij te kiezen. De hoogte is het hoogste bedrag van drie toetsen: een wettelijk vastgesteld normbedrag, het loon van de meest vergelijkbare dienstbetrekking, of het loon van de meestverdienende werknemer binnen de BV. Dit normbedrag is nadrukkelijk iets anders dan het wettelijk minimumloon voor werknemers — het gaat om een aparte regeling met een eigen bedrag. Het actuele normbedrag en de rekenregels wijzigen regelmatig — raadpleeg de Belastingdienst voor de geldende cijfers, of bespreek uw specifieke situatie met Avydo.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:

@@ -57,6 +57,27 @@ function resolveProviderChain(): AiProvider[] {
   return [groqProvider];
 }
 
+/**
+ * Bepaalt een grove, veilig te loggen foutcategorie uit de foutmelding van
+ * een provider-adapter (die zelf uitsluitend HTTP-status + ingekorte
+ * responstekst bevat, zie gemini.ts/groq.ts/anthropic.ts) — puur voor
+ * diagnose in de serverlogs, bevat zelf geen gevoelige data.
+ */
+function categorizeProviderError(error: string): string {
+  const statusMatch = error.match(/API (\d{3})/);
+  if (statusMatch) {
+    const status = Number(statusMatch[1]);
+    if (status === 429) return 'rate_limited';
+    if (status >= 500) return 'server_error';
+    if (status >= 400) return 'client_error';
+  }
+  if (/timeout|abort/i.test(error)) return 'timeout';
+  if (/netwerkfout/i.test(error)) return 'network';
+  if (/JSON-output|tool-antwoord|antwoordformaat/i.test(error)) return 'malformed_response';
+  if (/niet geconfigureerd/i.test(error)) return 'not_configured';
+  return 'unknown';
+}
+
 export interface AiCallOutcome {
   ok: boolean;
   input?: Record<string, unknown>;
@@ -86,15 +107,22 @@ export async function callAiWithFallback(args: {
   let lastError = '';
   for (const provider of chain) {
     attempted.push(provider.id);
+    const startedAt = Date.now();
     const result = await provider.call(args);
+    const durationMs = Date.now() - startedAt;
     if (!result.ok) {
       // Veilig voor de serverlogs: result.error bevat uitsluitend de
       // HTTP-status en de (ingekorte) responstekst van de provider — nooit
       // de API-sleutel zelf (die staat alleen in de Authorization/
       // x-goog-api-key-header van het uitgaande verzoek, nooit in de
-      // respons of in deze foutmelding). Zichtbaar in Vercel → project →
-      // Deployments → Functions → Logs.
-      console.error(`[kenniscentrum-chat] provider "${provider.id}" faalde: ${result.error}`);
+      // respons of in deze foutmelding), nooit de vraag van de bezoeker en
+      // nooit het modelantwoord. De categorie/duur is toegevoegd om een
+      // providerfout (rate limit/timeout/serverfout/misvormd antwoord) te
+      // kunnen onderscheiden zonder gevoelige data te loggen — zichtbaar in
+      // Vercel → project → Deployments → Functions → Logs.
+      console.error(
+        `[kenniscentrum-chat] provider "${provider.id}" faalde na ${durationMs}ms (categorie: ${categorizeProviderError(result.error)}): ${result.error}`,
+      );
     }
     if (result.ok) {
       return { ok: true, input: result.input, providerId: result.providerId, attempted };

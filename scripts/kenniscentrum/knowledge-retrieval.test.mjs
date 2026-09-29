@@ -67,7 +67,7 @@ const SAMPLE_ITEMS = [
     title: 'Zakelijke kosten versus privékosten',
     category: 'Inkomstenbelasting',
     content:
-      'Gemengde kosten zoals een telefoon zijn deels aftrekbaar. Een privételefoon is niet zonder meer volledig aftrekbaar. Boodschappen voor privégebruik zijn geen zakelijke kosten en dus niet aftrekbaar.',
+      'Gemengde kosten (zowel zakelijk als privé gebruikt, zoals een auto of een telefoon) zijn deels aftrekbaar. Een privételefoon die af en toe zakelijk gebruikt wordt, is niet zonder meer volledig aftrekbaar. Boodschappen voor privégebruik zijn geen zakelijke kosten en dus niet aftrekbaar.',
     tags: ['zakelijke kosten', 'privékosten', 'privételefoon aftrekken', 'gemengde kosten', 'boodschappen aftrekken', 'privéboodschappen'],
     priority: 3,
   },
@@ -165,6 +165,22 @@ const SAMPLE_ITEMS = [
     category: 'Ondernemingsvormen',
     content: 'Wie een onderneming start kiest eerst een rechtsvorm, schrijft in bij de KVK en regelt daarna administratie en btw.',
     tags: ['onderneming starten', 'starten', 'bedrijf starten', 'wat moet ik regelen', 'startcheck'],
+    priority: 3,
+  },
+  {
+    id: 'zakelijke-bankrekening',
+    title: 'Zakelijke bankrekening',
+    category: 'Administratie en accountancy',
+    content: 'Voor een BV hoort een eigen rekening op naam van de rechtspersoon bij de eigen rechtspersoonlijkheid; voor een eenmanszaak is dit niet wettelijk verplicht.',
+    tags: ['zakelijke bankrekening', 'zakelijke rekening', 'bankrekening ondernemer'],
+    priority: 2,
+  },
+  {
+    id: 'btw-algemeen',
+    title: 'Btw in Nederland',
+    category: 'Btw',
+    content: 'Btw is de belasting die ondernemers over de verkoop van goederen en diensten in rekening brengen en periodiek afdragen.',
+    tags: ['btw', 'omzetbelasting', 'wat is btw'],
     priority: 3,
   },
 ];
@@ -303,6 +319,73 @@ test('het volledige testgesprek uit de opdracht blijft bij elke stap relevante c
     );
     history.push(message);
   }
+});
+
+// Het volledige, 15-vragen testgesprek uit de kwaliteits-/stabiliteitsronde:
+// elke stap moet relevante context vinden, en context van eerdere BV-/
+// personeel-/btw-vragen mag latere, andere onderwerpen niet verdringen.
+// Voor stappen waar meerdere kennisitems een correct antwoord zouden
+// onderbouwen (bijv. een generieke btw-vervolgvraag na een personeelsvraag,
+// die geen enkel specifiek btw-subonderwerp noemt) wordt een kleine set
+// toegestane id's gebruikt in plaats van precies één verwacht item.
+test('het volledige 15-vragen testgesprek blijft bij elke stap relevante, onderwerpseigen context vinden', () => {
+  const history = [];
+  const steps = [
+    ['Wat is een balans?', ['balans']],
+    ['Ik wil een bedrijf starten. Wat moet ik regelen?', ['onderneming-starten']],
+    ['Wat is het verschil tussen een eenmanszaak en een BV?', ['verschil-eenmanszaak-en-bv']],
+    ['Is een BV altijd goedkoper?', ['verschil-eenmanszaak-en-bv']],
+    ['En hoe zit dat bij een BV?', ['verschil-eenmanszaak-en-bv']],
+    ['En hoe zit het met dividend?', ['dividend']],
+    ['En als ik de winst in de BV laat?', ['winst-in-de-bv']],
+    ['Hoeveel loon moet ik mezelf als DGA betalen?', ['gebruikelijk-loon']],
+    ['En hoe zit het met een zakelijke rekening?', ['zakelijke-bankrekening']],
+    ['En welke verzekeringen heb ik nodig?', ['bedrijfsverzekeringen']],
+    ['En als ik personeel aanneem?', ['werknemer-aannemen']],
+    ['En hoe zit dat met btw?', ['btw-algemeen', 'btw-aangifte', 'btw-tarieven', 'btw-zakelijke-kosten-en-diensten', 'kor']],
+    ['En als ik mijn telefoon ook privé gebruik?', ['zakelijke-versus-prive-kosten']],
+    ['Kan ik mijn boodschappen aftrekken?', ['zakelijke-versus-prive-kosten']],
+    ['Hoeveel belasting moet ik betalen als ik 50.000 euro winst maak?', ['voorlopige-aanslag']],
+  ];
+  for (const [message, acceptableIds] of steps) {
+    const results = retrieveWithFallback(history, message, SAMPLE_ITEMS);
+    assert.ok(
+      results.some((r) => acceptableIds.includes(r.id)),
+      `verwachtte één van [${acceptableIds.join(', ')}] bij "${message}" (gesprek tot nu toe: ${JSON.stringify(history)}), kreeg ${results.map((r) => r.id)}`,
+    );
+    history.push(message);
+  }
+});
+
+// Onderwerpwisseling: nadat het gesprek een tijd over BV/dividend/personeel/
+// btw ging, mag een laatste, op zichzelf staande vraag over een heel ander
+// onderwerp ("wat is een balans?") niet meer door die opgestapelde context
+// beïnvloed worden — dat zou zijn context die feitelijk niets met de nieuwe
+// vraag te maken heeft. Omdat "wat is een balans?" op zichzelf al genoeg
+// eigen trefwoorden heeft, wint stap 1 van de twee-staps retrieval (de
+// vraag alleen) altijd van de geschiedenis-fallback — dat is precies het
+// gedrag dat dit vastlegt.
+test('een latere, volledig andere vraag wordt niet beïnvloed door opgestapelde eerdere gespreksonderwerpen', () => {
+  const history = [];
+  const steps = [
+    ['Wat is een BV?', 'verschil-eenmanszaak-en-bv'],
+    ['Hoe werkt dividend?', 'dividend'],
+    ['Ik wil personeel aannemen.', 'werknemer-aannemen'],
+    ['Hoe zit het met btw?', 'btw-algemeen'],
+  ];
+  for (const [message] of steps) {
+    retrieveWithFallback(history, message, SAMPLE_ITEMS);
+    history.push(message);
+  }
+  const finalResults = retrieveWithFallback(history, 'Wat is een balans?', SAMPLE_ITEMS);
+  assert.ok(
+    finalResults.some((r) => r.id === 'balans'),
+    `verwachtte "balans" bij de laatste vraag, kreeg ${finalResults.map((r) => r.id)}`,
+  );
+  assert.ok(
+    !finalResults.some((r) => ['verschil-eenmanszaak-en-bv', 'dividend', 'werknemer-aannemen'].includes(r.id)),
+    `de laatste vraag over de balans mag geen BV/dividend/personeel-items uit eerdere gespreksonderwerpen meekrijgen, kreeg ${finalResults.map((r) => r.id)}`,
+  );
 });
 
 // Zonder de gespreksgeschiedenis zou de elliptische vervolgvraag op
