@@ -74,6 +74,16 @@ export interface AiCallOutcome {
    * er geen enkele provider geprobeerd is (not_configured).
    */
   errorCategory?: string;
+  /**
+   * Groq's eigen, actuele "x-ratelimit-remaining-tokens"/"-limit-tokens" van
+   * de LAATST geprobeerde provider (indien aanwezig) — de echte stand van
+   * Groq's TPM-budget, niet onze eigen schatting. Laat de route de lokale
+   * TPM-boekhouding bijstellen met de daadwerkelijke provider-usage in
+   * plaats van uitsluitend op estimateTokens() te vertrouwen (zie
+   * kenniscentrum-chat.ts).
+   */
+  remainingTokens?: number;
+  limitTokens?: number;
 }
 
 export async function callAiWithFallback(args: {
@@ -95,12 +105,22 @@ export async function callAiWithFallback(args: {
 
   let lastError = '';
   let lastErrorCategory = 'unknown';
+  let lastRemainingTokens: number | undefined;
+  let lastLimitTokens: number | undefined;
   for (const provider of chain) {
     attempted.push(provider.id);
     const startedAt = Date.now();
     const result = await provider.call(args);
     const durationMs = Date.now() - startedAt;
     const rateLimitSuffix = result.rateLimitInfo ? ` [${result.rateLimitInfo}]` : '';
+    // Expliciete, apart afleesbare regel met Groq's eigen resterende-tokens-
+    // stand (niet onze schatting) — dit is letterlijk het "request #1:
+    // remaining tokens, request #2: ..."-overzicht dat nodig is om vanuit de
+    // Vercel-logs te zien hoe dicht een sessie bij Groq's echte TPM-plafond
+    // zit, los van of dit verzoek zelf slaagde of faalde.
+    if (typeof result.remainingTokens === 'number') {
+      console.log(`[kenniscentrum-chat] provider "${provider.id}" remaining tokens: ${result.remainingTokens}${typeof result.limitTokens === 'number' ? `/${result.limitTokens}` : ''}`);
+    }
     if (!result.ok) {
       // Veilig voor de serverlogs: result.error bevat uitsluitend de
       // HTTP-status en de (ingekorte) responstekst van de provider — nooit
@@ -126,10 +146,19 @@ export async function callAiWithFallback(args: {
       console.log(`[kenniscentrum-chat] provider "${provider.id}" slaagde na ${durationMs}ms${rateLimitSuffix}`);
     }
     if (result.ok) {
-      return { ok: true, input: result.input, providerId: result.providerId, attempted };
+      return { ok: true, input: result.input, providerId: result.providerId, attempted, remainingTokens: result.remainingTokens, limitTokens: result.limitTokens };
     }
     lastError = result.error;
+    lastRemainingTokens = result.remainingTokens;
+    lastLimitTokens = result.limitTokens;
   }
 
-  return { ok: false, error: lastError || 'Alle geconfigureerde providers faalden.', attempted, errorCategory: lastErrorCategory };
+  return {
+    ok: false,
+    error: lastError || 'Alle geconfigureerde providers faalden.',
+    attempted,
+    errorCategory: lastErrorCategory,
+    remainingTokens: lastRemainingTokens,
+    limitTokens: lastLimitTokens,
+  };
 }

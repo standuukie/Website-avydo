@@ -51,16 +51,20 @@ function extractSystemPromptAndSchema() {
   return { systemPrompt: promptMatch[1], toolSchemaSource: toolMatch[0] };
 }
 
-test('de systeemprompt + tool-schema samen blijven ruim onder de helft van Groq\'s TPM-budget (8.000)', () => {
+test('de systeemprompt + tool-schema samen kosten (proxy-meting) minder dan 1.800 tokens', () => {
   const { systemPrompt, toolSchemaSource } = extractSystemPromptAndSchema();
   const fixedCostTokens = estimateTokens(systemPrompt) + estimateTokens(toolSchemaSource);
-  // Ruime marge (3.000, tegenover Groq's 8.000 TPM): laat een aantoonbare
-  // toekomstige uitbreiding toe zonder meteen te falen, maar signaleert wel
-  // als de systeemprompt weer richting de helft van het volledige budget
-  // zou groeien zoals vóór deze ronde (~3.900 tokens, zie git-historie).
+  // Ronde 4: verlaagd van <3.000 naar <1.800. Dit is een PROXY-meting (de
+  // volledige broncode van het ANSWER_TOOL-blok, niet exact wat de route
+  // daadwerkelijk verstuurt — zie TOOL_SCHEMA_TOKENS in kenniscentrum-chat.ts
+  // voor de precieze berekening), maar wel een consistente regressiegrendel:
+  // vóór ronde 4 was dit ~2.790 (systeemprompt 2.383 + schema 407), ná ronde
+  // 4 ~1.426 — een simulatie tegen de echte kennisbank liet zien dat dit de
+  // dominante hefboom was om een heel gesprek (10-15 vragen) binnen Groq's
+  // TPM-budget te houden (zie rate-limit.test.mjs voor de simulatie zelf).
   assert.ok(
-    fixedCostTokens < 3_000,
-    `systeemprompt + tool-schema kosten nu ~${fixedCostTokens} tokens — dat is te dicht bij Groq's TPM-budget van 8.000/minuut; kort de systeemprompt verder in`,
+    fixedCostTokens < 1_800,
+    `systeemprompt + tool-schema kosten nu ~${fixedCostTokens} tokens (was ~2.790 vóór ronde 4) — dat is te dicht bij Groq's TPM-budget van 8.000/minuut; kort de systeemprompt verder in`,
   );
 });
 
@@ -70,5 +74,5 @@ test('GROQ_TPM_LIMIT heeft een veilige, geconfigureerde marge onder Groq\'s daad
   assert.ok(match, 'DEFAULT_GROQ_TPM_LIMIT niet gevonden in de route');
   const value = Number(match[1].replace(/_/g, ''));
   assert.ok(value < 8_000, `DEFAULT_GROQ_TPM_LIMIT (${value}) moet lager zijn dan Groq's echte TPM-limiet (8.000) — nooit exact gelijk, zie opdracht`);
-  assert.ok(value >= 4_000, `DEFAULT_GROQ_TPM_LIMIT (${value}) lijkt onnodig laag voor een normaal gesprek`);
+  assert.ok(value >= 6_500, `DEFAULT_GROQ_TPM_LIMIT (${value}) lijkt onnodig laag gezien het nu veel lagere tokenverbruik per verzoek (zie de systeemprompt-test hierboven)`);
 });

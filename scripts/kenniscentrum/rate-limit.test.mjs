@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSlidingWindowLimiter } from '../../src/lib/rate-limit.mjs';
+import { findDeterministicFallbackItem } from '../../src/lib/knowledge-match.mjs';
 
 test('een normale reeks van meerdere requests binnen de limiet blokkeert niet', () => {
   // Simuleert een echt gesprek: 8 vragen kort na elkaar, ruim onder de
@@ -217,24 +218,31 @@ test('isLimited()/record() zonder expliciet gewicht gedragen zich nog exact als 
 
 // Reproduceert het daadwerkelijk GEMELDE patroon: "eerst werken meerdere
 // vragen, dan faalt zelfs een simpele vraag als 'wat is een balans?'". Bij
-// realistische, token-zware verzoeken (systeemprompt + schema + bronnen +
-// geschiedenis + outputreservering, zie token-estimate.test.mjs voor het
-// vaste-kostendeel) grijpt de TPM-limiet al in ruim vóórdat de RPM-limiet
-// (28/minuut) ook maar in de buurt komt — dat bewijst dat TPM, niet RPM, de
-// daadwerkelijke bottleneck was/is, en dat de TPM-precheck dit nu lokaal
-// afvangt vóórdat Groq zelf een 429 zou geven.
-test('TPM-limiet grijpt in ruim vóór de RPM-limiet bij realistische, token-zware verzoeken', () => {
-  const GROQ_TPM_LIMIT = 6_000; // zelfde default als DEFAULT_GROQ_TPM_LIMIT in de route
+// realistische, token-zware verzoeken grijpt de TPM-limiet nog altijd
+// (terecht) eerder in dan de RPM-limiet (28/minuut) — dat bevestigt dat TPM
+// de daadwerkelijke bottleneck is/blijft, ook na de verlaging van het
+// tokenverbruik per verzoek in ronde 4.
+//
+// Ronde 4 (2026-09-29): een simulatie tegen de ECHTE kennisbank liet zien
+// dat een verzoek vóór deze ronde 3.400-4.250 tokens kostte (systeemprompt
+// 2.383 + tool-schema 407 = 2.790 vaste kosten, plus bronnen/geschiedenis/
+// output) — bij een TPM-budget van 6.000 pasten daar maar 1-2 van in één
+// venster. Ná het inkorten van de systeemprompt (1.189), het tool-schema
+// (237), MODEL_HISTORY_MESSAGES (2 i.p.v. 4 berichten) en
+// MAX_KNOWLEDGE_SOURCES (2 i.p.v. 3) kost een verzoek nu ~2.000-2.500 tokens
+// — met het nieuwe, eveneens verruimde budget van 7.300 passen daar 2-3 van
+// in één venster, tegenover 1-2 voorheen.
+test('TPM-limiet laat na ronde 4 meer verzoeken per venster toe dan vóór de inkortingen, en blijft ruim vóór de RPM-limiet ingrijpen', () => {
+  const GROQ_TPM_LIMIT = 7_300; // zelfde default als DEFAULT_GROQ_TPM_LIMIT in de route
   const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
   const rpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 28 });
   const now = 1_000_000;
-  // Realistische schatting voor een verzoek met wat gespreksgeschiedenis en
-  // bronnen (systeem+schema ±2.800 + bronnen/geschiedenis/vraag ±900 +
-  // output-reservering 500) — ruim binnen wat token-estimate.test.mjs voor
-  // de echte, huidige systeemprompt meet.
-  const perRequestTokens = 2_200;
+  // Realistische schatting ná ronde 4's inkortingen (zie token-estimate.test.mjs
+  // voor de vaste-kostenmeting van systeemprompt + tool-schema).
+  const perRequestTokens = 2_300;
 
   let blockedAtRequest = null;
+  let successfulRequests = 0;
   for (let i = 1; i <= 10; i++) {
     if (tpmLimiter.wouldExceed('global', perRequestTokens, now)) {
       blockedAtRequest = i;
@@ -242,10 +250,58 @@ test('TPM-limiet grijpt in ruim vóór de RPM-limiet bij realistische, token-zwa
     }
     tpmLimiter.record('global', now, perRequestTokens);
     rpmLimiter.record('global', now);
+    successfulRequests++;
   }
 
-  assert.ok(blockedAtRequest !== null && blockedAtRequest <= 5, `TPM-limiet had binnen 5 verzoeken in hetzelfde venster moeten ingrijpen, greep pas in bij verzoek ${blockedAtRequest}`);
+  assert.ok(successfulRequests >= 2, `verwacht minstens 2 verzoeken binnen één venster vóór blokkade (was 1 vóór ronde 4), kreeg ${successfulRequests}`);
+  assert.ok(blockedAtRequest !== null, 'de TPM-limiet zou bij voldoende opeenvolgende verzoeken binnen hetzelfde venster nog altijd moeten ingrijpen (Groq se échte 8.000 TPM is een harde, externe grens)');
   assert.equal(rpmLimiter.isLimited('global', now), false, 'de RPM-limiet (28) is op dit punt nog lang niet bereikt — dit bevestigt dat TPM de daadwerkelijke bottleneck is, niet RPM');
+});
+
+// Punt 15 uit de opdracht ("stress test"): na het verstrijken van het
+// TPM-venster gaan verzoeken weer gewoon door — dit is geen permanente
+// blokkade, uitsluitend een tijdelijke, venster-gebonden bescherming.
+test('ná het verstrijken van het TPM-venster gaan verzoeken weer gewoon door (geen permanente blokkade)', () => {
+  const GROQ_TPM_LIMIT = 7_300;
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
+  const now = 1_000_000;
+  const perRequestTokens = 2_300;
+
+  tpmLimiter.record('global', now, perRequestTokens);
+  tpmLimiter.record('global', now, perRequestTokens);
+  tpmLimiter.record('global', now, perRequestTokens);
+  assert.equal(tpmLimiter.wouldExceed('global', perRequestTokens, now), true, 'venster zou nu vol moeten zijn');
+
+  // Ruim ná het venster (60s + marge): alle oude reserveringen vallen weg.
+  const later = now + 61_000;
+  assert.equal(tpmLimiter.wouldExceed('global', perRequestTokens, later), false, 'ná het verstrijken van het venster moet er weer ruimte zijn');
+});
+
+// Punt 15 uit de opdracht: "fallback wordt gebruikt wanneer veilig" — bij
+// een geblokkeerd verzoek (TPM of RPM) probeert de route eerst de
+// deterministische kennisbank-fallback vóór de blokkademelding (zie
+// rateLimitedResponse in kenniscentrum-chat.ts). Dit bevestigt hetzelfde
+// gedrag op het niveau van de onderliggende matchfunctie: voor een
+// fallback-geschikte vraag ("wat is een balans?") is er een antwoord
+// beschikbaar zonder Groq, voor een vraag die nuance vereist niet.
+test('bij een (gesimuleerde) blokkade is voor fallback-geschikte vragen een kennisbank-antwoord beschikbaar zonder Groq', () => {
+  const items = [
+    {
+      id: 'balans',
+      title: 'Balans',
+      category: 'Administratie en accountancy',
+      content: 'De balans is een overzicht van de bezittingen en schulden van een onderneming op een bepaald moment.',
+      tags: ['balans', 'bezittingen', 'eigen vermogen'],
+      deterministicFallback: true,
+    },
+  ];
+  // Fallback-geschikte, zuiver definitorische vraag: wél een antwoord.
+  assert.equal(findDeterministicFallbackItem('Wat is een balans?', items)?.id, 'balans');
+  // Een vraag die nuance/persoonlijke beoordeling vereist: nooit een
+  // fallback, ook niet als er toevallig een gerelateerd item bestaat — dan
+  // moet de bezoeker de (nette) blokkademelding zien in plaats van een
+  // misleidend te simpel antwoord.
+  assert.equal(findDeterministicFallbackItem('Hoeveel belasting moet ik betalen als ik 50.000 euro winst maak?', items), null);
 });
 
 // ---------------------------------------------------------------------

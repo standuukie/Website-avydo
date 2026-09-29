@@ -6,7 +6,7 @@
 // groq.ts/gemini.ts/anthropic.ts daadwerkelijk produceren.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { categorizeProviderError, shouldRetryProviderError, MAX_RETRYABLE_DELAY_MS } from '../../src/lib/error-classify.mjs';
+import { categorizeProviderError, shouldRetryProviderError } from '../../src/lib/error-classify.mjs';
 
 // --- categorizeProviderError --------------------------------------------
 
@@ -45,24 +45,20 @@ test('herkent de categorie ook nog als de foutmelding "(na 1 retry)" bevat', () 
 });
 
 // --- shouldRetryProviderError -------------------------------------------
-// Testscenario's C/D/E/F uit de opdracht: Groq 429 -> juiste categorie,
-// Groq 429 + Retry-After -> juiste backoff, Groq 500 -> één retry,
+// Testscenario's C/D/E/F uit de opdracht: Groq 429 -> juiste categorie (en,
+// sinds ronde 4, NOOIT een retry — zie hieronder), Groq 500 -> één retry,
 // Groq 401 -> geen retry.
 
-test('C/D: Groq 429 met een korte, geldige Retry-After wordt retryd met exact die vertraging', () => {
-  const decision = shouldRetryProviderError({ status: 429, retryAfterHeaderSeconds: 2 });
-  assert.equal(decision.retry, true);
-  assert.equal(decision.delayMs, 2000);
-});
-
-test('Groq 429 zonder Retry-After wordt NIET geretryd (voorkomt blind gokken)', () => {
-  const decision = shouldRetryProviderError({ status: 429, retryAfterHeaderSeconds: undefined });
-  assert.equal(decision.retry, false);
-});
-
-test('Groq 429 met een te lange Retry-After (boven het requestbudget) wordt NIET geretryd', () => {
-  const decision = shouldRetryProviderError({ status: 429, retryAfterHeaderSeconds: MAX_RETRYABLE_DELAY_MS / 1000 + 10 });
-  assert.equal(decision.retry, false);
+// Ronde 4 (2026-09-29): een 429-retry is bewust GESCHRAPT, ook mét een korte
+// Retry-After. Live testen liet zien dat een 429 vrijwel altijd betekent dat
+// het TPM/RPM-venster van déze minuut al vol zit — een tweede aanroep
+// binnen dezelfde minuut (zelfs na een paar seconden wachten) faalt dan
+// hoogstwaarschijnlijk opnieuw en verspilt alleen budget dat de VOLGENDE
+// vraag van de bezoeker nodig heeft. In plaats daarvan gaat de route direct
+// naar de kennisbank-fallback (indien beschikbaar) of de nette
+// provider_rate_limited-melding.
+test('C/D: Groq 429 wordt NOOIT geretryd, ook niet met een korte Retry-After (voorkomt budgetverspilling in een al vol venster)', () => {
+  assert.equal(shouldRetryProviderError({ status: 429 }).retry, false);
 });
 
 test('E: Groq 500 (en andere 5xx) krijgt altijd één retry, met backoff + jitter', () => {
@@ -112,6 +108,34 @@ test('groq.ts gebruikt de gedeelde shouldRetryProviderError, geen eigen dubbele 
   const text = readFileSync(GROQ_FILE, 'utf-8');
   assert.match(text, /shouldRetryProviderError/);
   assert.match(text, /from '@\/lib\/error-classify\.mjs'/);
+  // Geen retryAfterHeaderSeconds meer doorgegeven (ronde 4: 429 wordt nooit
+  // meer geretryd, dus die parameter is overbodig geworden).
+  assert.ok(!text.includes('retryAfterHeaderSeconds'), 'groq.ts geeft geen retryAfterHeaderSeconds meer door aan shouldRetryProviderError');
+});
+
+test('groq.ts geeft Groq\'s echte remaining/limit tokens gestructureerd door (niet alleen als platte tekst)', () => {
+  const text = readFileSync(GROQ_FILE, 'utf-8');
+  assert.match(text, /remainingTokens/);
+  assert.match(text, /limitTokens/);
+  assert.match(text, /x-ratelimit-remaining-tokens/);
+  assert.match(text, /x-ratelimit-limit-tokens/);
+});
+
+test('de route stelt de lokale TPM-boekhouding bij met Groq\'s echte remaining/limit tokens (zelfcorrectie)', () => {
+  const text = readFileSync(ROUTE_FILE, 'utf-8');
+  assert.match(text, /result\.remainingTokens/);
+  assert.match(text, /result\.limitTokens/);
+  assert.match(text, /tpmLimiter\.record/);
+});
+
+test('een geblokkeerd verzoek (RPM of TPM) probeert eerst de kennisbank-fallback vóór de blokkademelding', () => {
+  const text = readFileSync(ROUTE_FILE, 'utf-8');
+  assert.match(text, /function rateLimitedResponse/);
+  assert.match(text, /findDeterministicFallbackItem/);
+  // Beide precheck-plekken (RPM en TPM) moeten via dezelfde helper gaan —
+  // 1 keer de functiedeclaratie zelf + minstens 2 aanroepen (RPM + TPM).
+  const occurrences = [...text.matchAll(/rateLimitedResponse\(/g)].length;
+  assert.ok(occurrences >= 3, `verwacht de declaratie + minstens 2 aanroepen van rateLimitedResponse (RPM- en TPM-precheck), telde ${occurrences} voorkomens`);
 });
 
 test('index.ts gebruikt categorizeProviderError en geeft errorCategory door in AiCallOutcome', () => {

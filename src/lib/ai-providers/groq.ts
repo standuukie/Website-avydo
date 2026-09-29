@@ -22,7 +22,7 @@
 // instellen van een ander model — zowel voor geldigheid als voor de
 // gratis/betaald-status (i.v.m. de "nooit ongemerkt kosten"-eis).
 //
-// LET OP (incident 29-9-2026, ronde 3): Groq's gratis tier voor
+// LET OP (incident 29-9-2026, ronde 3+4): Groq's gratis tier voor
 // openai/gpt-oss-20b is niet alleen beperkt in requests/minuut (RPM), maar
 // ook in tokens/minuut (TPM) — zie console.groq.com/docs/rate-limits,
 // actueel: 30 RPM / 8.000 TPM / 1.000 RPD / 200.000 TPD, site-breed per
@@ -33,20 +33,29 @@
 // TPM-budget van de huidige minuut op is, faalt ELK volgend verzoek in die
 // minuut, ongeacht hoe eenvoudig de vraag zelf is. Zie de token-bewuste
 // limiter in kenniscentrum-chat.ts (GROQ_TPM_LIMIT) die dit vóóraf, lokaal,
-// probeert te voorkomen. Deze adapter zelf doet, aanvullend: (a) één
-// gecontroleerde retry bij een Groq 429 (met Retry-After) of 5xx (met
-// backoff+jitter) — nooit bij 401/403/404/413/422, dat zijn geen tijdelijke
-// storingen en een retry zou alleen maar extra budget verspillen — en (b)
-// geeft Groq's eigen rate-limit-headers (indien aanwezig) als veilig te
-// loggen diagnosetekst terug, nooit gebruikt richting de bezoeker.
+// probeert te voorkomen. Deze adapter zelf doet, aanvullend: (a) ÉÉN
+// gecontroleerde retry bij een Groq 5xx (backoff+jitter) — NOOIT bij 429
+// (ronde 4: een 429 betekent bijna altijd dat het venster van déze minuut al
+// vol zit, dus een retry zou vrijwel zeker opnieuw falen en alleen budget
+// verspillen dat de volgende vraag nodig heeft) en nooit bij
+// 401/403/404/413/422 (geen tijdelijke storingen) — en (b) geeft Groq's
+// eigen rate-limit-headers gestructureerd terug (remainingTokens/
+// limitTokens, niet alleen als opaque tekst), zodat kenniscentrum-chat.ts
+// de EIGEN, geschatte TPM-boekhouding kan bijstellen met Groq's echte,
+// actuele cijfer in plaats van alleen op de lokale schatting te vertrouwen
+// — nooit gebruikt richting de bezoeker, uitsluitend server-side diagnose.
 import type { AiProvider, ProviderCallResult } from './types';
 import { shouldRetryProviderError } from '@/lib/error-classify.mjs';
 
 // Override met de GROQ_MODEL-env-var indien gewenst.
 const DEFAULT_MODEL = 'openai/gpt-oss-20b';
 
-/** Veilig te loggen samenvatting van Groq's rate-limit-headers — nooit user-facing. */
-function summarizeRateLimitHeaders(headers: Headers): string | undefined {
+/**
+ * Groq's rate-limit-headers, zowel als veilig te loggen platte tekst als
+ * (waar aanwezig) gestructureerd voor de token-boekhouding in
+ * kenniscentrum-chat.ts. Nooit user-facing.
+ */
+function parseRateLimitHeaders(headers: Headers): { summary?: string; remainingTokens?: number; limitTokens?: number } {
   const names = [
     'x-ratelimit-limit-requests',
     'x-ratelimit-remaining-requests',
@@ -61,7 +70,15 @@ function summarizeRateLimitHeaders(headers: Headers): string | undefined {
     const value = headers.get(name);
     if (value !== null) parts.push(`${name}=${value}`);
   }
-  return parts.length > 0 ? parts.join(' ') : undefined;
+  const remainingTokensRaw = headers.get('x-ratelimit-remaining-tokens');
+  const limitTokensRaw = headers.get('x-ratelimit-limit-tokens');
+  const remainingTokens = remainingTokensRaw !== null ? Number(remainingTokensRaw) : undefined;
+  const limitTokens = limitTokensRaw !== null ? Number(limitTokensRaw) : undefined;
+  return {
+    summary: parts.length > 0 ? parts.join(' ') : undefined,
+    remainingTokens: Number.isFinite(remainingTokens) ? remainingTokens : undefined,
+    limitTokens: Number.isFinite(limitTokens) ? limitTokens : undefined,
+  };
 }
 
 function sleepUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
@@ -142,7 +159,7 @@ export const groqProvider: AiProvider = {
           }),
         });
 
-        const rateLimitInfo = summarizeRateLimitHeaders(res.headers);
+        const { summary: rateLimitInfo, remainingTokens, limitTokens } = parseRateLimitHeaders(res.headers);
 
         if (!res.ok) {
           const text = await res.text().catch(() => '');
@@ -152,17 +169,16 @@ export const groqProvider: AiProvider = {
           // GROQ_MODEL-env-var-override te kunnen onderscheiden van een echt
           // ongeldig modelnaam in de code zelf.
           const error = `Groq API ${res.status} (model="${model}"): ${text.slice(0, 300)}`;
-          const result: ProviderCallResult = { ok: false, error, providerId: 'groq', rateLimitInfo };
+          const result: ProviderCallResult = { ok: false, error, providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens };
 
           // Retry-BELEID (welke status + welke vertraging) komt uit de
-          // gedeelde, puur getestte error-classify.mjs — alleen 429 (met een
-          // korte Retry-After) en 5xx (met backoff+jitter) komen in
-          // aanmerking voor ÉÉN retry; 401/403/404/413/422 en elke andere
-          // 4xx zijn geen tijdelijke storingen, nooit blind retryen (zie
-          // shouldRetryProviderError).
-          const retryAfterHeader = res.headers.get('retry-after');
-          const retryAfterHeaderSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined;
-          const retryDecision = shouldRetryProviderError({ status: res.status, retryAfterHeaderSeconds });
+          // gedeelde, puur getestte error-classify.mjs — alleen 5xx (met
+          // backoff+jitter) komt in aanmerking voor ÉÉN retry; een 429 wordt
+          // (sinds ronde 4) nooit geretryd — dat zou binnen hetzelfde,
+          // waarschijnlijk nog altijd volle TPM/RPM-venster alleen maar
+          // extra budget verspillen — en 401/403/404/413/422/andere 4xx
+          // zijn sowieso geen tijdelijke storingen (zie shouldRetryProviderError).
+          const retryDecision = shouldRetryProviderError({ status: res.status });
           return retryDecision.retry ? { result, retryDelayMs: retryDecision.delayMs } : { result };
         }
 
@@ -170,20 +186,20 @@ export const groqProvider: AiProvider = {
         const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
         const rawArgs = toolCall?.function?.arguments;
         if (typeof rawArgs !== 'string') {
-          return { result: { ok: false, error: 'Geen geldig tool-antwoord ontvangen van Groq.', providerId: 'groq', rateLimitInfo } };
+          return { result: { ok: false, error: 'Geen geldig tool-antwoord ontvangen van Groq.', providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens } };
         }
 
         let parsedArgs: unknown;
         try {
           parsedArgs = JSON.parse(rawArgs);
         } catch {
-          return { result: { ok: false, error: 'Ongeldige JSON-output van Groq.', providerId: 'groq', rateLimitInfo } };
+          return { result: { ok: false, error: 'Ongeldige JSON-output van Groq.', providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens } };
         }
         if (typeof parsedArgs !== 'object' || parsedArgs === null) {
-          return { result: { ok: false, error: 'Onverwacht antwoordformaat van Groq.', providerId: 'groq', rateLimitInfo } };
+          return { result: { ok: false, error: 'Onverwacht antwoordformaat van Groq.', providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens } };
         }
 
-        return { result: { ok: true, input: parsedArgs as Record<string, unknown>, providerId: 'groq', rateLimitInfo } };
+        return { result: { ok: true, input: parsedArgs as Record<string, unknown>, providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens } };
       } catch (err) {
         // err.name is hier bewust apart opgenomen (naast err.message): bij een
         // afgebroken verzoek door FETCH_TIMEOUT_MS is dit altijd "AbortError",

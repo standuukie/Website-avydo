@@ -32,37 +32,32 @@ export function categorizeProviderError(error) {
   return 'unknown';
 }
 
-// Een Retry-After langer dan dit is niet de moeite waard om binnen één
-// serverless-requestbudget op te wachten — zie ook FETCH_TIMEOUT_MS in
-// kenniscentrum-chat.ts (het totale requestbudget is eindig, en een lange
-// wacht + retry zou dat budget grotendeels opsouperen voor niets).
-export const MAX_RETRYABLE_DELAY_MS = 3_000;
 export const SERVER_ERROR_BASE_DELAY_MS = 400;
 export const SERVER_ERROR_JITTER_MS = 400;
 
 /**
- * Retry-BELEID (geen mechaniek): gegeven een HTTP-statuscode en een
- * eventuele Retry-After-header (in seconden, zoals Groq die stuurt), bepaalt
- * dit of één gecontroleerde retry zinvol is, en met welke vertraging.
- * - 429: alleen retryen als Retry-After aanwezig, geldig én kort genoeg is
- *   (MAX_RETRYABLE_DELAY_MS) — anders direct doorgeven dat de provider het
- *   druk heeft, nooit blind wachten/retryen.
+ * Retry-BELEID (geen mechaniek): gegeven een HTTP-statuscode, bepaalt dit of
+ * één gecontroleerde retry zinvol is, en met welke vertraging.
+ * - 429: NOOIT retryen (ronde 4). Een 429 van Groq betekent bijna altijd dat
+ *   het TPM- of RPM-venster van DEZE minuut al vol zit — een tweede
+ *   aanroep binnen datzelfde venster (zelfs na Retry-After) faalt dan
+ *   hoogstwaarschijnlijk opnieuw en verbruikt alleen extra budget dat de
+ *   VOLGENDE, mogelijk wél succesvolle vraag van de bezoeker nodig heeft.
+ *   In plaats daarvan direct doorgeven aan de kennisbank-fallback (indien
+ *   beschikbaar) of de nette provider_rate_limited-melding — zie
+ *   kenniscentrum-chat.ts.
  * - 5xx: altijd één retry, met vaste basisvertraging + willekeurige jitter
  *   (voorkomt dat meerdere gelijktijdige requests exact tegelijk opnieuw
- *   proberen — "thundering herd").
+ *   proberen — "thundering herd"). Een 5xx is typisch een voorbijgaande
+ *   serverglitch, geen budgetprobleem, dus een enkele retry is hier wél
+ *   zinvol.
  * - Elke andere status (401/403/404/413/422/andere 4xx): nooit retryen —
  *   dit zijn geen tijdelijke storingen, een retry verspilt alleen budget.
- * @param {{ status: number, retryAfterHeaderSeconds?: number | null, random?: () => number }} args
+ * @param {{ status: number, random?: () => number }} args
  * @returns {{ retry: false } | { retry: true, delayMs: number }}
  */
-export function shouldRetryProviderError({ status, retryAfterHeaderSeconds, random = Math.random }) {
-  if (status === 429) {
-    const retryAfterMs = typeof retryAfterHeaderSeconds === 'number' ? retryAfterHeaderSeconds * 1000 : NaN;
-    if (Number.isFinite(retryAfterMs) && retryAfterMs >= 0 && retryAfterMs <= MAX_RETRYABLE_DELAY_MS) {
-      return { retry: true, delayMs: retryAfterMs };
-    }
-    return { retry: false };
-  }
+export function shouldRetryProviderError({ status, random = Math.random }) {
+  if (status === 429) return { retry: false };
   if (status >= 500) {
     return { retry: true, delayMs: SERVER_ERROR_BASE_DELAY_MS + random() * SERVER_ERROR_JITTER_MS };
   }

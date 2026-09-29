@@ -760,8 +760,106 @@ test('O: eenvoudige, korte vragen (zoals de verplichte testvragen) blijven onder
   assert.match(routeText, /const COMPLEX_MAX_OUTPUT_TOKENS = 700;/);
 });
 
-test('O: MAX_ARTICLE_SOURCES en MAX_DEADLINE_SOURCES zijn verlaagd (minder, minder relevante context per vraag)', () => {
+test('O: MAX_ARTICLE_SOURCES, MAX_DEADLINE_SOURCES en MAX_KNOWLEDGE_SOURCES zijn verlaagd (minder, minder relevante context per vraag)', () => {
   const assistentText = readFileSync(path.resolve(__dirname, '../../src/lib/ai-assistent.ts'), 'utf-8');
   assert.match(assistentText, /const MAX_ARTICLE_SOURCES = 2;/);
   assert.match(assistentText, /const MAX_DEADLINE_SOURCES = 2;/);
+  assert.match(assistentText, /const MAX_KNOWLEDGE_SOURCES = 2;/);
+});
+
+// ---------------------------------------------------------------------
+// Ronde 4 (2026-09-29): end-to-end simulatie van het 15-vragen testgesprek
+// uit de opdracht, met de ECHTE vaste kosten (systeemprompt + tool-schema,
+// uit de route zelf gehaald — geen los, verouderd getal) en de ECHTE
+// retrieval-/tokenschattingslogica (SAMPLE_ITEMS + estimateTokens), tegen
+// een realistisch tempo. Dit is de test die het daadwerkelijk gemelde
+// patroon ("eerst werken meerdere vragen, dan faalt zelfs een simpele
+// vraag") moet weerleggen: bij een normaal tempo (niet sneller dan een
+// bezoeker realistisch kan lezen/typen) mag er GEEN harde blokkade zonder
+// fallback voorkomen.
+import { createSlidingWindowLimiter } from '../../src/lib/rate-limit.mjs';
+import { estimateTokens, estimateTotalTokens } from '../../src/lib/token-estimate.mjs';
+
+function extractFixedCostTokens() {
+  const routeText = readFileSync(path.resolve(__dirname, '../../src/pages/api/kenniscentrum-chat.ts'), 'utf-8');
+  const promptMatch = routeText.match(/function buildSystemPrompt\(\): string \{[\s\S]*?\n  return `([\s\S]*?)`;\n\}/);
+  const toolMatch = routeText.match(/const ANSWER_TOOL: ToolDefinition = \{[\s\S]*?\n\};/);
+  assert.ok(promptMatch && toolMatch, 'kon systeemprompt/tool-schema niet uit de route halen');
+  // Zelfde proxy als token-estimate.test.mjs: de volledige broncode van het
+  // tool-schema-blok (iets ruimer dan de exacte runtime-berekening in de
+  // route, dus een lichte OVERschatting — veilig voor deze test).
+  return estimateTokens(promptMatch[1]) + estimateTokens(toolMatch[0]);
+}
+
+function formatSourcesForPromptLike(sources) {
+  if (sources.length === 0) return '(Geen relevante bronnen gevonden...)';
+  return sources.map((s, i) => `[${i + 1}] Avydo kennisbank (bron: test) — "${s.title}"\n${s.content}`).join('\n\n');
+}
+
+test('15-vragen testgesprek: bij een realistisch tempo (>=20s tussen vragen) treedt geen harde blokkade zonder fallback op', () => {
+  const FIXED_COST_TOKENS = extractFixedCostTokens();
+  const GROQ_TPM_LIMIT = 7_300;
+  const BASE_MAX_OUTPUT_TOKENS = 500;
+  const MODEL_HISTORY_MESSAGES = 2;
+  const MAX_KNOWLEDGE_SOURCES = 2;
+
+  const conversation = [
+    'Wat is een balans?',
+    'Wat is btw?',
+    'Wat is een eenmanszaak?',
+    'Wat is een BV?',
+    'Wat is dividend?',
+    'Kan ik winst in de BV laten?',
+    'Wat is gebruikelijk loon?',
+    'Welke verzekeringen zijn relevant?',
+    'Wat moet ik regelen als ik personeel aanneem?',
+    'Wat is een zakelijke rekening?',
+    'Kan ik mijn telefoon zakelijk aftrekken?',
+    'Kan ik boodschappen aftrekken?',
+    'Wat is de KOR?',
+    'Wat is een jaarrekening?',
+    'Wat is een DGA?',
+  ];
+
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
+  const history = [];
+  let now = 1_000_000;
+  let hardBlocked = 0;
+  let fallbackUsed = 0;
+  let answeredByGroq = 0;
+
+  for (const message of conversation) {
+    now += 22_000; // ~22s tussen vragen: lezen + typen, geen onrealistisch snel tempo
+    const previousUserMessages = history.filter((h) => h.role === 'user').map((h) => h.text);
+    let sources = retrieveKnowledgeItems(message, SAMPLE_ITEMS, { maxItems: MAX_KNOWLEDGE_SOURCES });
+    if (sources.length === 0 && previousUserMessages.length > 0) {
+      sources = retrieveKnowledgeItems(buildRetrievalQuery(previousUserMessages, message), SAMPLE_ITEMS, { maxItems: MAX_KNOWLEDGE_SOURCES });
+    }
+    const contextBlock = `<bronnen>\n${formatSourcesForPromptLike(sources)}\n</bronnen>`;
+    const modelHistory = history.slice(-MODEL_HISTORY_MESSAGES);
+    const total =
+      FIXED_COST_TOKENS +
+      estimateTokens(contextBlock) +
+      estimateTotalTokens(modelHistory.map((h) => h.text)) +
+      estimateTokens(message) +
+      BASE_MAX_OUTPUT_TOKENS;
+
+    if (tpmLimiter.wouldExceed('global', total, now)) {
+      const fallbackItem = findDeterministicFallbackItem(message, SAMPLE_ITEMS);
+      if (fallbackItem) fallbackUsed++;
+      else hardBlocked++;
+    } else {
+      tpmLimiter.record('global', now, total);
+      answeredByGroq++;
+    }
+
+    history.push({ role: 'user', text: message });
+    history.push({ role: 'assistant', text: 'Dit is een representatief voorbeeldantwoord van gemiddelde lengte voor de gesprekshistorie.' });
+  }
+
+  assert.equal(
+    hardBlocked,
+    0,
+    `bij een realistisch tempo (22s tussen vragen) mag geen enkele vraag hard geblokkeerd worden zonder fallback; kreeg ${hardBlocked} van de ${conversation.length} (fallback: ${fallbackUsed}, via Groq: ${answeredByGroq})`,
+  );
 });

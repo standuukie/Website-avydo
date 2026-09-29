@@ -36,11 +36,13 @@ export interface RetrievedSource {
 // onderbouwde brontype.
 const MAX_ARTICLE_SOURCES = 2;
 const MAX_DEADLINE_SOURCES = 2;
-// Bewust laag gehouden (zie ook opdracht "voorkom irrelevante context"):
-// de kennisbank bestaat uit korte, algemene items, dus 3 relevante items
-// zijn ruim voldoende om een vraag te onderbouwen zonder de hoeveelheid
-// context (en dus de Groq-aanroeptijd/tokengebruik) onnodig te vergroten.
-const MAX_KNOWLEDGE_SOURCES = 3;
+// Verlaagd (ronde 4) van 3 naar 2: een simulatie tegen de echte kennisbank
+// liet zien dat 3 volledige kennisitems bij een vraag als "wat moet ik
+// regelen als ik personeel aanneem?" al 700+ tokens kostten — een
+// aanzienlijk deel van het TPM-budget voor precies het brontype dat het
+// vaakst wordt opgehaald. 2 goed-gedrempelde items (via MIN_RELEVANCE_SCORE)
+// zijn voor een gewone vraag ruim voldoende zonder onnodig tokengebruik.
+const MAX_KNOWLEDGE_SOURCES = 2;
 const STALE_DEADLINE_DAYS = 400;
 
 export interface RetrieveOptions {
