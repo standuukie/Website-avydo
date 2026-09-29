@@ -118,14 +118,19 @@ test('REGRESSIE (punt 4): het "bv"-kennisitem formuleert aansprakelijkheid direc
   assert.ok(!bvContent.includes('schuldeiserij'), 'de gerapporteerde, grammaticaal onjuiste term "schuldeiserij" mag niet in de kennisbank voorkomen');
 });
 
-test('REGRESSIE (punt 5): het "dividend"-item presenteert dividend niet als simpel alternatief voor loon', () => {
+test('REGRESSIE (punt 5, ronde 9): het "dividend"-item presenteert dividend niet als simpel alternatief voor loon, en gebruikt geen absolute claims ("altijd"/"sowieso") of dubbele uitleg', () => {
   const text = readKbFile('bv-dga.ts');
   const blocks = extractContentBlocks(text);
   const dividendContent = blocks.find((c) => c.startsWith('Dividend is een uitkering'));
   assert.ok(dividendContent, 'kon het "dividend"-item niet terugvinden');
   assert.ok(!dividendContent.includes('als alternatief voor'), 'dividend mag niet als simpel alternatief voor loon worden gepresenteerd');
-  assert.match(dividendContent, /geen vervanging voor loon/, 'het item moet expliciet aangeven dat dividend geen vervanging is voor het verplichte gebruikelijk loon');
-  assert.match(dividendContent, /gebruikelijk loon/);
+  assert.ok(!/\baltijd\b/i.test(dividendContent), 'geen absolute "altijd"-claim');
+  assert.ok(!/\bsowieso\b/i.test(dividendContent), 'geen absolute "sowieso"-claim');
+  assert.match(dividendContent, /gebruikelijkloonregeling van toepassing kan zijn|kan .* van toepassing zijn/, 'het item moet de voorwaardelijke, niet-absolute formulering gebruiken');
+  assert.match(dividendContent, /dividend staat daar los van/i, 'moet expliciet aangeven dat dividend los staat van de gebruikelijkloonregeling, zonder het dubbel uit te leggen');
+  // Het punt mag maar op ÉÉN plek in dit item gemaakt worden (geen herhaling).
+  const loonMentions = [...dividendContent.matchAll(/gebruikelijk loon|gebruikelijkloonregeling/gi)].length;
+  assert.equal(loonMentions, 1, `de gebruikelijkloonregeling mag maar één keer genoemd worden in het dividend-item (geen dubbele uitleg), telde ${loonMentions}`);
 });
 
 test('REGRESSIE (punt 6): het "winst-in-de-bv"-item is compact (geen uitweiding naar rechtspersoonlijkheid/oprichting/vergelijking)', () => {
@@ -137,6 +142,23 @@ test('REGRESSIE (punt 6): het "winst-in-de-bv"-item is compact (geen uitweiding 
   assert.ok(wordCount <= 115, `het item moet compact blijven (≤115 woorden voor een gerichte vervolgvraag), telde ${wordCount} woorden`);
   assert.ok(!/rechtspersoonlijkheid|notariële akte|oprichting/i.test(winstContent), 'het item moet niet uitweiden naar rechtspersoonlijkheid/oprichting — dat hoort bij het "bv"-item, niet bij deze gerichte vervolgvraag');
   assert.match(winstContent, /vennootschapsbelasting/, 'het kernfeit (VPB blijft verschuldigd) moet aanwezig blijven');
+});
+
+test('REGRESSIE (ronde 9, punt 2): het "winst-in-de-bv"-item gebruikt de grammaticaal correcte vorm "dividend uit te keren", nooit een samengesteld "dividenduitkeren"', () => {
+  const text = readKbFile('bv-dga.ts');
+  const blocks = extractContentBlocks(text);
+  const winstContent = blocks.find((c) => c.startsWith('Winst die in de BV blijft'));
+  assert.ok(winstContent, 'kon het "winst-in-de-bv"-item niet terugvinden');
+  assert.match(winstContent, /dividend uit te keren/, 'moet de correcte, scheidbare werkwoordsvorm "dividend uit te keren" bevatten');
+  assert.ok(!/te dividenduitkeren|dividenduitkeren/i.test(winstContent), 'mag nooit het grammaticaal onjuiste samengestelde "dividenduitkeren" bevatten');
+});
+
+test('REGRESSIE (ronde 9, punt 3): het "winst-in-de-bv"-item formuleert de belastingclaim niet absoluut (gebruikt een hedge zoals "in beginsel")', () => {
+  const text = readKbFile('bv-dga.ts');
+  const blocks = extractContentBlocks(text);
+  const winstContent = blocks.find((c) => c.startsWith('Winst die in de BV blijft'));
+  assert.ok(winstContent, 'kon het "winst-in-de-bv"-item niet terugvinden');
+  assert.match(winstContent, /in beginsel/, 'de "geen dividendbelasting/inkomstenbelasting"-claim moet gehedged zijn (bijv. "in beginsel"), niet als absolute regel gepresenteerd');
 });
 
 test('REGRESSIE (punt 2): het "btw-algemeen"-item herhaalt "in rekening" niet nodeloos', () => {

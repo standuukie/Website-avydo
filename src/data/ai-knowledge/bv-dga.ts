@@ -49,7 +49,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Dividend',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders. Een BV mag alleen dividend uitkeren als het eigen vermogen dit toelaat, en moet daarbij aan wettelijke waarborgen voldoen. Dividend is geen vervanging voor loon: een DGA moet sowieso een gebruikelijk loon ontvangen (zie de gebruikelijkloonregeling); dividend is een aanvullende manier om winst aan de aandeelhouder te laten toekomen, en ontstaat pas op het moment dat de BV daadwerkelijk besluit uit te keren. Over uitgekeerd dividend is de aandeelhouder belasting verschuldigd; de BV houdt hiervoor doorgaans dividendbelasting in als voorheffing.',
+      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders. Voor een DGA die werkzaamheden verricht voor zijn of haar BV kan de gebruikelijkloonregeling van toepassing zijn; dividend staat daar los van en kan, als de BV tot uitkering besluit en aan de wettelijke voorwaarden (waaronder voldoende eigen vermogen) wordt voldaan, aanvullend aan de aandeelhouder worden uitgekeerd. Over uitgekeerd dividend is de aandeelhouder belasting verschuldigd; de BV houdt hiervoor doorgaans dividendbelasting in als voorheffing.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
@@ -64,7 +64,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt — dat geldt ongeacht of de winst wordt uitgekeerd. Zolang er geen dividend wordt uitgekeerd, is er over dat bedrag geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd; het geld blijft dan binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Een latere dividenduitkering is aan wettelijke voorwaarden gebonden (zie het kennisitem "Dividend"). Dit betekent niet automatisch dat een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
+      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang de BV geen dividend uitkeert, is er in beginsel nog geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd over dat bedrag; het geld blijft dan binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Pas als de BV besluit dividend uit te keren — en aan de wettelijke voorwaarden daarvoor wordt voldaan — ontstaat die belastingplicht. Dit betekent niet automatisch dat een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:

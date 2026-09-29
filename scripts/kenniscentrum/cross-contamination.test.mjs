@@ -50,7 +50,7 @@ const ITEMS = [
     title: 'Dividend',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders. Dividend is geen vervanging voor loon: een DGA moet sowieso een gebruikelijk loon ontvangen (zie de gebruikelijkloonregeling); dividend is een aanvullende manier om winst aan de aandeelhouder te laten toekomen, en ontstaat pas op het moment dat de BV daadwerkelijk besluit uit te keren.',
+      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders. Voor een DGA die werkzaamheden verricht voor zijn of haar BV kan de gebruikelijkloonregeling van toepassing zijn; dividend staat daar los van en kan, als de BV tot uitkering besluit en aan de wettelijke voorwaarden wordt voldaan, aanvullend aan de aandeelhouder worden uitgekeerd.',
     tags: ['dividend', 'dividend uitkeren', 'winstuitkering'],
     priority: 3,
     deterministicFallback: true,
@@ -60,7 +60,7 @@ const ITEMS = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang er geen dividend wordt uitgekeerd, is er over dat bedrag geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd; het geld blijft binnen de onderneming, bijvoorbeeld voor investeringen of liquiditeit. Een latere dividenduitkering is aan wettelijke voorwaarden gebonden.',
+      'Winst die in de BV blijft telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang de BV geen dividend uitkeert, is er in beginsel nog geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd over dat bedrag; het geld blijft binnen de onderneming, bijvoorbeeld voor investeringen of liquiditeit. Pas als de BV besluit dividend uit te keren, ontstaat die belastingplicht.',
     tags: ['winst in de bv laten', 'winst reserveren', 'winst niet uitkeren', 'geld in de bv laten zitten'],
     priority: 3,
   },
