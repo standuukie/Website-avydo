@@ -34,6 +34,7 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['kvk', 'inschrijving', 'handelsregister', 'kvk-nummer', 'inschrijven'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'rechtsvorm-kiezen',
@@ -60,6 +61,7 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['eenmanszaak', 'zzp', 'zelfstandig ondernemer'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'bv',
@@ -74,6 +76,7 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['bv', 'besloten vennootschap', 'rechtspersoon'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'vof-en-maatschap',
@@ -87,6 +90,7 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['vof', 'vennootschap onder firma', 'maatschap', 'samenwerken', 'samen een bedrijf starten'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'verschil-eenmanszaak-en-bv',

@@ -30,8 +30,8 @@ export interface ProviderCallArgs {
 }
 
 export type ProviderCallResult =
-  | { ok: true; input: Record<string, unknown>; providerId: string }
-  | { ok: false; error: string; providerId: string };
+  | { ok: true; input: Record<string, unknown>; providerId: string; rateLimitInfo?: string }
+  | { ok: false; error: string; providerId: string; rateLimitInfo?: string };
 
 export interface AiProvider {
   id: string;

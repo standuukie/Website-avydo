@@ -28,6 +28,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['dga', 'directeur grootaandeelhouder', 'aanmerkelijk belang'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'gebruikelijk-loon',
@@ -56,6 +57,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['dividend', 'dividend uitkeren', 'winstuitkering'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'winst-in-de-bv',

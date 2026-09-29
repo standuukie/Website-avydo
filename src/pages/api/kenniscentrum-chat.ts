@@ -24,15 +24,56 @@
 import type { APIRoute } from 'astro';
 import { retrieveContext, formatSourcesForPrompt, type RetrievedSource } from '@/lib/ai-assistent';
 import { callAiWithFallback, type ToolDefinition } from '@/lib/ai-providers';
-import { buildRetrievalQuery } from '@/lib/knowledge-match.mjs';
+import { buildRetrievalQuery, findDeterministicFallbackItem } from '@/lib/knowledge-match.mjs';
 import { createSlidingWindowLimiter } from '@/lib/rate-limit.mjs';
+import { estimateTokens, estimateTotalTokens } from '@/lib/token-estimate.mjs';
+import { knowledgeBase } from '@/data/ai-knowledge';
 
 export const prerender = false;
 
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_MESSAGE_LENGTH = 600;
+// Cap voor wat er als CONTEXT voor retrieval-doeleinden bewaard blijft
+// (buildRetrievalQuery, zodat een elliptische vervolgvraag het onderwerp
+// van eerdere vragen in dit gesprek kan vinden). Los van, en ruimer dan,
+// MODEL_HISTORY_MESSAGES hieronder — zie de toelichting daar.
 const MAX_HISTORY_MESSAGES = 8; // laatste 4 vraag/antwoord-paren
-const MAX_OUTPUT_TOKENS = 700;
+// Ronde 3 (2026-09-29): wat voor RETRIEVAL bewaard blijft (hierboven) hoeft
+// niet 1-op-1 hetzelfde te zijn als wat daadwerkelijk als gespreksberichten
+// naar Groq gestuurd wordt. Twee onafhankelijke redenen om dat laatste
+// strakker te beperken: (1) tokengebruik — elk bericht in de geschiedenis
+// telt volledig mee voor Groq's tokens-per-minuut-limiet, bij elk volgend
+// verzoek in het gesprek opnieuw; (2) contextlekken — een eerder, op
+// zichzelf correct antwoord over een ANDER onderwerp (bijv. een eerdere
+// vraag over de zakelijke rekening) blijft anders letterlijk in de prompt
+// staan wanneer de bezoeker allang een ander onderwerp is ingegaan (bijv.
+// verzekeringen), wat het model kan verleiden een feit uit dat oude
+// antwoord in het nieuwe, ongerelateerde antwoord te laten terugkomen. De
+// retrieval-query mag dus verder terugkijken dan wat het model daadwerkelijk
+// als ruwe gespreksberichten te zien krijgt.
+const MODEL_HISTORY_MESSAGES = 4; // laatste 2 vraag/antwoord-paren, alleen wat daadwerkelijk naar Groq gaat
+// Verlaagd van 700 naar een lager basisniveau (ronde 3): de meeste
+// antwoorden (definitievragen, korte praktische vragen) hebben geen 700
+// tokens nodig, en elke gereserveerde output-token telt volledig mee in de
+// TPM-schatting hieronder. Een aantoonbaar complexere/samengestelde vraag
+// (zie isComplexQuestion) krijgt iets meer ruimte.
+const BASE_MAX_OUTPUT_TOKENS = 500;
+const COMPLEX_MAX_OUTPUT_TOKENS = 700;
+
+/**
+ * Eenvoudige, deterministische (geen LLM-aanroep) inschatting of een vraag
+ * "complex" genoeg is om meer outputruimte te verdienen dan het compacte
+ * basisniveau — een lange vraag of een vraag met meerdere deelvragen
+ * (meerdere vraagtekens) heeft doorgaans ook een uitgebreider antwoord
+ * nodig. Bewust grof: dit hoeft geen perfecte classificatie te zijn, alleen
+ * te voorkomen dat een samengestelde vraag onnodig wordt afgekapt terwijl
+ * een simpele "wat is..."-vraag niet standaard de volle 700 tokens claimt.
+ */
+function isComplexQuestion(message: string): boolean {
+  if (message.length > 140) return true;
+  const questionMarks = message.match(/\?/g)?.length ?? 0;
+  return questionMarks > 1;
+}
 
 // Eenvoudige, in-memory sliding-window rate limiting per serverless-
 // instance. Dit is bewust géén externe store (Vercel KV/Upstash e.d.): dat
@@ -74,18 +115,29 @@ const MAX_OUTPUT_TOKENS = 700;
 //   een gesprek van een paar vervolgvragen (met oplopende geschiedenis) kon
 //   een LOS verzoek dus al een groot deel van het minuutbudget opsouperen,
 //   waarna Groq zelf een 429 teruggaf, ongeacht hoeveel verzoeken er waren.
-// Aanpak (kleinst mogelijke, gerichte correcties, geen blinde
+// Aanpak ronde 2 (kleinst mogelijke, gerichte correcties, geen blinde
 // limietverhoging): de systeemprompt is met ongeveer een derde ingekort
 // (dezelfde regels, beknopter geformuleerd, zie buildSystemPrompt())
 // specifiek om het TPM-verbruik per verzoek te verlagen; de Groq-aanroep
-// gebruikt nu reasoning_effort: "low" (zie groq.ts) om te voorkomen dat het
+// gebruikt reasoning_effort: "low" (zie groq.ts) om te voorkomen dat het
 // redeneermodel onnodig veel van het eigen tokenbudget aan onzichtbare
 // redenering besteedt; en GLOBAL_RATE_LIMIT_MAX hieronder is verlaagd naar
 // Groq's daadwerkelijke RPM-limiet (met een kleine marge), zodat onze eigen,
 // duidelijke 429 vóór Groq's eigen (opaque) 429 wordt bereikt in plaats van
-// andersom. Er bestaat geen ingebouwde TPM-bewuste limiter (dat zou een veel
-// grotere wijziging zijn dan nodig); de tokenverlaging bij de bron is de
-// aangewezen correctie voor dat deel.
+// andersom.
+//
+// Incident (2026-09-29, ronde 3 — "eerst werken meerdere vragen, dan faalt
+// zelfs een simpele vraag"): ronde 2 verlaagde alleen de RPM-limiet en het
+// TOKENVERBRUIK per verzoek, maar had nog geen limiet die daadwerkelijk
+// TOKENS PER MINUUT telt. Bij een langer gesprek (oplopende geschiedenis +
+// bronnen) kan een handvol verzoeken — ruim onder de RPM-limiet van 28 —
+// toch al Groq's eigen TPM-budget (8.000/minuut) opsouperen; zodra dat op
+// is, faalt ELK volgend verzoek in die minuut bij Groq, ook een op zichzelf
+// simpele vraag als "wat is een balans?" — dat verklaart het patroon exact.
+// tpmLimiter hieronder is de daadwerkelijke, token-bewuste limiter die dit
+// nu vóóraf, lokaal, afvangt (zie ook GROQ_TPM_LIMIT en de TPM-precheck in
+// de POST-handler) — in-memory, net als de RPM-limiters hierboven, geen
+// externe store.
 const RATE_LIMIT_WINDOW_MS = 5 * 60_000;
 const RATE_LIMIT_MAX_PER_IP = 30;
 const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -94,19 +146,42 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
 // sliding-window-telling van deze applicatie en die van Groq niet perfect
 // gelijk lopen.
 const GLOBAL_RATE_LIMIT_MAX = 28;
-// De globale limiter gebruikt intern altijd dezelfde sleutel (er is maar
-// één "site-breed" venster, geen per-IP-onderverdeling).
+// De globale limiters gebruiken intern altijd dezelfde sleutel (er is maar
+// één "site-breed" venster, geen per-IP-onderverdeling) — geldt zowel voor
+// de RPM- als de TPM-limiter, want Groq's TPM-budget is ook site-breed per
+// API-sleutel, niet per bezoeker.
 const GLOBAL_KEY = 'global';
+
+// Veilige standaard: ruim ONDER Groq's daadwerkelijke, publiek
+// gedocumenteerde TPM-limiet van 8.000 (console.groq.com/docs/rate-limits,
+// openai/gpt-oss-20b, gratis tier) — bewust NIET gelijk aan die limiet,
+// zodat lokale schattingsfouten (estimateTokens is een grove ~4-tekens-per-
+// token-heuristiek, geen echte tokenizer) en het feit dat deze applicatie
+// en Groq geen perfect gelijklopend tijdvenster hanteren, nooit alsnog tot
+// een Groq-429 leiden. Configureerbaar via GROQ_TPM_LIMIT voor wie zelf een
+// preciezere waarde wil instellen (bijv. na het aflezen van de echte
+// x-ratelimit-*-tokens-headers in de logs), maar de default blijft veilig
+// als die env-var ontbreekt of ongeldig is.
+const DEFAULT_GROQ_TPM_LIMIT = 6_000;
+const envTpmLimit = Number(import.meta.env.GROQ_TPM_LIMIT);
+const GROQ_TPM_LIMIT = Number.isFinite(envTpmLimit) && envTpmLimit > 0 ? envTpmLimit : DEFAULT_GROQ_TPM_LIMIT;
 
 const globalLimiter = createSlidingWindowLimiter({ windowMs: GLOBAL_RATE_LIMIT_WINDOW_MS, max: GLOBAL_RATE_LIMIT_MAX });
 const ipLimiter = createSlidingWindowLimiter({ windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX_PER_IP });
+// Zelfde sliding-window-implementatie als hierboven, maar met een gewicht
+// per hit (het geschatte aantal tokens van dat verzoek) in plaats van het
+// standaardgewicht 1 — zie createSlidingWindowLimiter in rate-limit.mjs.
+// Venster van 60s, net als Groq's eigen TPM-venster.
+const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
 
 /**
  * Alleen lezen: geeft aan of dit IP-adres (of de site als geheel) nu al
- * over de limiet zit, zonder daarbij zelf iets te registreren. Moet vroeg
- * in de request-afhandeling aangeroepen worden (vóór het dure werk), maar
- * telt zelf geen hit — dat gebeurt pas via recordSuccessfulRequest() zodra
- * bekend is dat het verzoek daadwerkelijk (nuttig) verwerkt is.
+ * over de RPM-limiet zit, zonder daarbij zelf iets te registreren. Moet
+ * vroeg in de request-afhandeling aangeroepen worden (vóór het dure werk),
+ * maar telt zelf geen hit — dat gebeurt pas via recordSuccessfulRequest()
+ * zodra bekend is dat het verzoek daadwerkelijk (nuttig) verwerkt is. De
+ * TPM-limiet wordt apart gecontroleerd, ná het opbouwen van de prompt (zie
+ * de POST-handler) — pas dan is bekend hoeveel tokens het verzoek kost.
  */
 function isRateLimited(ip: string): boolean {
   // In lokale ontwikkeling (`astro dev`) draait maar één, voortdurend warme
@@ -120,7 +195,7 @@ function isRateLimited(ip: string): boolean {
   return globalLimiter.isLimited(GLOBAL_KEY) || ipLimiter.isLimited(ip);
 }
 
-/** Registreert één daadwerkelijk succesvol beantwoord verzoek voor dit IP. */
+/** Registreert één daadwerkelijk succesvol beantwoord verzoek voor dit IP (RPM-limieten). */
 function recordSuccessfulRequest(ip: string): void {
   globalLimiter.record(GLOBAL_KEY);
   ipLimiter.record(ip);
@@ -218,7 +293,7 @@ STRUCTUUR — pas aan op de vraag, geen vast sjabloon
 BRONGEBRUIK — CRUCIAAL
 - Je krijgt een genummerde bronnenlijst (Avydo-kennisbank, Kenniscentrum-artikelen, Belastingkalender, Avydo-info) in een <bronnen>-blok. Dit is de ENIGE toegestane basis voor feitelijke, fiscale of juridische beweringen. Verzin nooit tarieven, deadlines, aftrekposten, bedragen of bronnen die er niet letterlijk in staan, en gebruik nooit eigen trainingskennis over actuele regels als de bronnen die niet bevestigen.
 - VERPLICHT: gebruik je feitelijke inhoud uit een bron, neem dan het bronnummer op in gebruikteBronIds — bij meerdere gebruikte bronnen ALLEMAAL vermelden. Nooit een id die je niet gebruikte of die niet in de lijst voorkomt.
-- Bronnenlijst dekt de vraag niet? Zet onvoldoendeInformatie op true en zeg dat eerlijk in kortAntwoord. Dit weegt zwaarder dan altijd proberen te antwoorden.
+- Bronnenlijst dekt de vraag niet? Zet onvoldoendeInformatie op true en zeg dat eerlijk in kortAntwoord, bijvoorbeeld: "Ik heb hierover onvoldoende betrouwbare informatie in mijn kennisbank. Avydo kan je hierover verder helpen." Dit weegt zwaarder dan altijd proberen te antwoorden.
 - De bronnenlijst kan bredere context bevatten dan voor déze vraag relevant is (retrieval haalt breed op, jij selecteert). Gebruik alleen wat direct relevant is voor de gestelde vraag — noem geen toevallig meegekomen bron over een ander tarief, een ongerelateerde regeling of een nieuwsartikel dat toevallig hetzelfde woord bevat. Beantwoord wat gevraagd is, niet wat er verder nog over het onderwerp te zeggen valt: voeg nooit ongevraagd extra deelonderwerpen, tariefwijzigingen of regelingen toe die niet in de vraag zaten, ook niet als een bron die toevallig ook noemt.
 
 GEEN ONGEFUNDEERDE FISCALE CONCLUSIES
@@ -248,6 +323,46 @@ VEILIGHEID
 Antwoord altijd via de tool "geef_antwoord".`;
 }
 
+// De systeemprompt en het tool-schema zijn voor elk verzoek exact gelijk,
+// dus eenmalig (bij het laden van deze module) berekend in plaats van bij
+// elk verzoek opnieuw — puur een kleine optimalisatie, maar vooral handig
+// om de vaste kosten hiervan (die op ELK verzoek meetellen voor Groq's TPM-
+// limiet) één keer te kunnen loggen/inspecteren in plaats van steeds
+// opnieuw te herberekenen.
+const SYSTEM_PROMPT = buildSystemPrompt();
+const SYSTEM_PROMPT_TOKENS = estimateTokens(SYSTEM_PROMPT);
+const TOOL_SCHEMA_TOKENS = estimateTokens(JSON.stringify(ANSWER_TOOL.schema)) + estimateTokens(ANSWER_TOOL.description);
+
+// PROVIDER-FALLBACK — laatste redmiddel wanneer Groq zelf (na de ingebouwde
+// retry in groq.ts) alsnog faalt: voor een klein, bewust gemarkeerd deel van
+// de kennisbank (KnowledgeItem.deterministicFallback === true — uitsluitend
+// zuiver definitorische items zonder actuele bedragen/percentages, zonder
+// persoonlijke berekening en zonder interpretatie van actuele wetgeving,
+// zie types.ts) kan findDeterministicFallbackItem() (knowledge-match.mjs)
+// een kant-en-klaar antwoord rechtstreeks uit de kennisbank leveren in
+// plaats van een harde foutmelding — zie daar voor de (bewust
+// conservatieve) matchlogica. Wordt hieronder bewust op de RUWE, huidige
+// vraag toegepast, nooit de geschiedenis-gecombineerde retrieval-query —
+// geen giswerk over wat een elliptische vervolgvraag zou kunnen betekenen
+// zonder dat de AI het gesprek zelf kan interpreteren.
+
+/** Zet een kennisitem om in dezelfde antwoordvorm als een normaal, geslaagd AI-antwoord. */
+function buildFallbackAnswer(item: (typeof knowledgeBase)[number]) {
+  const sentences = item.content.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+  const shortAnswer = sentences[0] ?? item.content;
+  const explanation = sentences.slice(1).join(' ');
+  return {
+    ok: true as const,
+    shortAnswer,
+    explanation,
+    note: 'Dit antwoord komt rechtstreeks uit de Avydo-kennisbank; de AI-assistent is op dit moment tijdelijk niet bereikbaar voor een uitgebreidere, op maat gemaakte toelichting.',
+    insufficientInfo: false,
+    personalAdviceNeeded: false,
+    sources: [{ name: `Avydo kennisbank (bron: ${item.sourceName})`, title: item.title, url: item.sourceUrl }],
+    fallback: true,
+  };
+}
+
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   if (request.headers.get('content-type')?.includes('application/json') !== true) {
     return jsonResponse({ ok: false, code: 'bad_request', error: 'Ongeldig contenttype.' }, 400);
@@ -259,7 +374,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       {
         ok: false,
         code: 'rate_limited',
-        error: 'Je stelt op dit moment te veel vragen achter elkaar. Probeer het over een paar minuten opnieuw.',
+        error: 'Je hebt in korte tijd veel vragen gesteld. Probeer het over een moment opnieuw.',
       },
       429,
     );
@@ -333,19 +448,72 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   }
   const sanitizedSources = sources.map((s) => ({ ...s, snippet: sanitizeSnippet(s.snippet), title: sanitizeSnippet(s.title) }));
 
-  const systemPrompt = buildSystemPrompt();
   const contextBlock = `<bronnen>\n${formatSourcesForPrompt(sanitizedSources)}\n</bronnen>`;
 
+  // Alleen de meest recente uitwisselingen gaan als ruwe gespreksberichten
+  // naar Groq (zie MODEL_HISTORY_MESSAGES hierboven) — de volledige,
+  // ruimere `history` blijft uitsluitend gebruikt voor de retrieval-query
+  // hierboven (previousUserMessages).
+  const modelHistory = history.slice(-MODEL_HISTORY_MESSAGES);
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
-    ...history.map((h) => ({ role: h.role, content: h.text })),
+    ...modelHistory.map((h) => ({ role: h.role, content: h.text })),
     { role: 'user', content: `${contextBlock}\n\nVraag van de bezoeker: ${message}` },
   ];
 
+  const maxOutputTokens = isComplexQuestion(message) ? COMPLEX_MAX_OUTPUT_TOKENS : BASE_MAX_OUTPUT_TOKENS;
+
+  // Token-schatting van dit specifieke verzoek — zie token-estimate.mjs
+  // (grove ~4-tekens-per-token-heuristiek). Systeemprompt en tool-schema
+  // zijn vast (hierboven eenmalig berekend); bronnen/geschiedenis/vraag
+  // verschillen per verzoek; de output-reservering is het MAXIMUM dat Groq
+  // mag genereren (dus het redelijke worst-case, niet wat het antwoord
+  // uiteindelijk daadwerkelijk kost).
+  const sourcesTokens = estimateTokens(contextBlock);
+  const historyTokens = estimateTotalTokens(modelHistory.map((h) => h.text));
+  const questionTokens = estimateTokens(message);
+  const totalEstimate = SYSTEM_PROMPT_TOKENS + TOOL_SCHEMA_TOKENS + sourcesTokens + historyTokens + questionTokens + maxOutputTokens;
+
+  const now = Date.now();
+  // Altijd loggen (nooit de vraagtekst zelf, alleen getallen) — dit is
+  // precies de diagnostische logregel die per vraag laat zien hoeveel
+  // tokens geschat zijn en hoeveel van het TPM-budget van dit venster al
+  // gebruikt is, zodat een reeks "vraag 1: ok, vraag 2: ok, vraag 3: faalt"
+  // in de Vercel-logs terug te herleiden is naar het daadwerkelijke,
+  // resterende Groq-budget in plaats van gokwerk te blijven.
+  console.log(
+    `[kenniscentrum-chat] verzoek: ~${totalEstimate} tokens geschat (systeem ${SYSTEM_PROMPT_TOKENS} + schema ${TOOL_SCHEMA_TOKENS} + bronnen ${sourcesTokens} + geschiedenis ${historyTokens} + vraag ${questionTokens} + output-reservering ${maxOutputTokens}); TPM-venster: ${tpmLimiter.usage(GLOBAL_KEY, now)}/${GROQ_TPM_LIMIT} vóór dit verzoek`,
+  );
+
+  if (tpmLimiter.wouldExceed(GLOBAL_KEY, totalEstimate, now)) {
+    // Dit verzoek wordt bewust NIET naar Groq gestuurd: lokaal is al
+    // duidelijk dat het (samen met wat dit venster al verbruikt is) Groq's
+    // eigen TPM-budget zou overschrijden. Zelfde gebruikersmelding/code als
+    // de RPM-limiet hierboven (voor de bezoeker is "onze eigen limiter
+    // greep in" één categorie) — het onderscheid RPM/TPM is uitsluitend
+    // voor de logs relevant (zie console.log hierboven).
+    console.warn(`[kenniscentrum-chat] TPM-limiet zou overschreden worden (~${totalEstimate} tokens, budget ${GROQ_TPM_LIMIT}/60s) — verzoek NIET naar Groq gestuurd.`);
+    return jsonResponse(
+      {
+        ok: false,
+        code: 'rate_limited',
+        error: 'Je hebt in korte tijd veel vragen gesteld. Probeer het over een moment opnieuw.',
+      },
+      429,
+    );
+  }
+  // Reservering VÓÓRDAT het verzoek verstuurd wordt, ongeacht het latere
+  // resultaat (in tegenstelling tot recordSuccessfulRequest() voor de
+  // RPM-limieten, die uitsluitend bij succes telt) — het doel hier is
+  // voorkomen dat déze applicatie in totaal meer tokens/minuut naar Groq
+  // stuurt dan het ingestelde budget, niet bijhouden hoeveel verzoeken
+  // úiteindelijk succesvol waren.
+  tpmLimiter.record(GLOBAL_KEY, now, totalEstimate);
+
   const result = await callAiWithFallback({
-    systemPrompt,
+    systemPrompt: SYSTEM_PROMPT,
     messages,
     tool: ANSWER_TOOL,
-    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    maxOutputTokens,
     timeoutMs: FETCH_TIMEOUT_MS,
   });
 
@@ -363,15 +531,44 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         503,
       );
     }
-    // Dit is een tijdelijke providerstoring (Groq/netwerk/timeout), geen
-    // uitspraak over de kennisbank — die twee moeten voor de bezoeker
-    // duidelijk verschillende situaties zijn (zie ook onvoldoendeInformatie
-    // hieronder, dat wél een uitspraak over de beschikbare kennis is).
+
+    // PROVIDER-FALLBACK: bij een echte providerstoring (Groq zelf faalde,
+    // dit is geen eigen rate limit) eerst proberen of de vraag een
+    // ondubbelzinnige, deterministische match in de kennisbank heeft (zie
+    // findDeterministicFallback hierboven) — zo blijft de assistent
+    // bruikbaar voor eenvoudige, definitorische vragen ("wat is een
+    // balans?") ook wanneer Groq tijdelijk niet bereikbaar is. Gebruikt
+    // bewust de RUWE huidige vraag, niet de geschiedenis-gecombineerde
+    // retrieval-query.
+    const fallbackItem = findDeterministicFallbackItem(message, knowledgeBase);
+    if (fallbackItem) {
+      console.warn(`[kenniscentrum-chat] providerfout: deterministische kennisbank-fallback gebruikt (item "${fallbackItem.id}").`);
+      return jsonResponse(buildFallbackAnswer(fallbackItem), 200);
+    }
+    // Dit is een tijdelijke providerstoring, geen uitspraak over de
+    // kennisbank — die twee moeten voor de bezoeker duidelijk verschillende
+    // situaties zijn (zie ook onvoldoendeInformatie hieronder, dat wél een
+    // uitspraak over de beschikbare kennis is). Binnen "providerstoring"
+    // wordt nu ook onderscheid gemaakt: Groq's EIGEN rate limit (429, een
+    // andere situatie dan onze eigen RPM/TPM-limiter hierboven, al is de
+    // onderliggende oorzaak vaak hetzelfde TPM-plafond) krijgt een andere
+    // melding dan een echte storing (5xx/timeout/netwerkfout/misvormd
+    // antwoord) — zie categorizeProviderError() in ai-providers/index.ts.
+    if (result.errorCategory === 'rate_limited') {
+      return jsonResponse(
+        {
+          ok: false,
+          code: 'provider_rate_limited',
+          error: 'De AI-assistent verwerkt op dit moment veel aanvragen. Probeer het over een moment opnieuw.',
+        },
+        429,
+      );
+    }
     return jsonResponse(
       {
         ok: false,
-        code: 'upstream_error',
-        error: 'De assistent kan momenteel geen antwoord genereren. Probeer het opnieuw.',
+        code: 'provider_unavailable',
+        error: 'De AI-assistent is tijdelijk niet beschikbaar. Probeer het opnieuw.',
       },
       502,
     );

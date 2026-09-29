@@ -24,4 +24,15 @@ export interface KnowledgeItem {
   tags: string[];
   /** 1 (specifiek) t/m 3 (breed/veelgevraagd) — tie-breaker bij gelijke score in de retrieval. */
   priority: 1 | 2 | 3;
+  /**
+   * True voor een klein, bewust gekozen deel van de kennisbank: een zuiver
+   * definitorisch item, zonder actuele bedragen/percentages, zonder
+   * persoonlijke berekening en zonder interpretatie van actuele wetgeving
+   * nodig. Alleen zulke items mogen als laatste redmiddel een kant-en-klaar,
+   * deterministisch antwoord leveren wanneer de AI-provider tijdelijk niet
+   * beschikbaar is (zie kenniscentrum-chat.ts, PROVIDER-FALLBACK). Bewust
+   * opt-in en standaard afwezig/false — nooit impliciet aannemen dat een
+   * kennisitem hiervoor geschikt is.
+   */
+  deterministicFallback?: boolean;
 }

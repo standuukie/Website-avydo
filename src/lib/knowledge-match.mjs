@@ -111,6 +111,81 @@ export function retrieveKnowledgeItems(query, items, opts = {}) {
     .map((x) => x.item);
 }
 
+// Strengere drempel dan MIN_RELEVANCE_SCORE (2): een deterministische
+// fallback (zie findDeterministicFallbackItem) mag alleen bij een écht
+// ondubbelzinnige match gebruikt worden, nooit bij een zwak/toevallig
+// gedeeld woord — dit antwoord komt immers zonder taalmodel-tussenkomst bij
+// de bezoeker terecht, dus een fout-positieve match is hier duurder dan bij
+// gewone contextretrieval (waar het taalmodel zelf nog een irrelevante bron
+// kan negeren). 3 (in plaats van bijvoorbeeld 4) is bewust gekozen: een
+// typische "wat is X?"-vraag reduceert na het strippen van stopwoorden tot
+// ÉÉN trefwoord, en overlapScore telt de AANWEZIGHEID van een trefwoord
+// (niet de frequentie) — het hoogst haalbare voor een eenwoordige vraag is
+// dus een treffer in titel/tags (2x) plus één treffer in de lopende tekst
+// (1x) = 3. Een drempel van 4 zou daarmee voor vrijwel elke simpele
+// definitievraag onbereikbaar zijn, wat de fallback in de praktijk nutteloos
+// zou maken. Score 3 vereist nog steeds een titel/tag-treffer (geen toeval)
+// mét een aanvullende bodytreffer — duidelijk strenger dan de gewone
+// MIN_RELEVANCE_SCORE (2), die al voldoet aan één enkele titel/tag-treffer
+// alléén.
+export const DETERMINISTIC_FALLBACK_MIN_SCORE = 3;
+
+// Woorden/zinsdelen die een vraag NOOIT geschikt maken voor een
+// deterministische fallback, ongeacht welk kennisitem verder zou matchen:
+// een bedrag/percentage-vraag ("hoeveel...") kan per definitie nooit door
+// kale, cijferloze kennisbank-content beantwoord worden (zie
+// ai-knowledge/index.ts: bewust geen bedragen/percentages in content), en
+// een vergelijkende/persoonlijke vraag ("voordeliger", "beter", "moet ik",
+// "mag ik", "kan ik", "voor mij", "mijn situatie") vereist per opdracht
+// juist de nuance/doorvraaglogica uit de systeemprompt, niet een vlakke
+// definitie. Zonder deze uitsluiting zou bijvoorbeeld "hoeveel loon moet ik
+// mezelf als DGA betalen?" via het losse "dga"-item (dat toevallig ook het
+// woord "loon" noemt) een te simpel, ontoereikend antwoord krijgen in
+// plaats van de uitleg van de gebruikelijkloonregeling.
+const FALLBACK_EXCLUDED_PATTERN = /\b(hoeveel|voordeliger|goedkoper|beter|verschil|moet ik|mag ik|kan ik|voor mij|mijn situatie)\b/i;
+
+/**
+ * Zoekt, uitsluitend onder items met `deterministicFallback === true`, een
+ * ondubbelzinnige match voor `query` — bedoeld als laatste redmiddel
+ * wanneer de AI-provider zelf niet bereikbaar is (zie kenniscentrum-chat.ts,
+ * PROVIDER-FALLBACK) en er dus geen taalmodel is dat een grensgeval nog zelf
+ * kan beoordelen. Bewust conservatief:
+ * - nooit bij een vraagvorm die om een bedrag of een persoonlijke/
+ *   vergelijkende beoordeling vraagt (zie FALLBACK_EXCLUDED_PATTERN);
+ * - nooit bij een kandidaat onder DETERMINISTIC_FALLBACK_MIN_SCORE;
+ * - nooit bij een dubbelzinnige uitkomst: als een tweede kandidaat na de
+ *   score EN een titel-tiebreak (een treffer in de titel zelf weegt zwaarder
+ *   dan een treffer die alleen via een bijkomende tag/lopende tekst komt)
+ *   nog steeds gelijk staat met de beste, is de vraag te dubbelzinnig om
+ *   zonder het taalmodel te beantwoorden.
+ * @template {{ title: string, category: string, content: string, tags: string[], deterministicFallback?: boolean }} T
+ * @param {string} query
+ * @param {T[]} items
+ * @returns {T | null}
+ */
+export function findDeterministicFallbackItem(query, items) {
+  if (FALLBACK_EXCLUDED_PATTERN.test(query)) return null;
+
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return null;
+
+  const scored = items
+    .filter((item) => item.deterministicFallback === true)
+    .map((item) => ({
+      item,
+      score: scoreKnowledgeItem(queryTokens, item),
+      titleScore: overlapScore(queryTokens, item.title),
+    }))
+    .filter((x) => x.score >= DETERMINISTIC_FALLBACK_MIN_SCORE)
+    .sort((a, b) => b.score - a.score || b.titleScore - a.titleScore);
+
+  if (scored.length === 0) return null;
+  if (scored.length > 1 && scored[1].score === scored[0].score && scored[1].titleScore === scored[0].titleScore) {
+    return null; // nog steeds te dubbelzinnig ná de titel-tiebreak
+  }
+  return scored[0].item;
+}
+
 /**
  * Bouwt de tekst die voor retrieval (dus NIET voor wat het model als
  * "vraag van de bezoeker" te zien krijgt) wordt getokeniseerd, door de

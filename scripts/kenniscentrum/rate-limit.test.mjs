@@ -117,20 +117,29 @@ test('recordSuccessfulRequest() wordt pas aangeroepen ná de provider-foutafhand
   const recordCallIndex = text.indexOf('recordSuccessfulRequest(ip)');
   const rateLimitedReturnIndex = text.indexOf("code: 'rate_limited'");
   const notConfiguredReturnIndex = text.indexOf("code: 'not_configured'");
-  const upstreamErrorReturnIndex = text.indexOf("code: 'upstream_error'");
+  const providerUnavailableReturnIndex = text.indexOf("code: 'provider_unavailable'");
+  const providerRateLimitedReturnIndex = text.indexOf("code: 'provider_rate_limited'");
 
   assert.ok(recordCallIndex > -1, 'recordSuccessfulRequest(ip) wordt nergens aangeroepen in de route');
-  assert.ok(rateLimitedReturnIndex > -1 && notConfiguredReturnIndex > -1 && upstreamErrorReturnIndex > -1);
+  assert.ok(rateLimitedReturnIndex > -1 && notConfiguredReturnIndex > -1 && providerUnavailableReturnIndex > -1 && providerRateLimitedReturnIndex > -1);
 
   assert.ok(recordCallIndex > rateLimitedReturnIndex, 'record moet ná de rate-limit-afhandeling staan');
   assert.ok(recordCallIndex > notConfiguredReturnIndex, 'record moet ná de not_configured-afhandeling staan');
-  assert.ok(recordCallIndex > upstreamErrorReturnIndex, 'record moet ná de upstream_error-afhandeling staan (mislukte provider-call telt niet mee)');
+  assert.ok(recordCallIndex > providerRateLimitedReturnIndex, 'record moet ná de provider_rate_limited-afhandeling staan (mislukte provider-call telt niet mee)');
+  assert.ok(recordCallIndex > providerUnavailableReturnIndex, 'record moet ná de provider_unavailable-afhandeling staan (mislukte provider-call telt niet mee)');
 });
 
-test('provider failure (upstream_error) en onvoldoende kennis (insufficientInfo) hebben verschillende, herkenbare teksten', () => {
+test('providerstoring (provider_rate_limited/provider_unavailable) en onvoldoende kennis (insufficientInfo) hebben verschillende, herkenbare teksten', () => {
   const text = readFileSync(ROUTE_FILE, 'utf-8');
-  assert.match(text, /De assistent kan momenteel geen antwoord genereren\. Probeer het opnieuw\./, 'upstream_error mist de verwachte, van onvoldoendeInformatie onderscheiden tekst');
+  assert.match(text, /De AI-assistent verwerkt op dit moment veel aanvragen\. Probeer het over een moment opnieuw\./, 'provider_rate_limited mist de verwachte tekst');
+  assert.match(text, /De AI-assistent is tijdelijk niet beschikbaar\. Probeer het opnieuw\./, 'provider_unavailable mist de verwachte tekst');
   assert.ok(!text.includes('kon nu niet antwoorden'), 'de oude, generieke foutmelding hoort niet meer in de route te staan');
+  // (Mag nog voorkomen in een historische incident-toelichting/comment —
+  // alleen niet meer als daadwerkelijke `error:`-waarde.)
+  assert.ok(
+    !/error: '[^']*De assistent kan momenteel geen antwoord genereren/.test(text),
+    'de oude, ongedifferentieerde upstream_error-tekst hoort niet meer als daadwerkelijke foutmelding in de route te staan',
+  );
 });
 
 // Regressie (2026-09-29, ronde 2): GLOBAL_RATE_LIMIT_MAX moet aansluiten bij
@@ -162,4 +171,99 @@ test('een volledig 15-vragen testgesprek met realistische tussenpozen blokkeert 
     globalLimiter.record('global', now);
     now += 20_000; // ~20 seconden tussen elke vraag/antwoord-beurt
   }
+});
+
+// ---------------------------------------------------------------------
+// Ronde 3 (2026-09-29): de token-bewuste (TPM) limiter — zelfde
+// createSlidingWindowLimiter, nu met een GEWICHT per hit (het geschatte
+// aantal tokens) in plaats van het standaardgewicht 1. Dit is de kern van
+// de fix voor "eerst werken meerdere vragen, dan faalt zelfs een simpele
+// vraag": RPM alleen (hierboven) kan dit patroon niet vangen, omdat een
+// handvol verzoeken ruim onder de RPM-limiet toch al Groq's TPM-budget kan
+// opsouperen.
+
+test('wouldExceed() detecteert een verzoek dat de limiet zou overschrijden, zonder zelf iets te registreren', () => {
+  const limiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 1000 });
+  const now = 1_000_000;
+
+  assert.equal(limiter.wouldExceed('global', 500, now), false);
+  assert.equal(limiter.usage('global', now), 0, 'wouldExceed() mag zelf niets registreren');
+
+  limiter.record('global', now, 500);
+  assert.equal(limiter.wouldExceed('global', 500, now), false, '500 + 500 = 1000, precies op de grens (niet erover) mag nog net');
+  assert.equal(limiter.wouldExceed('global', 501, now), true, '500 + 501 > 1000 moet wél overschrijden');
+});
+
+test('record() met een gewicht telt dat gewicht mee in usage(), niet 1 per hit', () => {
+  const limiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 10_000 });
+  const now = 1_000_000;
+
+  limiter.record('global', now, 2_500);
+  limiter.record('global', now, 1_500);
+  assert.equal(limiter.usage('global', now), 4_000);
+  // isLimited() blijft ook gewicht-bewust:
+  assert.equal(limiter.isLimited('global', now), false);
+});
+
+test('isLimited()/record() zonder expliciet gewicht gedragen zich nog exact als vóór deze wijziging (gewicht 1, dus een simpele telling) — RPM-tests hierboven blijven kloppen', () => {
+  const limiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 3 });
+  const now = 1_000_000;
+  limiter.record('ip', now);
+  limiter.record('ip', now);
+  limiter.record('ip', now);
+  assert.equal(limiter.isLimited('ip', now), true);
+  assert.equal(limiter.usage('ip', now), 3);
+});
+
+// Reproduceert het daadwerkelijk GEMELDE patroon: "eerst werken meerdere
+// vragen, dan faalt zelfs een simpele vraag als 'wat is een balans?'". Bij
+// realistische, token-zware verzoeken (systeemprompt + schema + bronnen +
+// geschiedenis + outputreservering, zie token-estimate.test.mjs voor het
+// vaste-kostendeel) grijpt de TPM-limiet al in ruim vóórdat de RPM-limiet
+// (28/minuut) ook maar in de buurt komt — dat bewijst dat TPM, niet RPM, de
+// daadwerkelijke bottleneck was/is, en dat de TPM-precheck dit nu lokaal
+// afvangt vóórdat Groq zelf een 429 zou geven.
+test('TPM-limiet grijpt in ruim vóór de RPM-limiet bij realistische, token-zware verzoeken', () => {
+  const GROQ_TPM_LIMIT = 6_000; // zelfde default als DEFAULT_GROQ_TPM_LIMIT in de route
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
+  const rpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 28 });
+  const now = 1_000_000;
+  // Realistische schatting voor een verzoek met wat gespreksgeschiedenis en
+  // bronnen (systeem+schema ±2.800 + bronnen/geschiedenis/vraag ±900 +
+  // output-reservering 500) — ruim binnen wat token-estimate.test.mjs voor
+  // de echte, huidige systeemprompt meet.
+  const perRequestTokens = 2_200;
+
+  let blockedAtRequest = null;
+  for (let i = 1; i <= 10; i++) {
+    if (tpmLimiter.wouldExceed('global', perRequestTokens, now)) {
+      blockedAtRequest = i;
+      break;
+    }
+    tpmLimiter.record('global', now, perRequestTokens);
+    rpmLimiter.record('global', now);
+  }
+
+  assert.ok(blockedAtRequest !== null && blockedAtRequest <= 5, `TPM-limiet had binnen 5 verzoeken in hetzelfde venster moeten ingrijpen, greep pas in bij verzoek ${blockedAtRequest}`);
+  assert.equal(rpmLimiter.isLimited('global', now), false, 'de RPM-limiet (28) is op dit punt nog lang niet bereikt — dit bevestigt dat TPM de daadwerkelijke bottleneck is, niet RPM');
+});
+
+// ---------------------------------------------------------------------
+// Structurele controle: bevestigt dat de route de TPM-precheck daadwerkelijk
+// vóór de Groq-aanroep uitvoert (dus zonder Groq aan te roepen wanneer al
+// lokaal duidelijk is dat de limiet overschreden zou worden), en dat de
+// reservering plaatsvindt ongeacht het latere resultaat (in tegenstelling
+// tot de RPM-registratie, die alleen bij succes telt).
+test('de TPM-precheck (wouldExceed) staat vóór de Groq-aanroep, en tpmLimiter.record() gebeurt vóórdat het resultaat bekend is', () => {
+  const text = readFileSync(ROUTE_FILE, 'utf-8');
+  const wouldExceedIndex = text.indexOf('tpmLimiter.wouldExceed(');
+  const tpmRecordIndex = text.indexOf('tpmLimiter.record(');
+  const callAiIndex = text.indexOf('await callAiWithFallback(');
+
+  assert.ok(wouldExceedIndex > -1, 'tpmLimiter.wouldExceed(...) wordt nergens aangeroepen in de route');
+  assert.ok(tpmRecordIndex > -1, 'tpmLimiter.record(...) wordt nergens aangeroepen in de route');
+  assert.ok(callAiIndex > -1, 'callAiWithFallback(...) wordt nergens aangeroepen in de route');
+
+  assert.ok(wouldExceedIndex < callAiIndex, 'de TPM-precheck moet vóór de Groq-aanroep staan, anders wordt de limiet niet daadwerkelijk gehandhaafd');
+  assert.ok(tpmRecordIndex < callAiIndex, 'tpmLimiter.record() moet vóór de Groq-aanroep staan (reservering, ongeacht het latere resultaat)');
 });

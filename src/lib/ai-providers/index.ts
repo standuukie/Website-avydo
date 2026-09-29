@@ -7,6 +7,7 @@ import { geminiProvider } from './gemini';
 import { groqProvider } from './groq';
 import { anthropicProvider } from './anthropic';
 import type { AiProvider, ChatMessage, ToolDefinition } from './types';
+import { categorizeProviderError } from '@/lib/error-classify.mjs';
 
 export type { ChatMessage, ToolDefinition } from './types';
 
@@ -57,27 +58,6 @@ function resolveProviderChain(): AiProvider[] {
   return [groqProvider];
 }
 
-/**
- * Bepaalt een grove, veilig te loggen foutcategorie uit de foutmelding van
- * een provider-adapter (die zelf uitsluitend HTTP-status + ingekorte
- * responstekst bevat, zie gemini.ts/groq.ts/anthropic.ts) — puur voor
- * diagnose in de serverlogs, bevat zelf geen gevoelige data.
- */
-function categorizeProviderError(error: string): string {
-  const statusMatch = error.match(/API (\d{3})/);
-  if (statusMatch) {
-    const status = Number(statusMatch[1]);
-    if (status === 429) return 'rate_limited';
-    if (status >= 500) return 'server_error';
-    if (status >= 400) return 'client_error';
-  }
-  if (/timeout|abort/i.test(error)) return 'timeout';
-  if (/netwerkfout/i.test(error)) return 'network';
-  if (/JSON-output|tool-antwoord|antwoordformaat/i.test(error)) return 'malformed_response';
-  if (/niet geconfigureerd/i.test(error)) return 'not_configured';
-  return 'unknown';
-}
-
 export interface AiCallOutcome {
   ok: boolean;
   input?: Record<string, unknown>;
@@ -85,6 +65,15 @@ export interface AiCallOutcome {
   providerId?: string;
   /** Welke provider-id's daadwerkelijk geprobeerd zijn, voor logging/diagnose. */
   attempted: string[];
+  /**
+   * Grove foutcategorie van de LAATST geprobeerde, mislukte provider (zie
+   * categorizeProviderError hieronder) — laat de API-route onderscheid
+   * maken tussen "Groq's eigen rate limit" (rate_limited) en een andere
+   * providerstoring (server_error/timeout/network/malformed_response/...)
+   * voor een specifiekere foutmelding aan de bezoeker. Ontbreekt/leeg als
+   * er geen enkele provider geprobeerd is (not_configured).
+   */
+  errorCategory?: string;
 }
 
 export async function callAiWithFallback(args: {
@@ -105,24 +94,36 @@ export async function callAiWithFallback(args: {
   }
 
   let lastError = '';
+  let lastErrorCategory = 'unknown';
   for (const provider of chain) {
     attempted.push(provider.id);
     const startedAt = Date.now();
     const result = await provider.call(args);
     const durationMs = Date.now() - startedAt;
+    const rateLimitSuffix = result.rateLimitInfo ? ` [${result.rateLimitInfo}]` : '';
     if (!result.ok) {
       // Veilig voor de serverlogs: result.error bevat uitsluitend de
       // HTTP-status en de (ingekorte) responstekst van de provider — nooit
       // de API-sleutel zelf (die staat alleen in de Authorization/
       // x-goog-api-key-header van het uitgaande verzoek, nooit in de
       // respons of in deze foutmelding), nooit de vraag van de bezoeker en
-      // nooit het modelantwoord. De categorie/duur is toegevoegd om een
-      // providerfout (rate limit/timeout/serverfout/misvormd antwoord) te
-      // kunnen onderscheiden zonder gevoelige data te loggen — zichtbaar in
-      // Vercel → project → Deployments → Functions → Logs.
-      console.error(
-        `[kenniscentrum-chat] provider "${provider.id}" faalde na ${durationMs}ms (categorie: ${categorizeProviderError(result.error)}): ${result.error}`,
-      );
+      // nooit het modelantwoord. De categorie/duur/rate-limit-headers zijn
+      // toegevoegd om een providerfout (rate limit/timeout/serverfout/
+      // misvormd antwoord) te kunnen onderscheiden van onze EIGEN limiter
+      // zonder gevoelige data te loggen — zichtbaar in Vercel → project →
+      // Deployments → Functions → Logs. Dit is precies het onderscheid dat
+      // nodig is om de vraag "faalt de assistent door onze eigen limiter,
+      // door Groq's RPM/TPM, of door een andere providerfout?" te
+      // beantwoorden vanuit de logs alleen.
+      const category = categorizeProviderError(result.error);
+      lastErrorCategory = category;
+      console.error(`[kenniscentrum-chat] provider "${provider.id}" faalde na ${durationMs}ms (categorie: ${category}): ${result.error}${rateLimitSuffix}`);
+    } else {
+      // Ook bij succes loggen (geen error-niveau): laat zien hoe dicht een
+      // sessie bij Groq's eigen TPM/RPM-plafond zit, zodat een opeenvolging
+      // van vragen ("vraag 1: ok, vraag 2: ok, vraag 3: faalt") in de logs
+      // te herleiden is tot het daadwerkelijke, resterende Groq-budget.
+      console.log(`[kenniscentrum-chat] provider "${provider.id}" slaagde na ${durationMs}ms${rateLimitSuffix}`);
     }
     if (result.ok) {
       return { ok: true, input: result.input, providerId: result.providerId, attempted };
@@ -130,5 +131,5 @@ export async function callAiWithFallback(args: {
     lastError = result.error;
   }
 
-  return { ok: false, error: lastError || 'Alle geconfigureerde providers faalden.', attempted };
+  return { ok: false, error: lastError || 'Alle geconfigureerde providers faalden.', attempted, errorCategory: lastErrorCategory };
 }

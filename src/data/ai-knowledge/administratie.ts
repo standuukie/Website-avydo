@@ -13,6 +13,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['administratieplicht', 'administratie bijhouden', 'boekhouding'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'bewaarplicht',
@@ -52,6 +53,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['balans', 'bezittingen', 'eigen vermogen'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'winst-en-verliesrekening',
@@ -65,6 +67,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['winst en verliesrekening', 'winst-en-verliesrekening', 'resultatenrekening'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'omzet-versus-winst',
@@ -78,6 +81,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['omzet versus winst', 'verschil omzet winst', 'omzet en winst'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'debiteuren-en-crediteuren',
@@ -91,6 +95,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['debiteuren', 'crediteuren', 'debiteurenbeheer', 'openstaande facturen'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'jaarrekening',
@@ -104,6 +109,7 @@ export const administratieItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['jaarrekening', 'jaarrekening maken', 'jaarrekening deponeren', 'jaarrekening opstellen'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'managementinformatie',

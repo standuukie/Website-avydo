@@ -13,6 +13,7 @@ export const btwItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['btw', 'omzetbelasting', 'wat is btw'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'btw-voor-wie',
@@ -94,6 +95,7 @@ export const btwItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['kor', 'kleineondernemersregeling', 'kleine ondernemersregeling', 'btw vrijstelling', 'kor voordelig'],
     priority: 3,
+    deterministicFallback: true,
   },
   {
     id: 'factuurvereisten',

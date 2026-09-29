@@ -23,8 +23,19 @@ export interface RetrievedSource {
   snippet: string;
 }
 
-const MAX_ARTICLE_SOURCES = 4;
-const MAX_DEADLINE_SOURCES = 3;
+// Verlaagd (2026-09-29, ronde 3) van 4/3 naar 2/2: Kenniscentrum-artikelen
+// en Belastingkalender-deadlines zijn de meest speculatieve, minst curated
+// brontypes — het minst essentieel voor een gewone definitie-/
+// personeel-/verzekeringenvraag, en de grootste bijdrage aan zowel
+// onnodig tokengebruik (elk verzoek naar Groq telt mee voor Groq's eigen
+// tokens-per-minuut-limiet) als het risico dat een toevallig meegekomen,
+// eigenlijk niet-relevante bron in het antwoord doorsijpelt (zie het
+// "zakelijke rekening"-in-een-verzekeringenantwoord-incident). De
+// kern-kennisbank (MAX_KNOWLEDGE_SOURCES) blijft ongewijzigd: die is al
+// strak gedrempeld via MIN_RELEVANCE_SCORE en typisch het beste
+// onderbouwde brontype.
+const MAX_ARTICLE_SOURCES = 2;
+const MAX_DEADLINE_SOURCES = 2;
 // Bewust laag gehouden (zie ook opdracht "voorkom irrelevante context"):
 // de kennisbank bestaat uit korte, algemene items, dus 3 relevante items
 // zijn ruim voldoende om een vraag te onderbouwen zonder de hoeveelheid

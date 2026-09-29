@@ -9,7 +9,7 @@
 // kunnen gaan lopen met de productiedata.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { retrieveKnowledgeItems, tokenize, buildRetrievalQuery } from '../../src/lib/knowledge-match.mjs';
+import { retrieveKnowledgeItems, tokenize, buildRetrievalQuery, findDeterministicFallbackItem } from '../../src/lib/knowledge-match.mjs';
 
 // De kennisbank zelf staat in TypeScript-bestanden (src/data/ai-knowledge/),
 // consistent met de rest van src/data/. Node's testrunner kan die niet
@@ -44,6 +44,7 @@ const SAMPLE_ITEMS = [
     content: 'Een eenmanszaak is een rechtsvorm zonder rechtspersoonlijkheid.',
     tags: ['eenmanszaak', 'zzp'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'irrelevant-lage-prioriteit',
@@ -158,6 +159,7 @@ const SAMPLE_ITEMS = [
     content: 'De balans is een overzicht van de bezittingen en schulden van een onderneming op een bepaald moment.',
     tags: ['balans', 'bezittingen', 'eigen vermogen'],
     priority: 2,
+    deterministicFallback: true,
   },
   {
     id: 'onderneming-starten',
@@ -530,4 +532,236 @@ test('de kennisbank bevat in totaal minstens 45 items, verdeeld over minstens 6 
   assert.ok(files.length >= 6, 'verwacht minstens 6 onderwerpbestanden in src/data/ai-knowledge/');
   const totalItems = files.reduce((sum, { text }) => sum + [...text.matchAll(/\bid:\s*'/g)].length, 0);
   assert.ok(totalItems >= 45, `verwacht minstens 45 kennisitems in totaal, telde er ${totalItems}`);
+});
+
+// ---------------------------------------------------------------------
+// I/J/K uit de opdracht: contextvraag en twee onderwerpwisselingen.
+
+test('I: "Wat is een BV?" gevolgd door "En hoe zit het met dividend?" vindt het juiste kennisitem via de gespreksgeschiedenis', () => {
+  const results = retrieveWithFallback(['Wat is een BV?'], 'En hoe zit het met dividend?', SAMPLE_ITEMS);
+  assert.ok(results.some((r) => r.id === 'dividend'));
+});
+
+test('J: "Wat is een BV?" gevolgd door "Welke verzekeringen heb ik nodig?" blijft bij het nieuwe onderwerp, niet bij BV', () => {
+  const results = retrieveWithFallback(['Wat is een BV?'], 'Welke verzekeringen heb ik nodig?', SAMPLE_ITEMS);
+  assert.ok(results.some((r) => r.id === 'bedrijfsverzekeringen'));
+  assert.ok(!results.some((r) => r.id === 'bv' || r.id === 'verschil-eenmanszaak-en-bv'), 'mag geen BV-item meenemen in een verzekeringenantwoord');
+});
+
+test('K: "Wat is een BV?" gevolgd door "Wat is een balans?" blijft bij het nieuwe onderwerp, niet bij BV', () => {
+  const results = retrieveWithFallback(['Wat is een BV?'], 'Wat is een balans?', SAMPLE_ITEMS);
+  assert.ok(results.some((r) => r.id === 'balans'));
+  assert.ok(!results.some((r) => r.id === 'bv' || r.id === 'verschil-eenmanszaak-en-bv'), 'mag geen BV-item meenemen in een balansantwoord');
+});
+
+// ---------------------------------------------------------------------
+// PROVIDER-FALLBACK (findDeterministicFallbackItem, zie knowledge-match.mjs
+// en kenniscentrum-chat.ts) — testscenario's G en H uit de opdracht.
+
+test('G: een eenvoudige, zuiver definitorische vraag levert een ondubbelzinnige deterministische-fallback-match op', () => {
+  assert.equal(findDeterministicFallbackItem('Wat is een balans?', SAMPLE_ITEMS)?.id, 'balans');
+  assert.equal(findDeterministicFallbackItem('Wat is een eenmanszaak?', SAMPLE_ITEMS)?.id, 'eenmanszaak');
+});
+
+test('H: een vraag die persoonlijke beoordeling/berekening vereist levert NOOIT een deterministische fallback op', () => {
+  // Geen van deze vragen mag een kant-en-klaar antwoord krijgen zonder het
+  // taalmodel: "hoeveel belasting" hangt af van de situatie, en "is een BV
+  // voordeliger" is expliciet persoonlijk/situatieafhankelijk — geen van
+  // beide bijbehorende items is (of hoort te zijn) gemarkeerd als
+  // deterministicFallback.
+  assert.equal(findDeterministicFallbackItem('Hoeveel belasting moet ik betalen als ik 50.000 euro winst maak?', SAMPLE_ITEMS), null);
+  assert.equal(findDeterministicFallbackItem('Is een BV voor mij voordeliger?', SAMPLE_ITEMS), null);
+});
+
+test('findDeterministicFallbackItem geeft null bij een lege vraag of geen enkele match', () => {
+  assert.equal(findDeterministicFallbackItem('', SAMPLE_ITEMS), null);
+  assert.equal(findDeterministicFallbackItem('Wie heeft de voetbalwedstrijd gewonnen?', SAMPLE_ITEMS), null);
+});
+
+test('findDeterministicFallbackItem geeft null bij een te dubbelzinnige match (twee bijna gelijk scorende kandidaten)', () => {
+  const items = [
+    { id: 'a', title: 'Btw algemeen', category: 'Btw', content: 'btw btw btw', tags: ['btw'], deterministicFallback: true },
+    { id: 'b', title: 'Btw tarieven', category: 'Btw', content: 'btw btw btw', tags: ['btw'], deterministicFallback: true },
+  ];
+  assert.equal(findDeterministicFallbackItem('btw', items), null);
+});
+
+test('findDeterministicFallbackItem negeert items zonder deterministicFallback: true, ook bij een sterke match', () => {
+  const items = [{ id: 'x', title: 'Gebruikelijk loon', category: 'BV en vennootschapsbelasting', content: 'gebruikelijk loon dga', tags: ['gebruikelijk loon', 'dga salaris'] }];
+  assert.equal(findDeterministicFallbackItem('Hoeveel loon moet ik mezelf als DGA betalen?', items), null);
+});
+
+// Regressie, gevonden tijdens handmatige verificatie tegen de ECHTE
+// kennisbank (niet alleen SAMPLE_ITEMS): een los "dga"-item dat toevallig
+// ook het woord "loon" in zijn lopende tekst noemt (want een DGA ontvangt
+// loon) scoorde hoog genoeg om als fallback te "winnen" voor "hoeveel loon
+// moet ik mezelf als DGA betalen?" — exact de vraag die judgment/nuance uit
+// de gebruikelijkloonregeling nodig heeft, niet een vlakke DGA-definitie.
+// FALLBACK_EXCLUDED_PATTERN vangt dit nu af via de "hoeveel"/"moet ik"-
+// vraagvorm, ongeacht welk kennisitem verder zou matchen.
+test('een "hoeveel...moet ik..."-vraag krijgt nooit een deterministische fallback, ook niet als een los item toevallig relevante woorden bevat', () => {
+  const items = [
+    {
+      id: 'dga',
+      title: 'Directeur-grootaandeelhouder (DGA)',
+      category: 'BV en vennootschapsbelasting',
+      content: 'Een DGA ontvangt loon uit de BV. Voor het loon gelden specifieke fiscale regels, waaronder de gebruikelijkloonregeling.',
+      tags: ['dga', 'directeur grootaandeelhouder'],
+      deterministicFallback: true,
+    },
+  ];
+  assert.equal(findDeterministicFallbackItem('Hoeveel loon moet ik mezelf als DGA betalen?', items), null);
+  // Een gewone, niet-vergelijkende/niet-bedrag-vraag over hetzelfde item
+  // moet wél gewoon een fallback krijgen — dit toont dat de uitsluiting
+  // specifiek op de vraagvorm werkt, niet op het onderwerp "dga" zelf.
+  assert.equal(findDeterministicFallbackItem('Wat is een DGA?', items)?.id, 'dga');
+});
+
+// Regressie: twee deterministicFallback-items die toevallig hetzelfde
+// trefwoord delen (bijv. via een bijkomende tag) mogen een titel-tiebreak
+// krijgen in plaats van meteen als "te dubbelzinnig" te worden afgewezen —
+// zo blijft "wat is btw?" bruikbaar ondanks dat de KOR ook "btw" als tag
+// heeft ("btw vrijstelling"), zolang het onderwerp van de VRAAG duidelijk
+// bij één item hoort (de titel).
+test('een gedeeld trefwoord via een bijkomende tag wordt via een titel-tiebreak opgelost, niet meteen als dubbelzinnig afgewezen', () => {
+  const items = [
+    {
+      id: 'btw-algemeen',
+      title: 'Btw in Nederland',
+      category: 'Btw',
+      content: 'Btw is de belasting die ondernemers over de verkoop van goederen en diensten in rekening brengen.',
+      tags: ['btw', 'omzetbelasting', 'wat is btw'],
+      deterministicFallback: true,
+    },
+    {
+      id: 'kor',
+      title: 'Kleineondernemersregeling (KOR)',
+      category: 'Btw',
+      content: 'De KOR is een btw-vrijstelling voor kleine ondernemers.',
+      tags: ['kor', 'kleineondernemersregeling', 'btw vrijstelling'],
+      deterministicFallback: true,
+    },
+  ];
+  assert.equal(findDeterministicFallbackItem('Wat is btw?', items)?.id, 'btw-algemeen');
+  assert.equal(findDeterministicFallbackItem('Wat is de KOR?', items)?.id, 'kor');
+});
+
+test('vergelijkende vraagvormen ("goedkoper", "verschil", "voordeliger") krijgen nooit een deterministische fallback', () => {
+  const items = [{ id: 'bv', title: 'Besloten vennootschap (BV)', category: 'Ondernemingsvormen', content: 'Een BV is een rechtspersoon.', tags: ['bv'], deterministicFallback: true }];
+  assert.equal(findDeterministicFallbackItem('Is een BV altijd goedkoper?', items), null);
+  assert.equal(findDeterministicFallbackItem('Wat is het verschil tussen een eenmanszaak en een BV?', items), null);
+  assert.equal(findDeterministicFallbackItem('Is een BV voor mij voordeliger?', items), null);
+  // De simpele, niet-vergelijkende vraag over hetzelfde item blijft werken.
+  assert.equal(findDeterministicFallbackItem('Wat is een BV?', items)?.id, 'bv');
+});
+
+// ---------------------------------------------------------------------
+// Bevestigt dat de ECHTE kennisbank deterministicFallback alleen zet op
+// zuiver definitorische items (nooit op gebruikelijk-loon, bedrijfs-
+// verzekeringen of zakelijke-bankrekening — die vereisen juist de nuance
+// die alleen het taalmodel/de systeemprompt kan bieden) en dat elk
+// gemarkeerd item genoeg content heeft voor een zinnig kant-en-klaar
+// antwoord.
+test('deterministicFallback staat in de echte kennisbank alleen op zuiver definitorische items, nooit op de genuanceerde items', () => {
+  const files = readKnowledgeFiles();
+  const neverFallbackIds = ['gebruikelijk-loon', 'bedrijfsverzekeringen', 'zakelijke-bankrekening'];
+  for (const { file, text } of files) {
+    for (const id of neverFallbackIds) {
+      const idIndex = text.indexOf(`id: '${id}'`);
+      if (idIndex === -1) continue;
+      const nextIdIndex = text.indexOf("id: '", idIndex + 1);
+      const itemBlock = text.slice(idIndex, nextIdIndex === -1 ? undefined : nextIdIndex);
+      assert.ok(!itemBlock.includes('deterministicFallback: true'), `${file}: "${id}" mag NOOIT deterministicFallback: true hebben (vereist nuance/actuele bedragen)`);
+    }
+  }
+  const totalFallbackItems = files.reduce((sum, { text }) => sum + [...text.matchAll(/deterministicFallback: true/g)].length, 0);
+  assert.ok(totalFallbackItems >= 10, `verwacht minstens 10 kennisitems met deterministicFallback: true, telde er ${totalFallbackItems}`);
+});
+
+// ---------------------------------------------------------------------
+// L/M/N: inhoudelijke controles op de ECHTE kennisbank-content — geen
+// wijziging van gedrag, alleen een regressiegrendel op wat al gecorrigeerd
+// is, zodat een toekomstige bewerking deze fouten niet ongemerkt terug kan
+// laten sluipen.
+
+test('L: het verzekeringenitem bevat geen zin die een zakelijke rekening/BV-verplichting noemt (contextlek-regressie)', () => {
+  const files = readKnowledgeFiles();
+  const ondernemingsvormen = files.find((f) => f.file === 'ondernemingsvormen.ts');
+  assert.ok(ondernemingsvormen, 'ondernemingsvormen.ts ontbreekt');
+  const idIndex = ondernemingsvormen.text.indexOf("id: 'bedrijfsverzekeringen'");
+  assert.ok(idIndex > -1, 'kennisitem "bedrijfsverzekeringen" ontbreekt');
+  const contentMatch = ondernemingsvormen.text.slice(idIndex).match(/content:\s*\n?\s*'((?:[^'\\]|\\.)*)'/);
+  assert.ok(contentMatch, 'content van "bedrijfsverzekeringen" niet gevonden');
+  const content = contentMatch[1];
+  assert.ok(!/zakelijke\s+(bank)?rekening/i.test(content), 'het verzekeringenitem mag niets over een zakelijke (bank)rekening bevatten — dat is een ander onderwerp');
+  // De vier vereiste categorieën uit de opdracht moeten aanwezig zijn.
+  assert.match(content, /wettelijk verplicht/i);
+  assert.match(content, /sector|contract|financiering/i);
+  assert.match(content, /vrijwillig/i);
+  assert.match(content, /inkomensbescherming/i);
+  // Mag beroepsaansprakelijkheid niet als algemeen (voor iedereen)
+  // wettelijk verplicht presenteren.
+  assert.ok(!/beroepsaansprakelijkheidsverzekering is (wettelijk )?verplicht\.?\s/i.test(content) || /gereguleerde beroepen|bepaalde beroepen/i.test(content));
+});
+
+test('M: het zakelijke-bankrekening-item maakt correct onderscheid tussen BV en eenmanszaak/VOF', () => {
+  const files = readKnowledgeFiles();
+  const administratie = files.find((f) => f.file === 'administratie.ts');
+  assert.ok(administratie, 'administratie.ts ontbreekt');
+  const idIndex = administratie.text.indexOf("id: 'zakelijke-bankrekening'");
+  assert.ok(idIndex > -1, 'kennisitem "zakelijke-bankrekening" ontbreekt');
+  const contentMatch = administratie.text.slice(idIndex).match(/content:\s*\n?\s*'((?:[^'\\]|\\.)*)'/);
+  assert.ok(contentMatch, 'content van "zakelijke-bankrekening" niet gevonden');
+  const content = contentMatch[1];
+  assert.ok(!/voor iedere ondernemer wettelijk verplicht/i.test(content), 'mag niet beweren dat een zakelijke rekening voor IEDERE ondernemer wettelijk verplicht is');
+  assert.match(content, /eenmanszaak/i);
+  assert.match(content, /\bBV\b/);
+  assert.match(content, /niet wettelijk verplicht/i);
+});
+
+test('N: het gebruikelijk-loon-item noemt nooit "minimaal het wettelijk minimumloon" als verklaring', () => {
+  const files = readKnowledgeFiles();
+  const bvDga = files.find((f) => f.file === 'bv-dga.ts');
+  assert.ok(bvDga, 'bv-dga.ts ontbreekt');
+  const idIndex = bvDga.text.indexOf("id: 'gebruikelijk-loon'");
+  assert.ok(idIndex > -1, 'kennisitem "gebruikelijk-loon" ontbreekt');
+  const contentMatch = bvDga.text.slice(idIndex).match(/content:\s*\n?\s*'((?:[^'\\]|\\.)*)'/);
+  assert.ok(contentMatch, 'content van "gebruikelijk-loon" niet gevonden');
+  const content = contentMatch[1];
+  assert.ok(!/minimaal het wettelijk minimumloon/i.test(content));
+  assert.match(content, /niet vrij te kiezen|niet zelf .*kiezen/i);
+});
+
+test('N (systeemprompt): de route verbiedt expliciet "minimaal het wettelijk minimumloon" als uitleg van het gebruikelijk loon', () => {
+  const routeText = readFileSync(path.resolve(__dirname, '../../src/pages/api/kenniscentrum-chat.ts'), 'utf-8');
+  assert.match(routeText, /minimaal het wettelijk minimumloon/i);
+  assert.match(routeText, /gebruikelijkloonregeling/i);
+});
+
+// ---------------------------------------------------------------------
+// O: eenvoudige vraag -> beperkte output/context. isComplexQuestion() en
+// de MAX_*_SOURCES-constanten leven in TypeScript-bestanden die Node's
+// testrunner niet rechtstreeks kan importeren (zelfde beperking als
+// elders in deze testset) — daarom hier gecontroleerd via dezelfde
+// structurele bron-scan, tegen de exacte, huidige drempelwaarden.
+test('O: eenvoudige, korte vragen (zoals de verplichte testvragen) blijven onder de complexiteitsdrempel voor extra outputruimte', () => {
+  const routeText = readFileSync(path.resolve(__dirname, '../../src/pages/api/kenniscentrum-chat.ts'), 'utf-8');
+  const lengthMatch = routeText.match(/if \(message\.length > (\d+)\) return true;/);
+  assert.ok(lengthMatch, 'isComplexQuestion-lengtedrempel niet gevonden');
+  const lengthThreshold = Number(lengthMatch[1]);
+
+  const simpleQuestions = ['Wat is een balans?', 'Wat is een eenmanszaak?', 'Wat is btw?', 'Wat is een DGA?', 'Hoeveel loon moet ik mezelf als DGA betalen?'];
+  for (const q of simpleQuestions) {
+    assert.ok(q.length <= lengthThreshold, `"${q}" (${q.length} tekens) zou onder de complexiteitsdrempel (${lengthThreshold}) moeten blijven`);
+    assert.ok((q.match(/\?/g) ?? []).length <= 1, `"${q}" mag niet als samengesteld (meerdere vraagtekens) gelden`);
+  }
+
+  assert.match(routeText, /const BASE_MAX_OUTPUT_TOKENS = 500;/);
+  assert.match(routeText, /const COMPLEX_MAX_OUTPUT_TOKENS = 700;/);
+});
+
+test('O: MAX_ARTICLE_SOURCES en MAX_DEADLINE_SOURCES zijn verlaagd (minder, minder relevante context per vraag)', () => {
+  const assistentText = readFileSync(path.resolve(__dirname, '../../src/lib/ai-assistent.ts'), 'utf-8');
+  assert.match(assistentText, /const MAX_ARTICLE_SOURCES = 2;/);
+  assert.match(assistentText, /const MAX_DEADLINE_SOURCES = 2;/);
 });
