@@ -20,7 +20,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Directeur-grootaandeelhouder (DGA)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Een directeur-grootaandeelhouder (DGA) is iemand die zowel bestuurder is van een BV als (samen met eventuele partner) een aanmerkelijk belang in de aandelen houdt. Dit begrip is fiscaal belangrijk omdat een DGA, anders dan een gewone werknemer, zelf kan bepalen hoeveel loon of dividend hij of zij uit de eigen BV opneemt — en de Belastingdienst daarom aanvullende regels hanteert om te voorkomen dat een DGA daardoor onterecht geen of te weinig belaste inkomsten opneemt. Concreet gelden er specifieke regels voor het loon dat de DGA uit de eigen BV ontvangt (de gebruikelijkloonregeling) en voor inkomsten uit het aanmerkelijk belang, zoals dividend.',
+      'Een directeur-grootaandeelhouder (DGA) is iemand die zowel bestuurder is van een BV als (samen met eventuele partner) een aanmerkelijk belang in de aandelen houdt. Dit begrip is fiscaal belangrijk omdat een DGA, anders dan een gewone werknemer, invloed heeft op de eigen beloning uit de BV — en de Belastingdienst daarom aanvullende regels hanteert om te voorkomen dat daardoor onterecht geen of te weinig belaste inkomsten worden opgenomen. Een DGA ontvangt loon uit de BV en kan daarnaast, als daar aanleiding voor is (bijvoorbeeld voldoende winst en vrij uitkeerbaar vermogen), dividend ontvangen. Voor het loon gelden specifieke fiscale regels, waaronder de gebruikelijkloonregeling; voor dividend gelden eigen regels, waaronder dividendbelasting.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:

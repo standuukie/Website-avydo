@@ -97,3 +97,22 @@ export function retrieveKnowledgeItems(query, items, opts = {}) {
     .slice(0, maxItems)
     .map((x) => x.item);
 }
+
+/**
+ * Bouwt de tekst die voor retrieval (dus NIET voor wat het model als
+ * "vraag van de bezoeker" te zien krijgt) wordt getokeniseerd, door de
+ * eerdere gebruikersvragen uit het gesprek vóór de huidige vraag te
+ * plakken. Dit lost op dat een elliptische vervolgvraag ("en hoe zit dat
+ * bij een BV?", "en voor een starter?", "hoe zit dat met dividend?") op
+ * zichzelf te weinig of geen trefwoorden bevat om de juiste kennisitems/
+ * artikelen te vinden — de eerdere vraag ("is een BV voordeliger?") levert
+ * het ontbrekende onderwerp. Geen permanente opslag: dit gebruikt precies
+ * dezelfde chatgeschiedenis die de client toch al meestuurt naar de
+ * provider (zie kenniscentrum-chat.ts).
+ * @param {string[]} previousUserMessages eerdere vragen van de bezoeker in dit gesprek, oud → nieuw
+ * @param {string} currentMessage
+ * @returns {string}
+ */
+export function buildRetrievalQuery(previousUserMessages, currentMessage) {
+  return [...previousUserMessages, currentMessage].filter((part) => typeof part === 'string' && part.trim().length > 0).join(' ');
+}

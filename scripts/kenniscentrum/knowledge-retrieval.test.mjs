@@ -9,7 +9,7 @@
 // kunnen gaan lopen met de productiedata.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { retrieveKnowledgeItems, tokenize } from '../../src/lib/knowledge-match.mjs';
+import { retrieveKnowledgeItems, tokenize, buildRetrievalQuery } from '../../src/lib/knowledge-match.mjs';
 
 // De kennisbank zelf staat in TypeScript-bestanden (src/data/ai-knowledge/),
 // consistent met de rest van src/data/. Node's testrunner kan die niet
@@ -86,6 +86,62 @@ const SAMPLE_ITEMS = [
     tags: ['werknemer aannemen', 'personeel aannemen', 'eerste werknemer', 'werkgever worden'],
     priority: 3,
   },
+  {
+    id: 'pensioen-werknemers',
+    title: 'Pensioen voor werknemers',
+    category: 'Personeel',
+    content: 'Of pensioen verplicht is hangt af van de sector en een eventuele bedrijfstakpensioenregeling.',
+    tags: ['pensioen', 'pensioenregeling', 'pensioenverplichting'],
+    priority: 1,
+  },
+  {
+    id: 'dga',
+    title: 'Directeur-grootaandeelhouder (DGA)',
+    category: 'BV en vennootschapsbelasting',
+    content: 'Een DGA ontvangt loon uit de BV en kan daarnaast dividend ontvangen. Voor het loon geldt de gebruikelijkloonregeling.',
+    tags: ['dga', 'directeur grootaandeelhouder', 'aanmerkelijk belang'],
+    priority: 3,
+  },
+  {
+    id: 'dividend',
+    title: 'Dividend',
+    category: 'BV en vennootschapsbelasting',
+    content: 'Dividend is een winstuitkering van een BV aan haar aandeelhouders.',
+    tags: ['dividend', 'dividend uitkeren', 'winstuitkering'],
+    priority: 2,
+  },
+  {
+    id: 'btw-tarieven',
+    title: 'Btw-tarieven',
+    category: 'Btw',
+    content: 'Het toepasselijke btw-tarief hangt af van het specifieke product of de dienst die geleverd wordt.',
+    tags: ['btw tarief', 'btw tarieven', 'hoog laag tarief', 'nultarief'],
+    priority: 3,
+  },
+  {
+    id: 'btw-zakelijke-kosten-en-diensten',
+    title: 'Btw bij zakelijke kosten en diensten',
+    category: 'Btw',
+    content: 'Over zakelijke kosten wordt btw in rekening gebracht die als voorbelasting kan worden teruggevraagd.',
+    tags: ['btw zakelijke kosten', 'btw diensten'],
+    priority: 2,
+  },
+  {
+    id: 'balans',
+    title: 'Balans',
+    category: 'Administratie en accountancy',
+    content: 'De balans is een overzicht van de bezittingen en schulden van een onderneming op een bepaald moment.',
+    tags: ['balans', 'bezittingen', 'eigen vermogen'],
+    priority: 2,
+  },
+  {
+    id: 'onderneming-starten',
+    title: 'Een onderneming starten: praktische startcheck',
+    category: 'Ondernemingsvormen',
+    content: 'Wie een onderneming start kiest eerst een rechtsvorm, schrijft in bij de KVK en regelt daarna administratie en btw.',
+    tags: ['onderneming starten', 'starten', 'bedrijf starten', 'wat moet ik regelen', 'startcheck'],
+    priority: 3,
+  },
 ];
 
 test('tokenize verwijdert stopwoorden en korte woorden', () => {
@@ -125,18 +181,77 @@ test('retrieveKnowledgeItems geeft nooit een item terug zonder enige trefwoordtr
 // afgedwongen via de systeemprompt in kenniscentrum-chat.ts.
 test('retrieveKnowledgeItems vindt het juiste kennisitem voor elke verplichte testvraag', () => {
   const cases = [
+    ['Wat is een balans?', 'balans'],
+    ['Ik wil binnenkort een bedrijf starten. Wat moet ik allemaal regelen?', 'onderneming-starten'],
     ['Wat is het verschil tussen een eenmanszaak en een BV?', 'verschil-eenmanszaak-en-bv'],
     ['Wat is de KOR en wanneer kan ik daar gebruik van maken?', 'kor'],
     ['Wanneer moet ik btw-aangifte doen?', 'btw-aangifte'],
     ['Hoeveel belasting moet ik betalen?', 'voorlopige-aanslag'],
     ['Is een BV altijd voordeliger dan een eenmanszaak?', 'verschil-eenmanszaak-en-bv'],
     ['Kan ik mijn privételefoon zakelijk aftrekken?', 'zakelijke-versus-prive-kosten'],
+    ['Welke kosten kan ik als ondernemer zakelijk aftrekken?', 'zakelijke-versus-prive-kosten'],
     ['Ik wil mijn eerste werknemer aannemen. Wat moet ik regelen?', 'werknemer-aannemen'],
+    ['Wat is een DGA?', 'dga'],
+    ['Is een BV voor mij voordeliger?', 'verschil-eenmanszaak-en-bv'],
+    ['Wat is momenteel het btw-tarief voor mijn situatie?', 'btw-tarieven'],
+    ['Kan ik mijn privéboodschappen volledig aftrekken?', 'zakelijke-versus-prive-kosten'],
   ];
   for (const [question, expectedId] of cases) {
     const results = retrieveKnowledgeItems(question, SAMPLE_ITEMS);
     assert.ok(results.some((r) => r.id === expectedId), `verwachtte "${expectedId}" voor "${question}", kreeg ${results.map((r) => r.id)}`);
   }
+});
+
+test('buildRetrievalQuery plakt eerdere gebruikersvragen vóór de huidige vraag', () => {
+  assert.equal(buildRetrievalQuery([], 'Wat is een DGA?'), 'Wat is een DGA?');
+  assert.equal(
+    buildRetrievalQuery(['Is een BV voor mij voordeliger?'], 'En hoe zit dat bij een eenmanszaak?'),
+    'Is een BV voor mij voordeliger? En hoe zit dat bij een eenmanszaak?',
+  );
+  // lege/witruimte-only berichten worden genegeerd, geen dubbele spaties of lege segmenten
+  assert.equal(buildRetrievalQuery(['', '  '], 'Wat is de KOR?'), 'Wat is de KOR?');
+});
+
+// Dekt de drie conversationele vervolgvraag-scenario's uit de opdracht:
+// een vervolgvraag die op zichzelf te weinig trefwoorden bevat om iets te
+// vinden, moet via de gecombineerde retrieval-query (eerdere vraag +
+// huidige vraag) alsnog het juiste kennisitem opleveren — dit is de kern
+// van "geen contextloze behandeling van vervolgvragen".
+test('vervolgvragen vinden het juiste kennisitem via de gecombineerde gespreksquery', () => {
+  const cases = [
+    // [eerdere gebruikersvragen, huidige (elliptische) vraag, verwacht kennisitem]
+    [['Is een BV voor mij voordeliger?'], 'En hoe zit dat bij een BV?', 'verschil-eenmanszaak-en-bv'],
+    [['Is een BV voor mij voordeliger?'], 'En hoe zit dat bij een eenmanszaak?', 'eenmanszaak'],
+    [['Is een BV voor mij voordeliger?'], 'Hoe zit dat met dividend?', 'dividend'],
+    [['Welke kosten kan ik aftrekken?'], 'En hoe zit dat met btw?', 'btw-zakelijke-kosten-en-diensten'],
+    [['Ik wil personeel aannemen.'], 'Hoe zit het met pensioen?', 'pensioen-werknemers'],
+  ];
+  for (const [previousUserMessages, currentMessage, expectedId] of cases) {
+    const query = buildRetrievalQuery(previousUserMessages, currentMessage);
+    const results = retrieveKnowledgeItems(query, SAMPLE_ITEMS);
+    assert.ok(
+      results.some((r) => r.id === expectedId),
+      `verwachtte "${expectedId}" voor vervolgvraag "${currentMessage}" (na "${previousUserMessages.join(' / ')}"), kreeg ${results.map((r) => r.id)}`,
+    );
+  }
+});
+
+// Zonder de gespreksgeschiedenis zou de elliptische vervolgvraag op
+// zichzelf vaak niets (bruikbaars) vinden — dit bevestigt dat de
+// contextuele query daadwerkelijk het verschil maakt, niet dat de vraag
+// toevallig ook op zichzelf al genoeg trefwoorden had.
+// Bevestigt dat de gespreksgeschiedenis daadwerkelijk het verschil maakt,
+// niet dat de elliptische vraag toevallig ook op zichzelf al genoeg
+// trefwoorden had: een puur verwijzende vervolgvraag zonder eigen
+// onderwerpswoorden ("en hoe zit dat daarmee?") vindt zonder de vorige
+// vraag niets, maar wél het juiste kennisitem zodra de eerdere vraag als
+// context wordt meegegeven.
+test('een vervolgvraag zonder eigen onderwerpswoorden vindt pas iets zodra de vorige vraag als context meetelt', () => {
+  const withoutContext = retrieveKnowledgeItems('En hoe zit dat daarmee?', SAMPLE_ITEMS);
+  assert.deepEqual(withoutContext, []);
+
+  const withContext = retrieveKnowledgeItems(buildRetrievalQuery(['Is een BV voor mij voordeliger?'], 'En hoe zit dat daarmee?'), SAMPLE_ITEMS);
+  assert.ok(withContext.some((r) => r.id === 'verschil-eenmanszaak-en-bv'));
 });
 
 // Regressie: een geheel onderwerpsvreemde vraag die toevallig één generiek,
