@@ -421,3 +421,70 @@ test('alle 12 vereiste testvragen vinden minstens één relevant kennisitem', ()
   }
   assert.equal(misses.length, 0, `deze vragen vonden geen enkel kennisitem: ${JSON.stringify(misses)}`);
 });
+
+// ---------------------------------------------------------------------
+// Ronde 10 (live-test na de freeze-voorbereiding): twee concrete, opnieuw
+// gerapporteerde problemen. Deze tests lezen de ECHTE kennisbankbestanden
+// (niet een fixture) om te bevestigen dat de brontekst zelf gecorrigeerd is.
+
+test('REGRESSIE (ronde 10, Arbo-vraag): "werknemer-aannemen" noemt "arbeidsomstandigheden" niet meer in zijn eigen content (voorkomt onterecht meescoren bij een Arbo-vraag)', () => {
+  const text = readKbFile('personeel.ts');
+  const blocks = extractContentBlocks(text);
+  const werknemerContent = blocks.find((c) => c.startsWith('Bij het aannemen van de eerste werknemer'));
+  assert.ok(werknemerContent, 'kon het "werknemer-aannemen"-item niet terugvinden');
+  assert.ok(!/arbeidsomstandigheden/i.test(werknemerContent), 'het personeelsantwoord mag "arbeidsomstandigheden" niet meer noemen — dat woord liet het item onterecht meescoren voor Arbo-vragen');
+  assert.match(werknemerContent, /pensioen/i, 'de (elders bevestigd correct werkende) pensioen-verwijzing moet behouden blijven');
+});
+
+test('REGRESSIE (ronde 10, Arbo-vraag): het "arbeidsomstandigheden"-item zelf blijft inhoudelijk over Arbowet/RI&E/preventiemedewerker/bedrijfsarts gaan', () => {
+  const text = readKbFile('personeel.ts');
+  const blocks = extractContentBlocks(text);
+  const arboContent = blocks.find((c) => c.startsWith('De Arbowet verplicht werkgevers'));
+  assert.ok(arboContent, 'kon het "arbeidsomstandigheden"-item niet terugvinden');
+  assert.match(arboContent, /risico-inventarisatie|RI&E/i);
+  assert.match(arboContent, /preventiemedewerker/i);
+  assert.match(arboContent, /arbodienst|bedrijfsarts/i);
+});
+
+test('REGRESSIE (ronde 10, winst-in-de-bv): geen "alleen belast" of "er ontstaat geen" — de belastingclaim blijft gehedged met "in beginsel"', () => {
+  const text = readKbFile('bv-dga.ts');
+  const blocks = extractContentBlocks(text);
+  const winstContent = blocks.find((c) => c.startsWith('Winst die in de BV blijft'));
+  assert.ok(winstContent, 'kon het "winst-in-de-bv"-item niet terugvinden');
+  assert.ok(!/alleen belast/i.test(winstContent), 'geen "alleen belast"-formulering');
+  assert.ok(!/er ontstaat geen/i.test(winstContent), 'geen "er ontstaat geen"-formulering');
+  assert.ok(!/\baltijd\b/i.test(winstContent), 'geen "altijd"');
+  assert.ok(!/\bnooit\b/i.test(winstContent), 'geen "nooit"');
+  assert.match(winstContent, /in beginsel/, 'de belastingclaim moet gehedged blijven met "in beginsel"');
+});
+
+test('REGRESSIE (ronde 10, dividend): blijft de voorwaardelijke formulering gebruiken, geen "je moet nog steeds"/"moet"-achtige absolute herintroductie', () => {
+  const text = readKbFile('bv-dga.ts');
+  const blocks = extractContentBlocks(text);
+  const dividendContent = blocks.find((c) => c.startsWith('Dividend is een uitkering'));
+  assert.ok(dividendContent, 'kon het "dividend"-item niet terugvinden');
+  assert.match(dividendContent, /Voor een DGA die werkzaamheden verricht voor zijn of haar BV kan de gebruikelijkloonregeling van toepassing zijn/, 'moet de exacte, voorwaardelijke formulering bevatten');
+  assert.match(dividendContent, /dividend staat daar los van/i);
+  assert.ok(!/\baltijd\b/i.test(dividendContent) && !/\bsowieso\b/i.test(dividendContent), 'geen "altijd"/"sowieso"');
+});
+
+test('REGRESSIE (ronde 10, btw terugvragen): maakt expliciet onderscheid tussen aftrekken/verrekenen van voorbelasting en het per saldo terugkrijgen van btw', () => {
+  const text = readKbFile('btw.ts');
+  const blocks = extractContentBlocks(text);
+  const btwTerugContent = blocks.find((c) => c.startsWith('Btw die een ondernemer zelf betaalt'));
+  assert.ok(btwTerugContent, 'kon het "btw-terugvragen-voorbelasting"-item niet terugvinden');
+  assert.match(btwTerugContent, /aftrekken\/verrekenen van voorbelasting/, 'moet expliciet het aftrekken/verrekenen benoemen');
+  assert.match(btwTerugContent, /per saldo/, 'moet expliciet "per saldo" gebruiken voor de daadwerkelijke teruggave');
+  assert.match(btwTerugContent, /daadwerkelijk terug/, 'moet het verschil tussen aftrek en daadwerkelijke teruggave benoemen');
+});
+
+test('REGRESSIE (ronde 10, zakelijke kosten): is verder ingekort (kort antwoord + 2-3 nuances + bron), behoudt het IB/vpb-vs-btw-onderscheid', () => {
+  const text = readKbFile('inkomstenbelasting.ts');
+  const blocks = extractContentBlocks(text);
+  const kostenContent = blocks.find((c) => c.startsWith('Kosten die uitsluitend of overwegend zakelijk'));
+  assert.ok(kostenContent, 'kon het "zakelijke-versus-prive-kosten"-item niet terugvinden');
+  const wordCount = kostenContent.split(/\s+/).filter(Boolean).length;
+  assert.ok(wordCount <= 95, `het item moet verder ingekort zijn (≤95 woorden, was ~140), telde ${wordCount} woorden`);
+  assert.match(kostenContent, /aftrekbaarheid voor de winstberekening/, 'het IB/vpb-vs-btw-onderscheid moet behouden blijven');
+  assert.match(kostenContent, /Btw bij zakelijke kosten en diensten/, 'de korte verwijzing naar het btw-item moet behouden blijven');
+});

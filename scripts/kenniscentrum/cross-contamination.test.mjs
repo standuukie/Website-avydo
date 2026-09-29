@@ -60,7 +60,7 @@ const ITEMS = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang de BV geen dividend uitkeert, is er in beginsel nog geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd over dat bedrag; het geld blijft binnen de onderneming, bijvoorbeeld voor investeringen of liquiditeit. Pas als de BV besluit dividend uit te keren, ontstaat die belastingplicht.',
+      'Winst die in de BV blijft telt mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang de BV geen dividend uitkeert, is er in beginsel nog geen dividendbelasting of inkomstenbelasting verschuldigd bij de aandeelhouder; het geld blijft binnen de onderneming, bijvoorbeeld voor investeringen of liquiditeit. Zodra de BV wel besluit dividend uit te keren, ontstaat die belastingplicht alsnog.',
     tags: ['winst in de bv laten', 'winst reserveren', 'winst niet uitkeren', 'geld in de bv laten zitten'],
     priority: 3,
   },
@@ -69,7 +69,7 @@ const ITEMS = [
     title: 'Een werknemer aannemen',
     category: 'Personeel',
     content:
-      'Bij het aannemen van de eerste werknemer komt in de kern het volgende samen: u wordt werkgever, u stelt een arbeidsovereenkomst op, en u start een loonadministratie. Als werkgever moet u zich uiterlijk op de dag dat de eerste werknemer begint aanmelden bij de Belastingdienst. Zie voor de afzonderlijke vervolgstappen ook de kennisitems over loonadministratie, loonheffingen, werkgeversverplichtingen en — waar van toepassing — pensioen en arbeidsomstandigheden.',
+      'Bij het aannemen van de eerste werknemer komt in de kern het volgende samen: u wordt werkgever, u stelt een arbeidsovereenkomst op, en u start een loonadministratie. Als werkgever moet u zich uiterlijk op de dag dat de eerste werknemer begint aanmelden bij de Belastingdienst. Zie voor de afzonderlijke vervolgstappen ook de kennisitems over loonadministratie, loonheffingen, werkgeversverplichtingen en — waar van toepassing — pensioen.',
     tags: ['werknemer aannemen', 'personeel aannemen', 'personeel aanneem', 'eerste werknemer', 'aanmelden als werkgever', 'werkgever worden'],
     priority: 3,
   },
@@ -105,7 +105,7 @@ const ITEMS = [
     title: 'Zakelijke kosten versus privékosten',
     category: 'Inkomstenbelasting',
     content:
-      'Kosten die uitsluitend of overwegend zakelijk worden gemaakt, verlagen doorgaans de fiscale winst waarover u inkomsten- of vennootschapsbelasting betaalt; puur privékosten doen dat niet. Bij gemengde kosten (een auto, een telefoon, een werkruimte thuis) mag doorgaans alleen het zakelijke deel worden afgetrokken. Let op: dit gaat over de aftrekbaarheid voor de winstberekening — of over dezelfde kosten ook btw kan worden teruggevraagd, is een aparte beoordeling (zie het kennisitem "Btw bij zakelijke kosten en diensten").',
+      'Kosten die uitsluitend of overwegend zakelijk zijn, verlagen doorgaans de fiscale winst waarover u inkomsten- of vennootschapsbelasting betaalt; puur privékosten (zoals boodschappen) zijn niet aftrekbaar. Bij gemengde kosten (een auto, een telefoon, een werkruimte thuis) is doorgaans alleen het zakelijke deel aftrekbaar. Let op: dit gaat over de aftrekbaarheid voor de winstberekening — of over dezelfde kosten ook btw kan worden teruggevraagd, is een aparte beoordeling (zie het kennisitem "Btw bij zakelijke kosten en diensten").',
     tags: ['zakelijke kosten', 'privékosten', 'aftrekbare kosten', 'privételefoon aftrekken', 'gemengde kosten', 'boodschappen aftrekken'],
     priority: 3,
   },
@@ -123,7 +123,7 @@ const ITEMS = [
     title: 'Btw terugvragen (voorbelasting)',
     category: 'Btw',
     content:
-      'Btw die een ondernemer zelf betaalt over zakelijke kosten en investeringen wordt voorbelasting genoemd, en mag in de btw-aangifte in mindering worden gebracht op de btw die aan klanten in rekening is gebracht.',
+      'Btw die een ondernemer zelf betaalt over zakelijke kosten en investeringen (voorbelasting) mag in de btw-aangifte in mindering worden gebracht op de btw die aan klanten in rekening is gebracht — dat is het aftrekken/verrekenen van voorbelasting. Is er in een tijdvak per saldo meer voorbelasting dan verschuldigde btw, dan betaalt de Belastingdienst dat verschil daadwerkelijk terug; dat is iets anders dan de aftrek zelf.',
     tags: ['voorbelasting', 'btw terugvragen', 'btw terugkrijgen', 'btw aftrekken'],
     priority: 2,
   },
@@ -197,14 +197,43 @@ test('Scenario G: "En hoe zit het met arbeidsomstandigheden?" -> Arbowet/RI&E, g
   assert.ok(!answer.explanation.includes('Wie in Nederland een onderneming start'), 'geen onderneming-startcheck in het arbeidsomstandigheden-antwoord');
 });
 
-test('Scenario H: "En hoe zit het met zakelijke kosten?" -> zakelijke kosten/fiscale winst, geen volledige btw-uitleg erbij', () => {
+// Ronde 10 (live-test): de EXACTE, letterlijke live-vraag die het incident
+// veroorzaakte — bevat, anders dan Scenario G hierboven, ook "regelen" en
+// "personeel", wat werknemer-aannemen via de gedeelde categorie "Personeel"
+// en zijn eigen tags een reële concurrent maakte. Oorzaak: werknemer-
+// aannemen's content bevatte zelf het woord "arbeidsomstandigheden" (in een
+// cross-referentiezin naar andere kennisitems), wat het onterecht liet
+// meescoren voor een Arbo-vraag. Fix: dat woord is uit de content verwijderd
+// (de "pensioen"-verwijzing, elders al bevestigd correct te werken, blijft
+// staan).
+test('REGRESSIE (live-test, ronde 10): "Wat moet ik regelen voor de arbeidsomstandigheden van mijn personeel?" geeft het Arbo-item, niet het personeelsantwoord', () => {
+  const items = retrieve('Wat moet ik regelen voor de arbeidsomstandigheden van mijn personeel?', []);
+  assert.equal(items[0]?.id, 'arbeidsomstandigheden', `verwacht "arbeidsomstandigheden" als primaire bron, kreeg "${items[0]?.id}"`);
+  const answer = buildSourceFallbackAnswer(toSources(items));
+  assert.match(answer.shortAnswer, /Arbowet/);
+  assert.ok(!answer.explanation.includes('Bij het aannemen van de eerste werknemer'), 'het antwoord mag niet over het aannemen van een eerste werknemer gaan');
+  assert.ok(!answer.explanation.includes('burgerservicenummer'), 'het antwoord mag niet over BSN/identiteit gaan (dat hoort bij personeel aannemen, niet bij Arbo)');
+  assert.ok(!answer.explanation.includes('loonadministratie'), 'het antwoord mag niet over loonadministratie gaan');
+});
+
+test('REGRESSIE (live-test, ronde 10): "Wat moet ik regelen als ik personeel in dienst neem?" blijft gewoon het personeelsantwoord geven (geen regressie door de Arbo-fix)', () => {
+  const items = retrieve('Wat moet ik regelen als ik personeel in dienst neem?', []);
+  assert.equal(items[0]?.id, 'werknemer-aannemen', `verwacht "werknemer-aannemen" als primaire bron, kreeg "${items[0]?.id}"`);
+  const answer = buildSourceFallbackAnswer(toSources(items));
+  assert.match(answer.shortAnswer, /aannemen van de eerste werknemer/);
+});
+
+test('Scenario H: "En hoe zit het met zakelijke kosten?" -> zakelijke kosten/fiscale winst, geen volledige btw-uitleg erbij, behoudt het IB/vpb-vs-btw-onderscheid, blijft kort', () => {
   const items = retrieve('En hoe zit het met zakelijke kosten?', []);
   assert.equal(items[0]?.id, 'zakelijke-versus-prive-kosten');
   const answer = buildSourceFallbackAnswer(toSources(items));
   assert.ok(!answer.explanation.includes('voorbelasting'), 'de volledige btw-voorbelasting-uitleg mag niet in het zakelijke-kosten-antwoord verschijnen');
+  assert.match(answer.shortAnswer + ' ' + answer.explanation, /aftrekbaarheid voor de winstberekening/, 'het onderscheid met btw moet behouden blijven');
+  const wordCount = (answer.shortAnswer + ' ' + answer.explanation).split(/\s+/).filter(Boolean).length;
+  assert.ok(wordCount <= 90, `het antwoord moet kort blijven (kort antwoord + 2-3 nuances + bron), telde ${wordCount} woorden`);
 });
 
-test('Scenario I: "Kan ik de btw daarop terugvragen?" (na zakelijke kosten) -> btw/voorbelasting-item, fiscale winstaftrek en btw-aftrek blijven gescheiden', () => {
+test('Scenario I: "Kan ik de btw daarop terugvragen?" (na zakelijke kosten) -> btw/voorbelasting-item, fiscale winstaftrek en btw-aftrek blijven gescheiden, met expliciet onderscheid aftrekken vs. per saldo terugkrijgen', () => {
   const items = retrieve('Kan ik de btw daarop terugvragen?', ['En hoe zit het met zakelijke kosten?']);
   assert.ok(['btw-terugvragen-voorbelasting', 'btw-zakelijke-kosten-en-diensten'].includes(items[0]?.id), `verwacht een btw-item als primaire bron, kreeg "${items[0]?.id}"`);
   const answer = buildSourceFallbackAnswer(toSources(items));

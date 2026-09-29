@@ -74,11 +74,11 @@ export const btwItems: KnowledgeItem[] = [
     title: 'Btw terugvragen (voorbelasting)',
     category: 'Btw',
     content:
-      'Btw die een ondernemer zelf betaalt over zakelijke kosten en investeringen wordt voorbelasting genoemd, en mag in de btw-aangifte in mindering worden gebracht op de btw die aan klanten in rekening is gebracht. Is er in een tijdvak meer voorbelasting dan verschuldigde btw (bijvoorbeeld bij een grote investering), dan wordt het verschil door de Belastingdienst terugbetaald. Voor btw op kosten die deels privé worden gebruikt (bijvoorbeeld een auto) gelden bijzondere correctieregels.',
+      'Btw die een ondernemer zelf betaalt over zakelijke kosten en investeringen (voorbelasting) mag in de btw-aangifte in mindering worden gebracht op de btw die aan klanten in rekening is gebracht — dat is het aftrekken/verrekenen van voorbelasting, en gebeurt bij vrijwel elke aangifte. Is er in een tijdvak per saldo meer voorbelasting dan verschuldigde btw (bijvoorbeeld bij een grote investering), dan betaalt de Belastingdienst dat verschil daadwerkelijk terug; dat is iets anders dan de aftrek zelf en komt minder vaak voor. Voor btw op kosten die deels privé worden gebruikt (bijvoorbeeld een auto) gelden bijzondere correctieregels.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl: 'https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/btw',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['voorbelasting', 'btw terugvragen', 'btw terugkrijgen', 'btw aftrekken'],
     priority: 2,
   },
