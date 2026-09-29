@@ -74,7 +74,14 @@ test('buildFallbackAnswer geeft een natuurlijk antwoord: lege note (geen technis
   assert.equal(answer.fallback, true);
 });
 
-test('buildSourceFallbackAnswer geeft een natuurlijk antwoord op basis van meerdere context-bewuste bronnen, lege note, alle bronnen vermeld', () => {
+// Ronde 8 (2026-09-30) — "kruisbesmetting"-incident: een eerdere versie
+// plakte ook de VOLLEDIGE tekst van een eventuele TWEEDE bron achter het
+// antwoord (zie fallback-answer.mjs voor de volledige toelichting). Dit
+// verklaarde het gerapporteerde patroon waarbij bijvoorbeeld een vraag over
+// personeel aannemen plotseling gevolgd werd door een complete, letterlijke
+// alinea over het starten van een onderneming. Fix: uitsluitend de
+// PRIMAIRE (best scorende) bron gebruiken, exact als buildFallbackAnswer.
+test('buildSourceFallbackAnswer gebruikt UITSLUITEND de primaire bron — een tweede, minder relevante bron wordt nooit volledig meegeplakt (regressie "kruisbesmetting")', () => {
   const sources = [
     { name: 'Avydo kennisbank (bron: Belastingdienst)', title: 'Winst in de BV laten', url: 'https://www.belastingdienst.nl/winst-in-de-bv', snippet: 'Winst die in de BV blijft, wordt niet automatisch als dividend uitgekeerd. Dividend ontstaat pas als de BV daadwerkelijk uitkeert.' },
     { name: 'Avydo kennisbank (bron: Belastingdienst)', title: 'Dividend', url: 'https://www.belastingdienst.nl/dividend', snippet: 'Dividend is een winstuitkering van een BV aan haar aandeelhouders.' },
@@ -84,8 +91,9 @@ test('buildSourceFallbackAnswer geeft een natuurlijk antwoord op basis van meerd
   assert.equal(answer.note, '');
   assert.equal(answer.shortAnswer, 'Winst die in de BV blijft, wordt niet automatisch als dividend uitgekeerd.');
   assert.match(answer.explanation, /Dividend ontstaat pas/);
-  assert.match(answer.explanation, /winstuitkering van een BV/, 'de tweede bron moet ook in de toelichting terugkomen');
-  assert.equal(answer.sources.length, 2);
+  assert.ok(!answer.explanation.includes('winstuitkering van een BV'), 'de tweede bron mag NIET (meer) volledig in de toelichting terechtkomen — dat was precies de kruisbesmetting');
+  assert.equal(answer.sources.length, 1, 'alleen de primaire bron hoort in sources te staan, geen tweede, ongebruikte bron');
+  assert.equal(answer.sources[0].title, 'Winst in de BV laten');
   assert.equal(answer.insufficientInfo, false);
 });
 

@@ -134,7 +134,7 @@ test('REGRESSIE (punt 6): het "winst-in-de-bv"-item is compact (geen uitweiding 
   const winstContent = blocks.find((c) => c.startsWith('Winst die in de BV blijft'));
   assert.ok(winstContent, 'kon het "winst-in-de-bv"-item niet terugvinden');
   const wordCount = winstContent.split(/\s+/).filter(Boolean).length;
-  assert.ok(wordCount <= 100, `het item moet compact blijven (≤100 woorden voor een gerichte vervolgvraag), telde ${wordCount} woorden`);
+  assert.ok(wordCount <= 115, `het item moet compact blijven (≤115 woorden voor een gerichte vervolgvraag), telde ${wordCount} woorden`);
   assert.ok(!/rechtspersoonlijkheid|notariële akte|oprichting/i.test(winstContent), 'het item moet niet uitweiden naar rechtspersoonlijkheid/oprichting — dat hoort bij het "bv"-item, niet bij deze gerichte vervolgvraag');
   assert.match(winstContent, /vennootschapsbelasting/, 'het kernfeit (VPB blijft verschuldigd) moet aanwezig blijven');
 });

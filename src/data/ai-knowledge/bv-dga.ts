@@ -35,12 +35,12 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Gebruikelijk loon',
     category: 'BV en vennootschapsbelasting',
     content:
-      'De gebruikelijkloonregeling verplicht een DGA om zichzelf een loon toe te kennen dat gebruikelijk is voor het niveau en de duur van zijn of haar werkzaamheden voor de BV, ook als de DGA daar zelf voor zou kiezen geen of een laag loon op te nemen — het loon is dus niet vrij te kiezen. De hoogte is het hoogste bedrag van drie toetsen: een wettelijk vastgesteld normbedrag, het loon van de meest vergelijkbare dienstbetrekking, of het loon van de meestverdienende werknemer binnen de BV. Dit normbedrag is nadrukkelijk iets anders dan het wettelijk minimumloon voor werknemers — het gaat om een aparte regeling met een eigen bedrag. Het actuele normbedrag en de rekenregels wijzigen regelmatig — raadpleeg de Belastingdienst voor de geldende cijfers, of bespreek uw specifieke situatie met Avydo.',
+      'De gebruikelijkloonregeling bepaalt, onder voorwaarden, welk loon een aanmerkelijkbelanghouder die werkzaamheden verricht voor zijn of haar BV daarvoor fiscaal in aanmerking moet nemen — dit loon is niet vrij te kiezen, ook niet door bewust te kiezen voor geen of een laag loon. De hoogte is het hoogste bedrag van drie toetsen: een wettelijk vastgesteld normbedrag, het loon van de meest vergelijkbare dienstbetrekking, of het loon van de meestverdienende werknemer binnen de BV. Dit normbedrag is nadrukkelijk iets anders dan het wettelijk minimumloon voor werknemers — het gaat om een aparte regeling met een eigen bedrag. Het actuele normbedrag en de rekenregels wijzigen regelmatig — raadpleeg de Belastingdienst voor de geldende cijfers, of bespreek uw specifieke situatie met Avydo.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/vermogen_en_aanmerkelijk_belang/aanmerkelijk_belang/loon_en_aanmerkelijk_belang/',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['gebruikelijk loon', 'gebruikelijkloonregeling', 'dga salaris', 'hoeveel loon dga', 'loon mezelf uitbetalen', 'dga loon bepalen'],
     priority: 3,
   },
@@ -64,7 +64,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt — dat geldt ongeacht of de winst wordt uitgekeerd. Zolang er geen dividend wordt uitgekeerd, is er over dat bedrag geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd; het geld blijft dan binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Dit betekent niet automatisch dat een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
+      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt — dat geldt ongeacht of de winst wordt uitgekeerd. Zolang er geen dividend wordt uitgekeerd, is er over dat bedrag geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd; het geld blijft dan binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Een latere dividenduitkering is aan wettelijke voorwaarden gebonden (zie het kennisitem "Dividend"). Dit betekent niet automatisch dat een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
