@@ -49,14 +49,14 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Dividend',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders, als alternatief voor (of aanvulling op) het uitkeren van loon aan een DGA. Een BV mag alleen dividend uitkeren als het eigen vermogen dit toelaat, en moet daarbij aan wettelijke waarborgen voldoen. Over uitgekeerd dividend is de aandeelhouder belasting verschuldigd; de BV houdt hiervoor doorgaans dividendbelasting in.',
+      'Dividend is een uitkering van (een deel van) de winst van een BV aan haar aandeelhouders. Een BV mag alleen dividend uitkeren als het eigen vermogen dit toelaat, en moet daarbij aan wettelijke waarborgen voldoen. Dividend is geen vervanging voor loon: een DGA moet sowieso een gebruikelijk loon ontvangen (zie de gebruikelijkloonregeling); dividend is een aanvullende manier om winst aan de aandeelhouder te laten toekomen, en ontstaat pas op het moment dat de BV daadwerkelijk besluit uit te keren. Over uitgekeerd dividend is de aandeelhouder belasting verschuldigd; de BV houdt hiervoor doorgaans dividendbelasting in als voorheffing.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/dividendbelasting/als_u_dividend_uitkeert/als_u_dividend_uitkeert',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['dividend', 'dividend uitkeren', 'winstuitkering'],
-    priority: 2,
+    priority: 3,
     deterministicFallback: true,
   },
   {
@@ -64,7 +64,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft, wordt niet automatisch als dividend aan de aandeelhouder uitgekeerd — de BV houdt dat bedrag gewoon binnen de onderneming, bijvoorbeeld als onderdeel van het eigen vermogen op de balans. Dividend ontstaat pas op het moment dat de BV daadwerkelijk besluit dividend uit te keren; zolang dat niet gebeurt, is er voor de aandeelhouder ook geen dividendbelasting verschuldigd. Fiscaal is het daarom belangrijk onderscheid te maken tussen winst van de BV (waarover de BV vennootschapsbelasting betaalt, ongeacht of de winst wordt uitgekeerd) en een privé-uitkering aan de DGA via loon of dividend (waarover apart loonheffing respectievelijk dividendbelasting/inkomstenbelasting geldt). Geld in de BV laten zitten kan relevant zijn met het oog op toekomstige investeringen of liquiditeit, maar betekent niet automatisch dat een BV per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
+      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt — dat geldt ongeacht of de winst wordt uitgekeerd. Zolang er geen dividend wordt uitgekeerd, is er over dat bedrag geen dividendbelasting of inkomstenbelasting bij de aandeelhouder verschuldigd; het geld blijft dan binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Dit betekent niet automatisch dat een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
@@ -78,11 +78,11 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Dividendbelasting',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Wanneer een BV dividend uitkeert aan haar aandeelhouders, moet zij hierover dividendbelasting inhouden en afdragen aan de Belastingdienst. Deze ingehouden dividendbelasting kan de aandeelhouder onder voorwaarden verrekenen met de eigen inkomstenbelasting. Het geldende percentage en de precieze regels (bijvoorbeeld bij uitkering aan buitenlandse aandeelhouders) staan bij de Belastingdienst, omdat deze kunnen wijzigen.',
+      'Wanneer een BV dividend uitkeert aan haar aandeelhouders, moet zij hierover dividendbelasting inhouden en afdragen aan de Belastingdienst. Deze ingehouden dividendbelasting is een voorheffing die de aandeelhouder onder voorwaarden kan verrekenen met de eigen inkomstenbelasting. Het geldende percentage en de precieze regels (bijvoorbeeld bij uitkering aan buitenlandse aandeelhouders) staan bij de Belastingdienst, omdat deze kunnen wijzigen.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl: 'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/dividendbelasting/dividendbelasting',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['dividendbelasting', 'belasting op dividend'],
     priority: 2,
   },

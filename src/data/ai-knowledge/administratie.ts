@@ -33,7 +33,7 @@ export const administratieItems: KnowledgeItem[] = [
     title: 'Zakelijke bankrekening',
     category: 'Administratie en accountancy',
     content:
-      'Voor een eenmanszaak, VOF, maatschap of CV is een zakelijke bankrekening niet wettelijk verplicht: deze rechtsvormen hebben geen van de eigenaar gescheiden vermogen, dus een privérekening mag in beginsel ook voor de onderneming gebruikt worden. Voor een BV (en andere rechtspersonen zoals een NV) ligt dit anders: omdat de BV een eigen rechtspersoonlijkheid heeft met een vermogen dat los staat van dat van de DGA, hoort daar een eigen rekening op naam van de BV bij. Los van deze wettelijke kant stellen banken daarnaast hun eigen voorwaarden: de meeste banken staan zakelijk gebruik van een privérekening niet toe, en kunnen daarover contact opnemen als ze veel zakelijke transacties op een privérekening zien. Een aparte rekening helpt bovendien zakelijke en privétransacties gescheiden te houden, wat de administratie overzichtelijker maakt.',
+      'Voor een eenmanszaak, VOF, maatschap of CV is een zakelijke bankrekening niet wettelijk verplicht: deze rechtsvormen hebben geen van de eigenaar gescheiden vermogen, dus een privérekening mag in beginsel ook voor de onderneming gebruikt worden. Voor een BV (en andere rechtspersonen zoals een NV) ligt dit anders: de BV heeft een eigen vermogen dat los staat van dat van de DGA, en in de praktijk wordt daarom vrijwel altijd een aparte rekening op naam van de BV gebruikt — een specifieke wet die dit apart voorschrijft is er echter niet. Los van deze kant stellen banken daarnaast hun eigen voorwaarden: de meeste banken staan zakelijk gebruik van een privérekening niet toe, en kunnen daarover contact opnemen als ze veel zakelijke transacties op een privérekening zien. Een aparte rekening helpt bovendien zakelijke en privétransacties gescheiden te houden, wat de administratie overzichtelijker maakt.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/geldzaken/zakelijke-rekening-handig-niet-verplicht/',
@@ -50,9 +50,9 @@ export const administratieItems: KnowledgeItem[] = [
     targetAudience: ['mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/producten-bestellen/welke-gegevens-staan-er-in-een-jaarrekening/',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['balans', 'bezittingen', 'eigen vermogen'],
-    priority: 2,
+    priority: 3,
     deterministicFallback: true,
   },
   {

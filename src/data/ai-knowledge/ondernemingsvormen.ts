@@ -58,9 +58,9 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     targetAudience: ['zzp'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/starten/een-eenmanszaak-of-bv-als-rechtsvorm-kiezen/',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['eenmanszaak', 'zzp', 'zelfstandig ondernemer'],
-    priority: 2,
+    priority: 3,
     deterministicFallback: true,
   },
   {
@@ -68,14 +68,14 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Besloten vennootschap (BV)',
     category: 'Ondernemingsvormen',
     content:
-      'Een besloten vennootschap (BV) is een rechtspersoon: de BV heeft eigen rechten en plichten, los van de persoon (of personen) die de BV bestuurt of erin werkt. Voor oprichting is een notariële akte nodig. Omdat de BV een aparte rechtspersoon is, is doorgaans niet de bestuurder/aandeelhouder in privé aansprakelijk voor schulden van de BV, maar de BV zelf (met uitzonderingen bij bijvoorbeeld wanbestuur). Een BV betaalt vennootschapsbelasting over de winst, in plaats van dat de winst rechtstreeks bij de eigenaar in de inkomstenbelasting valt zoals bij een eenmanszaak.',
+      'Een besloten vennootschap (BV) is een rechtspersoon: de BV heeft eigen rechten en plichten, los van de persoon (of personen) die de BV bestuurt of erin werkt. Voor oprichting is een notariële akte nodig. De BV is zelf aansprakelijk voor haar eigen schulden; de bestuurder/aandeelhouder is daarvoor in privé doorgaans niet aansprakelijk, met uitzonderingen (bijvoorbeeld bij wanbestuur). Een BV betaalt vennootschapsbelasting over de winst, in plaats van dat de winst rechtstreeks bij de eigenaar in de inkomstenbelasting valt zoals bij een eenmanszaak.',
     targetAudience: ['bv-dga', 'mkb-ondernemer'],
     sourceName: 'Belastingdienst',
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/ondernemen/onderneming_starten/rechtsvorm/besloten-vennootschap-bv',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['bv', 'besloten vennootschap', 'rechtspersoon'],
-    priority: 2,
+    priority: 3,
     deterministicFallback: true,
   },
   {
@@ -97,11 +97,11 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Verschil tussen een eenmanszaak en een BV',
     category: 'Ondernemingsvormen',
     content:
-      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door op meerdere vlakken. Aansprakelijkheid: bij een eenmanszaak bent u in privé aansprakelijk voor zakelijke schulden, bij een BV is in beginsel de BV zelf aansprakelijk. Belastingheffing: een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met daarnaast loonheffing over het loon van de directeur-grootaandeelhouder (DGA) en mogelijk dividendbelasting bij een winstuitkering. Administratie: een BV heeft aanvullende verplichtingen, zoals het jaarlijks deponeren van een jaarrekening bij de KVK, die een eenmanszaak niet kent. Oprichting en complexiteit: een eenmanszaak richt u eenvoudig op via inschrijving bij de KVK, terwijl een BV wordt opgericht via een notariële akte, wat extra kosten en verplichtingen met zich meebrengt (zoals de jaarrekening). Een BV is niet automatisch goedkoper of fiscaal voordeliger dan een eenmanszaak (en omgekeerd) — de uitkomst hangt onder meer af van de hoogte van de winst, de manier waarop geld uit de onderneming wordt gehaald, risico\'s, en de extra kosten en verplichtingen van een BV, en verschilt van geval tot geval. Avydo kan dit voor uw situatie doorrekenen.',
+      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door op meerdere vlakken. Aansprakelijkheid: bij een eenmanszaak bent u in privé aansprakelijk voor zakelijke schulden; bij een BV is de BV zelf aansprakelijk voor haar schulden, en is de bestuurder/aandeelhouder daarvoor in beginsel niet in privé aansprakelijk (met uitzonderingen, bijvoorbeeld bij wanbestuur). Belastingheffing: een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met daarnaast loonheffing over het loon van de directeur-grootaandeelhouder (DGA) en mogelijk dividendbelasting bij een winstuitkering. Administratie: een BV heeft aanvullende verplichtingen, zoals het jaarlijks deponeren van een jaarrekening bij de KVK, die een eenmanszaak niet kent. Oprichting en complexiteit: een eenmanszaak richt u eenvoudig op via inschrijving bij de KVK, terwijl een BV wordt opgericht via een notariële akte, wat extra kosten en verplichtingen met zich meebrengt (zoals de jaarrekening). Een BV is niet automatisch goedkoper of fiscaal voordeliger dan een eenmanszaak (en omgekeerd) — de uitkomst hangt onder meer af van de hoogte van de winst, de manier waarop geld uit de onderneming wordt gehaald, risico\'s, en de extra kosten en verplichtingen van een BV, en verschilt van geval tot geval. Avydo kan dit voor uw situatie doorrekenen.',
     targetAudience: ['zzp', 'bv-dga', 'mkb-ondernemer'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/starten/een-eenmanszaak-of-bv-als-rechtsvorm-kiezen/',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: [
       'verschil eenmanszaak bv',
       'eenmanszaak of bv',

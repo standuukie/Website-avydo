@@ -6,11 +6,11 @@ export const btwItems: KnowledgeItem[] = [
     title: 'Btw in Nederland',
     category: 'Btw',
     content:
-      'Btw (omzetbelasting) is de belasting die ondernemers in rekening brengen over de verkoop van goederen en diensten. De btw die een ondernemer aan klanten in rekening brengt, wordt periodiek afgedragen aan de Belastingdienst; btw die de ondernemer zelf betaalt over zakelijke kosten en investeringen (voorbelasting) mag daarbij doorgaans worden afgetrokken. Btw geldt voor vrijwel alle ondernemers, met enkele uitzonderingen en bijzondere regelingen voor specifieke sectoren of kleine ondernemers.',
+      'Btw (omzetbelasting) is de belasting die ondernemers in rekening brengen over de verkoop van goederen en diensten, en die zij periodiek afdragen aan de Belastingdienst. Btw die de ondernemer zelf betaalt over zakelijke kosten en investeringen (voorbelasting) mag daarbij doorgaans worden afgetrokken. Btw geldt voor vrijwel alle ondernemers, met enkele uitzonderingen en bijzondere regelingen voor specifieke sectoren of kleine ondernemers (zoals de KOR).',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl: 'https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/btw',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['btw', 'omzetbelasting', 'wat is btw'],
     priority: 3,
     deterministicFallback: true,
