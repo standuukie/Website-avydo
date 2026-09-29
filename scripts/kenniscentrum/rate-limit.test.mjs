@@ -323,3 +323,76 @@ test('de TPM-precheck (wouldExceed) staat vóór de Groq-aanroep, en tpmLimiter.
   assert.ok(wouldExceedIndex < callAiIndex, 'de TPM-precheck moet vóór de Groq-aanroep staan, anders wordt de limiet niet daadwerkelijk gehandhaafd');
   assert.ok(tpmRecordIndex < callAiIndex, 'tpmLimiter.record() moet vóór de Groq-aanroep staan (reservering, ongeacht het latere resultaat)');
 });
+
+// ---------------------------------------------------------------------
+// Ronde 5 (2026-09-30): exact het scenario uit de live test die opnieuw
+// faalde ("ik heb ongeveer 1 minuut tussen elke vraag gewacht, toch
+// geblokkeerd"). Bij een venster van 60s en tussenpozen van PRECIES 60s (of
+// meer) moet de vorige reservering altijd volledig verlopen zijn vóórdat de
+// volgende vraag gecontroleerd wordt — een normaal verzoek (ruim onder het
+// TPM-budget op zichzelf) mag dan nooit geblokkeerd worden.
+test('5 vragen met exact 60s tussenpozen worden nooit door de eigen TPM-limiet geblokkeerd', () => {
+  const GROQ_TPM_LIMIT = 7_300;
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
+  const perRequestTokens = 2_300; // realistische schatting ná ronde 4, zie token-estimate.test.mjs
+  let now = 1_000_000;
+
+  for (let i = 1; i <= 5; i++) {
+    assert.equal(
+      tpmLimiter.wouldExceed('global', perRequestTokens, now),
+      false,
+      `vraag ${i} (na exact 60s wachten) zou niet geblokkeerd moeten worden — budget vóór dit verzoek: ${tpmLimiter.usage('global', now)}/${GROQ_TPM_LIMIT}`,
+    );
+    tpmLimiter.record('global', now, perRequestTokens);
+    now += 60_000; // exact 60 seconden wachten, zoals in de live test
+  }
+});
+
+// Punt 5 uit de opdracht: een providerfout mag nooit PERMANENT tokenruimte
+// blijven reserveren. De sliding window lost dit al op door ontwerp (elke
+// reservering vervalt na precies windowMs, ongeacht of het bijbehorende
+// verzoek slaagde of faalde) — dit bevestigt dat expliciet: een reservering
+// die hoort bij een mislukt verzoek is, na het verstrijken van het venster,
+// niet te onderscheiden van een reservering die hoort bij een geslaagd
+// verzoek, en blokkeert dus nooit langer dan de andere.
+test('een reservering die hoort bij een providerfout blokkeert nooit langer dan het venster (geen permanente reservering)', () => {
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 3_000 });
+  let now = 1_000_000;
+
+  // Vraag 1: reservering gemaakt (het bestaande ontwerp reserveert vóór de
+  // Groq-aanroep, ongeacht het latere resultaat — zie kenniscentrum-chat.ts).
+  tpmLimiter.record('global', now, 2_500);
+  assert.equal(tpmLimiter.wouldExceed('global', 2_500, now), true, 'venster zou nu (bijna) vol moeten zijn ná de eerste reservering');
+
+  // Wachten tot ná het venster (zoals de opdracht beschrijft: "wachten,
+  // nieuwe vraag"): de reservering van de mislukte poging moet volledig
+  // verlopen zijn, niet "permanent" blijven staan.
+  now += 60_001;
+  assert.equal(tpmLimiter.wouldExceed('global', 2_500, now), false, 'ná het venster mag de reservering van de mislukte poging niet meer meetellen');
+});
+
+// Ronde 5, punt 7 uit de opdracht: een fallback-antwoord (na een
+// providerfout, of na een geblokkeerd precheck-verzoek) mag NOOIT een eigen,
+// tweede tokenreservering toevoegen — dat zou één gebruikersvraag effectief
+// dubbel laten meetellen. Zie ook de structurele test in
+// error-classify.test.mjs die bevestigt dat tpmLimiter.record() maar op één
+// plek in de route voorkomt; dit bevestigt hetzelfde op het niveau van de
+// limiter zelf: alleen expliciete record()-aanroepen tellen, en de route
+// roept die community maar één keer per verzoek aan.
+test('een fallback-antwoord voegt geen tweede reservering toe bovenop de oorspronkelijke Groq-poging', () => {
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: 10_000 });
+  const now = 1_000_000;
+
+  // Simuleert: TPM-precheck ok -> reservering voor de (mislukte) Groq-poging.
+  const originalEstimate = 2_300;
+  tpmLimiter.record('global', now, originalEstimate);
+  const usageAfterOriginalAttempt = tpmLimiter.usage('global', now);
+
+  // Een fallback-antwoord (kennisbank, geen Groq-aanroep) registreert
+  // zelf NIETS extra — dit is precies wat findDeterministicFallbackItem()
+  // + buildFallbackAnswer() doen: geen enkele aanroep naar tpmLimiter.
+  // record() erbij.
+  const usageAfterFallback = tpmLimiter.usage('global', now);
+  assert.equal(usageAfterFallback, usageAfterOriginalAttempt, 'een fallback-antwoord mag de TPM-teller niet nogmaals verhogen');
+  assert.equal(usageAfterFallback, originalEstimate, 'de teller moet uitsluitend de oorspronkelijke, eenmalige reservering weerspiegelen');
+});

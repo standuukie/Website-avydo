@@ -863,3 +863,67 @@ test('15-vragen testgesprek: bij een realistisch tempo (>=20s tussen vragen) tre
     `bij een realistisch tempo (22s tussen vragen) mag geen enkele vraag hard geblokkeerd worden zonder fallback; kreeg ${hardBlocked} van de ${conversation.length} (fallback: ${fallbackUsed}, via Groq: ${answeredByGroq})`,
   );
 });
+
+// ---------------------------------------------------------------------
+// Ronde 5 (2026-09-30): reproduceert EXACT het live-testgesprek dat opnieuw
+// faalde, met de EXACTE tussenpoos die de gebruiker rapporteerde ("ongeveer
+// 1 minuut tussen elke vraag"). Rapporteert per vraag de volledige
+// diagnostiek (tokenschatting, TPM-budget vóór/na, beslissing) zodat exact
+// zichtbaar is BIJ WELKE VRAAG de teller eventueel zou ontsporen — dit is de
+// unit-testequivalent van de gevraagde productielogging, maar dan
+// deterministisch en zonder live Groq-aanroep.
+test('live-scenario-replay: 8 vragen met exact 60s tussenpozen worden geen van alle geblokkeerd', () => {
+  const FIXED_COST_TOKENS = extractFixedCostTokens();
+  const GROQ_TPM_LIMIT = 7_300;
+  const BASE_MAX_OUTPUT_TOKENS = 500;
+  const MODEL_HISTORY_MESSAGES = 2;
+  const MAX_KNOWLEDGE_SOURCES = 2;
+
+  const conversation = [
+    'Wat is een balans?',
+    'Wat is btw?',
+    'Wat is een eenmanszaak?',
+    'Wat is een BV?',
+    'En hoe zit het met dividend?',
+    'En als ik de winst in de BV laat?',
+    'Hoeveel loon moet ik mezelf als DGA betalen?',
+    'Welke verzekeringen heb ik nodig?',
+  ];
+
+  const tpmLimiter = createSlidingWindowLimiter({ windowMs: 60_000, max: GROQ_TPM_LIMIT });
+  const history = [];
+  let now = 1_000_000;
+  const report = [];
+
+  for (const message of conversation) {
+    if (report.length > 0) now += 60_000; // "ongeveer 1 minuut" tussen elke vraag, zoals gerapporteerd
+    const previousUserMessages = history.filter((h) => h.role === 'user').map((h) => h.text);
+    let sources = retrieveKnowledgeItems(message, SAMPLE_ITEMS, { maxItems: MAX_KNOWLEDGE_SOURCES });
+    if (sources.length === 0 && previousUserMessages.length > 0) {
+      sources = retrieveKnowledgeItems(buildRetrievalQuery(previousUserMessages, message), SAMPLE_ITEMS, { maxItems: MAX_KNOWLEDGE_SOURCES });
+    }
+    const contextBlock = `<bronnen>\n${formatSourcesForPromptLike(sources)}\n</bronnen>`;
+    const modelHistory = history.slice(-MODEL_HISTORY_MESSAGES);
+    const total =
+      FIXED_COST_TOKENS +
+      estimateTokens(contextBlock) +
+      estimateTotalTokens(modelHistory.map((h) => h.text)) +
+      estimateTokens(message) +
+      BASE_MAX_OUTPUT_TOKENS;
+
+    const tpmBefore = tpmLimiter.usage('global', now);
+    const blocked = tpmLimiter.wouldExceed('global', total, now);
+    if (!blocked) tpmLimiter.record('global', now, total);
+    report.push({ message, estimated_tokens: total, tpm_before: tpmBefore, tpm_limit: GROQ_TPM_LIMIT, blocked });
+
+    history.push({ role: 'user', text: message });
+    history.push({ role: 'assistant', text: 'Dit is een representatief voorbeeldantwoord van gemiddelde lengte voor de gesprekshistorie.' });
+  }
+
+  const blockedQuestions = report.filter((r) => r.blocked);
+  assert.equal(
+    blockedQuestions.length,
+    0,
+    `bij ~60s tussen elke vraag mag geen enkele vraag door de eigen TPM-limiet geblokkeerd worden; geblokkeerd: ${JSON.stringify(blockedQuestions, null, 2)}. Volledig rapport: ${JSON.stringify(report, null, 2)}`,
+  );
+});

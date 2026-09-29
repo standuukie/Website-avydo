@@ -121,11 +121,24 @@ test('groq.ts geeft Groq\'s echte remaining/limit tokens gestructureerd door (ni
   assert.match(text, /x-ratelimit-limit-tokens/);
 });
 
-test('de route stelt de lokale TPM-boekhouding bij met Groq\'s echte remaining/limit tokens (zelfcorrectie)', () => {
+// Ronde 5 (2026-09-30): een eerdere versie "corrigeerde" de lokale
+// TPM-boekhouding met Groq's x-ratelimit-remaining-tokens. Live testen (een
+// bezoeker die ~60s tussen vragen wachtte en alsnog na 2 vragen werd
+// geblokkeerd) wees uit dat dit averechts werkte: dat Groq-cijfer is
+// ACCOUNT-BREED (alle verkeer op de API-sleutel, niet uitsluitend dit ene
+// gesprek), dus een tijdelijk laag account-breed budget — door andere
+// bezoekers, preview-deployments, eerder testen — injecteerde een
+// oneigenlijke, grote reservering in de LOKALE, per-gesprek teller. Groq's
+// cijfers worden daarom nu uitsluitend gelogd (voor diagnose), nooit meer
+// gebruikt om tpmLimiter bij te werken — dit bevestigt dat tpmLimiter.record()
+// nog maar op ÉÉN plek in de route voorkomt (de reservering vóór de
+// Groq-aanroep), niet nogmaals ná het resultaat.
+test('Groq\'s remaining/limit tokens worden alleen gelogd, nooit gebruikt om de lokale TPM-teller bij te werken', () => {
   const text = readFileSync(ROUTE_FILE, 'utf-8');
-  assert.match(text, /result\.remainingTokens/);
+  assert.match(text, /result\.remainingTokens/, 'Groq\'s remaining tokens moeten nog altijd gelogd worden voor diagnose');
   assert.match(text, /result\.limitTokens/);
-  assert.match(text, /tpmLimiter\.record/);
+  const recordCalls = [...text.matchAll(/tpmLimiter\.record\(/g)].length;
+  assert.equal(recordCalls, 1, `tpmLimiter.record() mag maar op één plek voorkomen (de reservering vóór de Groq-aanroep), telde ${recordCalls}`);
 });
 
 test('een geblokkeerd verzoek (RPM of TPM) probeert eerst de kennisbank-fallback vóór de blokkademelding', () => {

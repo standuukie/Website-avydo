@@ -31,6 +31,13 @@ import { knowledgeBase } from '@/data/ai-knowledge';
 
 export const prerender = false;
 
+// Handmatig bijgewerkte identifier, uitsluitend voor diagnose in de
+// serverlogs (Vercel → project → Deployments → Functions → Logs) — nooit
+// zichtbaar voor de bezoeker. Bij twijfel of Production daadwerkelijk de
+// nieuwste code draait: zoek deze string in de live logs. Verhoog bij een
+// volgende ronde die de request-flow raakt.
+const AI_ASSISTANT_VERSION = 'ronde5-2026-09-30-01';
+
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_MESSAGE_LENGTH = 600;
 // Cap voor wat er als CONTEXT voor retrieval-doeleinden bewaard blijft
@@ -83,16 +90,36 @@ function isComplexQuestion(message: string): boolean {
   return questionMarks > 1;
 }
 
-// Eenvoudige, in-memory sliding-window rate limiting per serverless-
-// instance. Dit is bewust géén externe store (Vercel KV/Upstash e.d.): dat
-// zou een nieuwe infrastructuur-afhankelijkheid toevoegen die voor deze
-// schaal niet nodig is, en geen permanente opslag van IP-adressen — de
-// timestamps leven alleen in het geheugen van de warme instance. Beperking:
-// de teller leeft alleen zolang de serverless-instance warm is en is dus
-// niet gegarandeerd consistent over alle gelijktijdige instances heen. Voor
-// een kantoorwebsite met bescheiden verkeer is dit een redelijke eerste
-// verdedigingslinie tegen misbruik in bursts; bij veel verkeer is een
-// gedeelde store de logische vervolgstap.
+// Eenvoudige, in-memory sliding-window rate limiting. Vier verschillende
+// "niveaus" zijn hier bewust te onderscheiden (ronde 5, expliciet gevraagd
+// na live testen dat niet paste bij wat de code zou moeten doen):
+// 1. PER-INSTANCE limiter (wat dit bestand daadwerkelijk implementeert):
+//    globalLimiter/ipLimiter/tpmLimiter leven als module-scope Map's in het
+//    geheugen van ÉÉN warme Vercel-serverless-instance. Zolang Vercel
+//    dezelfde instance hergebruikt voor opeenvolgende verzoeken (gebruikelijk
+//    bij bescheiden, niet-gelijktijdig verkeer — een instance blijft
+//    doorgaans enkele minuten warm), gedraagt dit zich in de praktijk als
+//    één gedeelde teller. Bij gelijktijdig verkeer of een cold start kan
+//    Vercel echter een TWEEDE instance starten met zijn EIGEN, lege Map's —
+//    dan bestaan er twee onafhankelijke tellers naast elkaar. Er is dus geen
+//    keiharde garantie op één werkelijk site-brede teller.
+// 2. PER-IP limiter (ipLimiter, RATE_LIMIT_MAX_PER_IP): binnen zo'n
+//    per-instance teller nog eens apart per IP-adres bijgehouden.
+// 3. "Globale" providerlimiet (globalLimiter/tpmLimiter, GLOBAL_KEY): een
+//    poging om Groq's eigen, ECHT site-brede/account-brede RPM/TPM-budget
+//    (punt 4) lokaal te benaderen — zie punt 1 voor waarom dit met opzet
+//    "poging" heet, geen garantie.
+// 4. Groq's eigen, provider-side RPM/TPM-limiet: de enige ECHT
+//    betrouwbare, account-brede waarheid — niet iets dat deze applicatie
+//    kan garanderen, alleen kan benaderen (punt 3) en achteraf kan aflezen
+//    (de x-ratelimit-*-headers, zie groq.ts en de logging hieronder).
+// Dit is bewust géén externe store (Vercel KV/Upstash e.d.): dat zou een
+// nieuwe infrastructuur-afhankelijkheid toevoegen die voor deze schaal niet
+// nodig is, en geen permanente opslag van IP-adressen — de timestamps leven
+// alleen in het geheugen van de warme instance(s). Voor een kantoorwebsite
+// met bescheiden verkeer is dit een redelijke eerste verdedigingslinie tegen
+// misbruik in bursts; bij veel gelijktijdig verkeer is een gedeelde store
+// (met niveau 1 = niveau 3, een echte garantie) de logische vervolgstap.
 //
 // Incident (2026-09-29, ronde 1): tijdens normaal live testen kregen
 // bezoekers al snel "te veel vragen achter elkaar" te zien. Oorzaak was
@@ -249,6 +276,25 @@ function sanitizeSnippet(text: string): string {
   return text.replace(/<\/?bronnen>/gi, '').replace(/<\/?systeem>/gi, '');
 }
 
+/** Kort, willekeurig id per verzoek — uitsluitend om logregels van hetzelfde verzoek aan elkaar te kunnen koppelen, geen geheim/token. */
+function makeRequestId(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+/**
+ * Eén consistente, grep-bare logregel per beslissing (toegestaan of
+ * geblokkeerd) — exact het format dat nodig is om vanuit de Vercel-logs te
+ * zien WAAROM een verzoek wel/niet is doorgelaten, zonder ooit de
+ * vraagtekst, het antwoord, de API-sleutel of persoonsgegevens te loggen.
+ * key=value-vorm (geen JSON) zodat dit ook zonder log-parser leesbaar blijft.
+ */
+function logDecision(fields: Record<string, string | number | boolean | undefined>): void {
+  const parts = Object.entries(fields)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${v}`);
+  console.log(`[kenniscentrum-chat] ${parts.join(' ')}`);
+}
+
 // Beknopte descriptions (ronde 4): dit schema wordt letterlijk meegestuurd
 // bij ELK verzoek en telt dus mee voor Groq's TPM-budget — zie
 // buildSystemPrompt() hierboven voor dezelfde afweging. De kern-instructies
@@ -378,13 +424,13 @@ function buildFallbackAnswer(item: (typeof knowledgeBase)[number]) {
  * types.ts) — een vraag die nuance nodig heeft, krijgt nooit stilzwijgend
  * een te simpel antwoord, ook niet onder tijdsdruk op het budget.
  */
-function rateLimitedResponse(message: string, reason: string): Response {
+function rateLimitedResponse(message: string, reason: string, diagnostics: Record<string, string | number | boolean | undefined>): Response {
   const fallbackItem = findDeterministicFallbackItem(message, knowledgeBase);
   if (fallbackItem) {
-    console.warn(`[kenniscentrum-chat] ${reason}: deterministische kennisbank-fallback gebruikt (item "${fallbackItem.id}") in plaats van een blokkade.`);
+    logDecision({ ...diagnostics, decision: 'blocked_with_fallback', reason, fallback_item: fallbackItem.id });
     return jsonResponse(buildFallbackAnswer(fallbackItem), 200);
   }
-  console.warn(`[kenniscentrum-chat] ${reason}: verzoek geblokkeerd, geen fallback beschikbaar.`);
+  logDecision({ ...diagnostics, decision: 'blocked', reason });
   return jsonResponse(
     {
       ok: false,
@@ -428,9 +474,19 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   // krijgen in plaats van een kale foutmelding (zie rateLimitedResponse
   // hierboven) — het JSON parsen zelf is te goedkoop om dat verschil niet
   // waard te zijn.
+  const requestId = makeRequestId();
   const ip = clientAddress || request.headers.get('x-forwarded-for') || 'unknown';
+  const rpmBeforeGlobal = globalLimiter.usage(GLOBAL_KEY);
+  const rpmBeforeIp = ipLimiter.usage(ip);
   if (isRateLimited(ip)) {
-    return rateLimitedResponse(message, 'eigen RPM-limiet bereikt');
+    return rateLimitedResponse(message, 'rpm', {
+      request: requestId,
+      version: AI_ASSISTANT_VERSION,
+      rpm_global_before: rpmBeforeGlobal,
+      rpm_global_limit: GLOBAL_RATE_LIMIT_MAX,
+      rpm_ip_before: rpmBeforeIp,
+      rpm_ip_limit: RATE_LIMIT_MAX_PER_IP,
+    });
   }
 
   const rawHistory = Array.isArray(body.history) ? body.history : [];
@@ -505,15 +561,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   const totalEstimate = SYSTEM_PROMPT_TOKENS + TOOL_SCHEMA_TOKENS + sourcesTokens + historyTokens + questionTokens + maxOutputTokens;
 
   const now = Date.now();
-  // Altijd loggen (nooit de vraagtekst zelf, alleen getallen) — dit is
-  // precies de diagnostische logregel die per vraag laat zien hoeveel
-  // tokens geschat zijn en hoeveel van het TPM-budget van dit venster al
-  // gebruikt is, zodat een reeks "vraag 1: ok, vraag 2: ok, vraag 3: faalt"
-  // in de Vercel-logs terug te herleiden is naar het daadwerkelijke,
-  // resterende Groq-budget in plaats van gokwerk te blijven.
-  console.log(
-    `[kenniscentrum-chat] verzoek: ~${totalEstimate} tokens geschat (systeem ${SYSTEM_PROMPT_TOKENS} + schema ${TOOL_SCHEMA_TOKENS} + bronnen ${sourcesTokens} + geschiedenis ${historyTokens} + vraag ${questionTokens} + output-reservering ${maxOutputTokens}); TPM-venster: ${tpmLimiter.usage(GLOBAL_KEY, now)}/${GROQ_TPM_LIMIT} vóór dit verzoek`,
-  );
+  const tpmBefore = tpmLimiter.usage(GLOBAL_KEY, now);
 
   if (tpmLimiter.wouldExceed(GLOBAL_KEY, totalEstimate, now)) {
     // Dit verzoek wordt bewust NIET naar Groq gestuurd: lokaal is al
@@ -522,16 +570,36 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // fallback (zie rateLimitedResponse) vóór de kale blokkademelding —
     // dat is precies waarom findDeterministicFallbackItem() hier, vóór de
     // Groq-aanroep, al bruikbaar moet zijn, niet alleen ná een providerfout.
-    console.warn(`[kenniscentrum-chat] TPM-limiet zou overschreden worden (~${totalEstimate} tokens, budget ${GROQ_TPM_LIMIT}/60s) — verzoek NIET naar Groq gestuurd.`);
-    return rateLimitedResponse(message, 'eigen TPM-limiet zou overschreden worden');
+    return rateLimitedResponse(message, 'tpm', {
+      request: requestId,
+      version: AI_ASSISTANT_VERSION,
+      tpm_before: tpmBefore,
+      estimated_tokens: totalEstimate,
+      tpm_limit: GROQ_TPM_LIMIT,
+      rpm_global_before: rpmBeforeGlobal,
+      rpm_ip_before: rpmBeforeIp,
+    });
   }
   // Reservering VÓÓRDAT het verzoek verstuurd wordt, ongeacht het latere
   // resultaat (in tegenstelling tot recordSuccessfulRequest() voor de
   // RPM-limieten, die uitsluitend bij succes telt) — het doel hier is
   // voorkomen dat déze applicatie in totaal meer tokens/minuut naar Groq
   // stuurt dan het ingestelde budget, niet bijhouden hoeveel verzoeken
-  // úiteindelijk succesvol waren.
+  // úiteindelijk succesvol waren. Dit is de ENIGE plek in deze route die de
+  // TPM-teller bijwerkt — een mislukte/geretryde/fallback-Groq-call
+  // registreert nooit een tweede keer (zie hieronder).
   tpmLimiter.record(GLOBAL_KEY, now, totalEstimate);
+  logDecision({
+    request: requestId,
+    version: AI_ASSISTANT_VERSION,
+    provider: 'groq',
+    decision: 'allowed',
+    rpm_global_before: rpmBeforeGlobal,
+    rpm_ip_before: rpmBeforeIp,
+    tpm_before: tpmBefore,
+    estimated_tokens: totalEstimate,
+    tpm_limit: GROQ_TPM_LIMIT,
+  });
 
   const result = await callAiWithFallback({
     systemPrompt: SYSTEM_PROMPT,
@@ -541,22 +609,30 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     timeoutMs: FETCH_TIMEOUT_MS,
   });
 
-  // Zelfcorrectie van de lokale TPM-boekhouding met Groq's EIGEN, actuele
-  // cijfer (result.remainingTokens/limitTokens, uit de x-ratelimit-*-tokens-
-  // headers — zie groq.ts) in plaats van uitsluitend op de lokale schatting
-  // te vertrouwen. Groq's eigen venster loopt niet perfect gelijk met dat
-  // van deze applicatie, dus dit is een benadering, geen exacte
-  // synchronisatie — maar als Groq's eigen cijfer een HOGER verbruik laat
-  // zien dan onze eigen boekhouding voor dit venster al aannam, wordt het
-  // verschil bijgeboekt, zodat een volgend verzoek niet ten onrechte denkt
-  // dat er nog ruimte is terwijl Groq zelf al bijna vol zit.
-  if (typeof result.remainingTokens === 'number' && typeof result.limitTokens === 'number') {
-    const groqUsageNow = result.limitTokens - result.remainingTokens;
-    const ourUsageNow = tpmLimiter.usage(GLOBAL_KEY, now);
-    if (groqUsageNow > ourUsageNow) {
-      tpmLimiter.record(GLOBAL_KEY, now, groqUsageNow - ourUsageNow);
-    }
-  }
+  // BELANGRIJK (ronde 5, 2026-09-30): de lokale TPM-boekhouding hierboven
+  // (tpmLimiter.record) wordt UITSLUITEND gevoed door onze eigen, lokale
+  // schatting — niet meer door Groq's x-ratelimit-remaining-tokens-header.
+  // Een eerdere versie "corrigeerde" de lokale teller met dat Groq-cijfer,
+  // maar x-ratelimit-remaining-tokens weerspiegelt Groq's ACCOUNT-BREDE
+  // budget (alle verkeer op deze API-sleutel: andere bezoekers, preview-
+  // deployments, eerder testen — niet uitsluitend dit ene gesprek). Als dat
+  // account-brede budget om een andere reden al laag stond, injecteerde die
+  // correctie een grote, oneigenlijke reservering in de LOKALE, per-gesprek
+  // teller — waardoor een bezoeker die zelf keurig ~60s tussen vragen
+  // wachtte alsnog geblokkeerd kon worden door verkeer dat niets met zijn/
+  // haar eigen gesprek te maken had. Groq's eigen cijfers worden daarom nu
+  // uitsluitend gelogd (voor diagnose — zie hieronder), nooit meer gebruikt
+  // om de lokale beslissing te beïnvloeden.
+  logDecision({
+    request: requestId,
+    version: AI_ASSISTANT_VERSION,
+    provider: 'groq',
+    decision: result.ok ? 'success' : 'provider_error',
+    error_category: result.ok ? undefined : result.errorCategory,
+    tpm_after: tpmLimiter.usage(GLOBAL_KEY, now),
+    groq_remaining_tokens: result.remainingTokens,
+    groq_limit_tokens: result.limitTokens,
+  });
 
   if (!result.ok) {
     // Geen enkele provider geconfigureerd (attempted is leeg) versus wel
@@ -583,7 +659,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // retrieval-query.
     const fallbackItem = findDeterministicFallbackItem(message, knowledgeBase);
     if (fallbackItem) {
-      console.warn(`[kenniscentrum-chat] providerfout: deterministische kennisbank-fallback gebruikt (item "${fallbackItem.id}").`);
+      logDecision({ request: requestId, version: AI_ASSISTANT_VERSION, decision: 'provider_error_with_fallback', reason: result.errorCategory, fallback_item: fallbackItem.id });
       return jsonResponse(buildFallbackAnswer(fallbackItem), 200);
     }
     // Dit is een tijdelijke providerstoring, geen uitspraak over de
@@ -620,6 +696,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   // dus mee voor de rate limiter, in tegenstelling tot een geweigerd,
   // ongeldig of aan een providerfout mislukt verzoek hierboven.
   recordSuccessfulRequest(ip);
+  logDecision({
+    request: requestId,
+    version: AI_ASSISTANT_VERSION,
+    decision: 'answered',
+    rpm_global_after: globalLimiter.usage(GLOBAL_KEY),
+    rpm_ip_after: ipLimiter.usage(ip),
+  });
 
   const input = result.input as {
     kortAntwoord?: unknown;
