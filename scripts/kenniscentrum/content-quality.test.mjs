@@ -446,6 +446,43 @@ test('REGRESSIE (ronde 10, Arbo-vraag): het "arbeidsomstandigheden"-item zelf bl
   assert.match(arboContent, /arbodienst|bedrijfsarts/i);
 });
 
+// Ronde 11 (herhaalde live-test): de daadwerkelijke grondoorzaak bleek niet
+// werknemer-aannemen (ronde 10 loste dat terecht op, maar onvolledig) maar
+// "werkgeversverplichtingen" — een item dat zelf ook "arbeidsomstandigheden
+// (Arbowet)" noemt én de tag "personeel in dienst" heeft, en zo exact gelijk
+// scoorde aan het Arbo-item voor de live-vraag. Bij een score-gelijkspel
+// beslist priority; arbeidsomstandigheden stond nog op 1 tegenover
+// werkgeversverplichtingen's 3. Dit bevestigt de brontekst-fix (priority 3)
+// direct in het echte bestand, niet alleen via een testfixture.
+test('REGRESSIE (ronde 11, Arbo-vraag — daadwerkelijke grondoorzaak): "arbeidsomstandigheden" heeft priority 3, gelijk aan "werkgeversverplichtingen" (wint de score-tie via bestandsvolgorde)', () => {
+  const text = readKbFile('personeel.ts');
+  const arboMatch = text.match(/id: 'arbeidsomstandigheden'[\s\S]*?priority: (\d)/);
+  const werkgeversMatch = text.match(/id: 'werkgeversverplichtingen'[\s\S]*?priority: (\d)/);
+  assert.ok(arboMatch, 'kon de priority van "arbeidsomstandigheden" niet vinden');
+  assert.ok(werkgeversMatch, 'kon de priority van "werkgeversverplichtingen" niet vinden');
+  assert.equal(Number(arboMatch[1]), 3, 'arbeidsomstandigheden moet priority 3 hebben om de score-tie met werkgeversverplichtingen te winnen');
+  assert.equal(Number(arboMatch[1]), Number(werkgeversMatch[1]), 'bij gelijke priority beslist de (vaste) bestandsvolgorde, waarin arbeidsomstandigheden vóór werkgeversverplichtingen staat');
+});
+
+test('REGRESSIE (ronde 11, Arbo-vraag): het "arbeidsomstandigheden"-item noemt nu ook bedrijfshulpverlening (BHV), zoals expliciet gevraagd', () => {
+  const text = readKbFile('personeel.ts');
+  const blocks = extractContentBlocks(text);
+  const arboContent = blocks.find((c) => c.startsWith('De Arbowet verplicht werkgevers'));
+  assert.ok(arboContent, 'kon het "arbeidsomstandigheden"-item niet terugvinden');
+  assert.match(arboContent, /bedrijfshulpverlening|BHV/i);
+});
+
+test('REGRESSIE (ronde 11, Arbo-vraag): "werkgeversverplichtingen" en "pensioen-werknemers" zijn NIET gewijzigd (scope strikt beperkt tot het Arbo-item)', () => {
+  const text = readKbFile('personeel.ts');
+  const blocks = extractContentBlocks(text);
+  const werkgeversContent = blocks.find((c) => c.startsWith('Zodra een onderneming personeel in dienst heeft'));
+  const pensioenContent = blocks.find((c) => c.startsWith('Of een werkgever verplicht is een pensioenregeling'));
+  assert.ok(werkgeversContent, 'kon "werkgeversverplichtingen" niet terugvinden');
+  assert.ok(pensioenContent, 'kon "pensioen-werknemers" niet terugvinden');
+  assert.match(werkgeversContent, /aanmelding als werkgever bij de Belastingdienst/, 'werkgeversverplichtingen moet ongewijzigd zijn gebleven');
+  assert.match(pensioenContent, /bedrijfstakpensioenregeling/, 'pensioen-werknemers moet ongewijzigd zijn gebleven');
+});
+
 test('REGRESSIE (ronde 10, winst-in-de-bv): geen "alleen belast" of "er ontstaat geen" — de belastingclaim blijft gehedged met "in beginsel"', () => {
   const text = readKbFile('bv-dga.ts');
   const blocks = extractContentBlocks(text);

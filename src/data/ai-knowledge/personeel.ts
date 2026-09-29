@@ -52,13 +52,13 @@ export const personeelItems: KnowledgeItem[] = [
     title: 'Arbeidsomstandigheden (Arbowet)',
     category: 'Personeel',
     content:
-      'De Arbowet verplicht werkgevers te zorgen voor veilige en gezonde arbeidsomstandigheden. In de praktijk betekent dit onder meer: een risico-inventarisatie en -evaluatie (RI&E) opstellen die de risico\'s van het werk in kaart brengt, een bijbehorend plan van aanpak maken, een preventiemedewerker aanwijzen binnen de organisatie, en een basiscontract afsluiten met een arbodienst of bedrijfsarts. Werkgevers moeten werknemers ook informeren over het arbobeleid en waar nodig beschermingsmiddelen en instructies geven. Welke maatregelen concreet nodig zijn, hangt af van de aard van het werk en de sector.',
+      'De Arbowet verplicht werkgevers te zorgen voor veilige en gezonde arbeidsomstandigheden. In de praktijk betekent dit onder meer: een risico-inventarisatie en -evaluatie (RI&E) opstellen die de risico\'s van het werk in kaart brengt, een bijbehorend plan van aanpak maken, een preventiemedewerker aanwijzen binnen de organisatie, bedrijfshulpverlening (BHV) organiseren, en een basiscontract afsluiten met een arbodienst of bedrijfsarts. Werkgevers moeten werknemers ook informeren over het arbobeleid en waar nodig beschermingsmiddelen en instructies geven. Welke maatregelen concreet nodig zijn, hangt af van de aard van het werk en de sector.',
     targetAudience: ['werkgever', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'Rijksoverheid',
     sourceUrl: 'https://www.rijksoverheid.nl/onderwerpen/arbeidsomstandigheden/vraag-en-antwoord/waar-moet-mijn-werkgever-voor-zorgen-volgens-de-arbowet',
-    lastVerified: '2026-09-28',
-    tags: ['arbowet', 'arbeidsomstandigheden', 'rie', 'risico-inventarisatie', 'preventiemedewerker', 'bedrijfsarts'],
-    priority: 1,
+    lastVerified: '2026-09-30',
+    tags: ['arbowet', 'arbeidsomstandigheden', 'rie', 'risico-inventarisatie', 'preventiemedewerker', 'bedrijfsarts', 'bhv', 'bedrijfshulpverlening'],
+    priority: 3,
   },
   {
     id: 'loonadministratie',

@@ -87,9 +87,18 @@ const ITEMS = [
     title: 'Arbeidsomstandigheden (Arbowet)',
     category: 'Personeel',
     content:
-      'De Arbowet verplicht werkgevers te zorgen voor veilige en gezonde arbeidsomstandigheden. In de praktijk betekent dit onder meer: een risico-inventarisatie en -evaluatie (RI&E) opstellen, een preventiemedewerker aanwijzen, en een basiscontract afsluiten met een arbodienst of bedrijfsarts.',
-    tags: ['arbowet', 'arbeidsomstandigheden', 'rie', 'risico-inventarisatie', 'preventiemedewerker', 'bedrijfsarts'],
-    priority: 1,
+      'De Arbowet verplicht werkgevers te zorgen voor veilige en gezonde arbeidsomstandigheden. In de praktijk betekent dit onder meer: een risico-inventarisatie en -evaluatie (RI&E) opstellen, een preventiemedewerker aanwijzen, bedrijfshulpverlening (BHV) organiseren, en een basiscontract afsluiten met een arbodienst of bedrijfsarts.',
+    tags: ['arbowet', 'arbeidsomstandigheden', 'rie', 'risico-inventarisatie', 'preventiemedewerker', 'bedrijfsarts', 'bhv', 'bedrijfshulpverlening'],
+    priority: 3,
+  },
+  {
+    id: 'werkgeversverplichtingen',
+    title: 'Werkgeversverplichtingen',
+    category: 'Personeel',
+    content:
+      'Zodra een onderneming personeel in dienst heeft, gelden diverse wettelijke verplichtingen: aanmelding als werkgever bij de Belastingdienst, een arbeidsovereenkomst met verplichte kerngegevens, het bijhouden van een loonadministratie en het doen van periodieke loonaangifte, het naleven van arbeidsvoorwaarden (zoals minimumloon en vakantiedagen), zorgen voor veilige arbeidsomstandigheden (Arbowet), verplichtingen bij ziekte van een werknemer, en — afhankelijk van de sector — mogelijk een verplichte pensioenregeling.',
+    tags: ['werkgeversverplichtingen', 'verplichtingen werkgever', 'personeel in dienst'],
+    priority: 3,
   },
   {
     id: 'onderneming-starten',
@@ -197,16 +206,27 @@ test('Scenario G: "En hoe zit het met arbeidsomstandigheden?" -> Arbowet/RI&E, g
   assert.ok(!answer.explanation.includes('Wie in Nederland een onderneming start'), 'geen onderneming-startcheck in het arbeidsomstandigheden-antwoord');
 });
 
-// Ronde 10 (live-test): de EXACTE, letterlijke live-vraag die het incident
-// veroorzaakte — bevat, anders dan Scenario G hierboven, ook "regelen" en
-// "personeel", wat werknemer-aannemen via de gedeelde categorie "Personeel"
-// en zijn eigen tags een reële concurrent maakte. Oorzaak: werknemer-
-// aannemen's content bevatte zelf het woord "arbeidsomstandigheden" (in een
-// cross-referentiezin naar andere kennisitems), wat het onterecht liet
-// meescoren voor een Arbo-vraag. Fix: dat woord is uit de content verwijderd
-// (de "pensioen"-verwijzing, elders al bevestigd correct te werken, blijft
-// staan).
-test('REGRESSIE (live-test, ronde 10): "Wat moet ik regelen voor de arbeidsomstandigheden van mijn personeel?" geeft het Arbo-item, niet het personeelsantwoord', () => {
+// Ronde 10 (live-test): de EXACTE, letterlijke live-vraag bevat, anders dan
+// Scenario G hierboven, ook "regelen" en "personeel", wat andere
+// "Personeel"-items een reële concurrent maakte voor het Arbo-item. Ronde
+// 10 verwijderde het woord "arbeidsomstandigheden" uit werknemer-aannemen's
+// content — een terechte, maar ONVOLDOENDE fix: het probleem bleef bestaan.
+//
+// Ronde 11 (herhaalde live-test, daadwerkelijke grondoorzaak): niet
+// werknemer-aannemen, maar "werkgeversverplichtingen" — een breed
+// overzichtsitem dat zelf ook "arbeidsomstandigheden (Arbowet)" noemt als
+// één van meerdere werkgeversverplichtingen, én de tag "personeel in
+// dienst" heeft — scoorde EXACT GELIJK aan het Arbo-item (beide 4 punten)
+// voor de live-vraag. Bij een gelijke score wint de hoogste `priority`, en
+// arbeidsomstandigheden stond nog op prioriteit 1 tegenover
+// werkgeversverplichtingen's 3 — dat verklaart waarom het brede
+// personeelsantwoord (aanmelden werkgever/BSN/loonadministratie/
+// loonaangifte/pensioen) bleef verschijnen. Fix: arbeidsomstandigheden naar
+// prioriteit 3 (gelijk aan werkgeversverplichtingen) — bij een gelijke score
+// én prioriteit wint de vaste, stabiele volgorde in het kennisbankbestand,
+// waarin arbeidsomstandigheden vóór werkgeversverplichtingen staat. Geen
+// enkel ander kennisitem is hiervoor aangepast.
+test('REGRESSIE (live-test, ronde 11 — daadwerkelijke grondoorzaak): "Wat moet ik regelen voor de arbeidsomstandigheden van mijn personeel?" geeft het Arbo-item, niet werkgeversverplichtingen/werknemer-aannemen', () => {
   const items = retrieve('Wat moet ik regelen voor de arbeidsomstandigheden van mijn personeel?', []);
   assert.equal(items[0]?.id, 'arbeidsomstandigheden', `verwacht "arbeidsomstandigheden" als primaire bron, kreeg "${items[0]?.id}"`);
   const answer = buildSourceFallbackAnswer(toSources(items));
@@ -214,13 +234,23 @@ test('REGRESSIE (live-test, ronde 10): "Wat moet ik regelen voor de arbeidsomsta
   assert.ok(!answer.explanation.includes('Bij het aannemen van de eerste werknemer'), 'het antwoord mag niet over het aannemen van een eerste werknemer gaan');
   assert.ok(!answer.explanation.includes('burgerservicenummer'), 'het antwoord mag niet over BSN/identiteit gaan (dat hoort bij personeel aannemen, niet bij Arbo)');
   assert.ok(!answer.explanation.includes('loonadministratie'), 'het antwoord mag niet over loonadministratie gaan');
+  assert.ok(!answer.explanation.includes('aanmelding als werkgever bij de Belastingdienst'), 'het antwoord mag niet de brede werkgeversverplichtingen-opsomming bevatten');
+  assert.match(answer.shortAnswer + ' ' + answer.explanation, /preventiemedewerker|RI&E|risico-inventarisatie|BHV|bedrijfshulpverlening/i, 'het antwoord moet daadwerkelijk Arbo-specifieke inhoud bevatten');
 });
 
-test('REGRESSIE (live-test, ronde 10): "Wat moet ik regelen als ik personeel in dienst neem?" blijft gewoon het personeelsantwoord geven (geen regressie door de Arbo-fix)', () => {
+test('REGRESSIE (ronde 11, test 1): "Wat moet ik regelen als ik personeel in dienst neem?" geeft een personeelsantwoord (werknemer-aannemen of werkgeversverplichtingen), nooit het Arbo-item als primaire bron', () => {
   const items = retrieve('Wat moet ik regelen als ik personeel in dienst neem?', []);
-  assert.equal(items[0]?.id, 'werknemer-aannemen', `verwacht "werknemer-aannemen" als primaire bron, kreeg "${items[0]?.id}"`);
+  assert.ok(['werknemer-aannemen', 'werkgeversverplichtingen'].includes(items[0]?.id), `verwacht een personeelsitem als primaire bron, kreeg "${items[0]?.id}"`);
   const answer = buildSourceFallbackAnswer(toSources(items));
-  assert.match(answer.shortAnswer, /aannemen van de eerste werknemer/);
+  assert.ok(!/^De Arbowet/.test(answer.shortAnswer), 'het antwoord mag niet primair over de Arbowet gaan');
+});
+
+test('REGRESSIE (ronde 11, test 3): "Ben ik verplicht pensioen voor mijn personeel te regelen?" geeft alleen het pensioenantwoord', () => {
+  const items = retrieve('Ben ik verplicht pensioen voor mijn personeel te regelen?', []);
+  assert.equal(items[0]?.id, 'pensioen-werknemers', `verwacht "pensioen-werknemers" als primaire bron, kreeg "${items[0]?.id}"`);
+  const answer = buildSourceFallbackAnswer(toSources(items));
+  assert.match(answer.shortAnswer, /pensioenregeling aan te bieden/);
+  assert.ok(!answer.explanation.includes('De Arbowet verplicht'), 'geen Arbo-inhoud in het pensioenantwoord');
 });
 
 test('Scenario H: "En hoe zit het met zakelijke kosten?" -> zakelijke kosten/fiscale winst, geen volledige btw-uitleg erbij, behoudt het IB/vpb-vs-btw-onderscheid, blijft kort', () => {
