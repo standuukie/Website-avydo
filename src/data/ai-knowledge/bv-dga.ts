@@ -40,7 +40,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/vermogen_en_aanmerkelijk_belang/aanmerkelijk_belang/loon_en_aanmerkelijk_belang/',
     lastVerified: '2026-09-28',
-    tags: ['gebruikelijk loon', 'gebruikelijkloonregeling', 'dga salaris'],
+    tags: ['gebruikelijk loon', 'gebruikelijkloonregeling', 'dga salaris', 'hoeveel loon dga', 'loon mezelf uitbetalen', 'dga loon bepalen'],
     priority: 3,
   },
   {
@@ -56,6 +56,20 @@ export const bvDgaItems: KnowledgeItem[] = [
     lastVerified: '2026-09-28',
     tags: ['dividend', 'dividend uitkeren', 'winstuitkering'],
     priority: 2,
+  },
+  {
+    id: 'winst-in-de-bv',
+    title: 'Winst in de BV laten (winst reserveren)',
+    category: 'BV en vennootschapsbelasting',
+    content:
+      'Winst die in de BV blijft, wordt niet automatisch als dividend aan de aandeelhouder uitgekeerd — de BV houdt dat bedrag gewoon binnen de onderneming, bijvoorbeeld als onderdeel van het eigen vermogen op de balans. Dividend ontstaat pas op het moment dat de BV daadwerkelijk besluit dividend uit te keren; zolang dat niet gebeurt, is er voor de aandeelhouder ook geen dividendbelasting verschuldigd. Fiscaal is het daarom belangrijk onderscheid te maken tussen winst van de BV (waarover de BV vennootschapsbelasting betaalt, ongeacht of de winst wordt uitgekeerd) en een privé-uitkering aan de DGA via loon of dividend (waarover apart loonheffing respectievelijk dividendbelasting/inkomstenbelasting geldt). Geld in de BV laten zitten kan relevant zijn met het oog op toekomstige investeringen of liquiditeit, maar betekent niet automatisch dat een BV per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak — dat hangt af van de concrete situatie.',
+    targetAudience: ['bv-dga'],
+    sourceName: 'Belastingdienst',
+    sourceUrl:
+      'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/dividendbelasting/als_u_dividend_uitkeert/als_u_dividend_uitkeert',
+    lastVerified: '2026-09-29',
+    tags: ['winst in de bv laten', 'winst reserveren', 'winst in bv houden', 'winst niet uitkeren', 'winstreserve', 'geld in de bv laten zitten'],
+    priority: 3,
   },
   {
     id: 'dividendbelasting',

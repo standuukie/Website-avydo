@@ -30,13 +30,22 @@ const STOPWORDS = new Set([
   'gaan', 'gaat', 'wordt', 'worden', 'zou', 'zullen', 'moeten', 'kunnen',
 ]);
 
+// Ondergrens voor tokenlengte. Was eerder >2 (dus minstens 3 tekens), maar
+// dat filterde stilzwijgend "bv" weg — een van de belangrijkste termen in
+// deze hele kennisbank (rechtsvorm-vergelijkingen, DGA-onderwerpen, enz.).
+// Bij >1 (dus minstens 2 tekens) blijft "bv" wél een token, terwijl vrijwel
+// alle overige korte Nederlandse functiewoorden van 2 tekens (in, is, te,
+// of, er, om, nu, zo, ik, je, me, ...) al expliciet in STOPWORDS staan en
+// dus alsnog worden uitgefilterd.
+const MIN_TOKEN_LENGTH = 1;
+
 /** @param {string} text */
 export function tokenize(text) {
   const normalized = text
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
-  return (normalized.match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2 && !STOPWORDS.has(w));
+  return (normalized.match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > MIN_TOKEN_LENGTH && !STOPWORDS.has(w));
 }
 
 /**
@@ -64,13 +73,17 @@ export function scoreKnowledgeItem(queryTokens, item) {
   return overlapScore(queryTokens, titleAndTags) * 2 + overlapScore(queryTokens, bodyText);
 }
 
-// Minimumscore om een kennisitem daadwerkelijk als context mee te geven.
-// Eén enkel gedeeld woord dat uitsluitend in de lopende tekst voorkomt
-// (score 1) is te zwak om op te vertrouwen — dat kan een toevallig
-// gedeeld, verder inhoudsloos woord zijn (bijv. een generiek bijvoeglijk
-// naamwoord als "beste"). Een treffer in titel/tags (die al 2x meetelt) of
-// twee of meer treffers in de lopende tekst halen deze drempel altijd.
-const MIN_RELEVANCE_SCORE = 2;
+// Minimumscore om een kennisitem/artikel/deadline daadwerkelijk als context
+// mee te geven (zie ook MIN_ARTICLE_RELEVANCE_SCORE-gebruik in
+// ai-assistent.ts, dezelfde drempel voor Kenniscentrum-artikelen en
+// Belastingkalender-deadlines). Eén enkel gedeeld woord dat uitsluitend in
+// de lopende tekst voorkomt (score 1) is te zwak om op te vertrouwen — dat
+// kan een toevallig gedeeld, verder inhoudsloos woord zijn (bijv. een
+// generiek bijvoeglijk naamwoord als "beste", of "btw" dat toevallig ook in
+// een compleet ander nieuwsartikel voorkomt). Een treffer in titel/tags
+// (die al 2x meetelt) of twee of meer treffers in de lopende tekst halen
+// deze drempel altijd.
+export const MIN_RELEVANCE_SCORE = 2;
 
 /**
  * Selecteert de meest relevante kennisitems voor een vraag. Geeft nooit

@@ -32,11 +32,11 @@ export const administratieItems: KnowledgeItem[] = [
     title: 'Zakelijke bankrekening',
     category: 'Administratie en accountancy',
     content:
-      'Een zakelijke bankrekening is niet voor elke rechtsvorm wettelijk verplicht — voor een BV is het gebruikelijk en in de praktijk vrijwel altijd nodig, terwijl een eenmanszaak, VOF of maatschap in beginsel ook via een privérekening zou kunnen werken. In de praktijk wordt een aparte zakelijke rekening bij vrijwel elke onderneming sterk aangeraden: het houdt zakelijke en privé-uitgaven gescheiden, wat de administratie overzichtelijker maakt en een boekhoudfout of discussie met de Belastingdienst voorkomt.',
+      'Een zakelijke bankrekening is niet voor iedere rechtsvorm wettelijk verplicht: een eenmanszaak, VOF of maatschap zou in beginsel ook via een privérekening kunnen werken. Banken kunnen echter wel als eigen voorwaarde stellen dat een onderneming (met name een BV) een zakelijke rekening opent om er zakelijk bankieren mee te doen; dat is een voorwaarde van de bank, geen wettelijke verplichting op zichzelf. Een aparte rekening helpt zakelijke en privétransacties gescheiden te houden, wat de administratie overzichtelijker maakt en een boekhoudfout of discussie met de Belastingdienst voorkomt. Voor een BV is een zakelijke rekening in de praktijk gebruikelijk en vrijwel noodzakelijk voor de bedrijfsvoering, al is dat dus eerder een praktische dan een strikt wettelijke noodzaak.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/geldzaken/zakelijke-rekening-handig-niet-verplicht/',
-    lastVerified: '2026-09-28',
+    lastVerified: '2026-09-29',
     tags: ['zakelijke bankrekening', 'zakelijke rekening', 'bankrekening ondernemer'],
     priority: 2,
   },

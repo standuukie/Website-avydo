@@ -25,6 +25,7 @@ import type { APIRoute } from 'astro';
 import { retrieveContext, formatSourcesForPrompt, type RetrievedSource } from '@/lib/ai-assistent';
 import { callAiWithFallback, type ToolDefinition } from '@/lib/ai-providers';
 import { buildRetrievalQuery } from '@/lib/knowledge-match.mjs';
+import { createSlidingWindowLimiter } from '@/lib/rate-limit.mjs';
 
 export const prerender = false;
 
@@ -33,44 +34,76 @@ const MAX_MESSAGE_LENGTH = 600;
 const MAX_HISTORY_MESSAGES = 8; // laatste 4 vraag/antwoord-paren
 const MAX_OUTPUT_TOKENS = 700;
 
-// Eenvoudige, in-memory rate limiting per serverless-instance. Dit is
-// bewust géén externe store (Vercel KV/Upstash e.d.): dat zou een nieuwe
-// infrastructuur-afhankelijkheid toevoegen die voor deze schaal niet
-// nodig is. Beperking: de teller leeft alleen zolang de serverless-
-// instance warm is en is dus niet gegarandeerd consistent over alle
-// gelijktijdige instances heen. Voor een kantoorwebsite met bescheiden
-// verkeer is dit een redelijke eerste verdedigingslinie tegen misbruik in
-// bursts; bij veel verkeer is een gedeelde store de logische vervolgstap.
+// Eenvoudige, in-memory sliding-window rate limiting per serverless-
+// instance. Dit is bewust géén externe store (Vercel KV/Upstash e.d.): dat
+// zou een nieuwe infrastructuur-afhankelijkheid toevoegen die voor deze
+// schaal niet nodig is, en geen permanente opslag van IP-adressen — de
+// timestamps leven alleen in het geheugen van de warme instance. Beperking:
+// de teller leeft alleen zolang de serverless-instance warm is en is dus
+// niet gegarandeerd consistent over alle gelijktijdige instances heen. Voor
+// een kantoorwebsite met bescheiden verkeer is dit een redelijke eerste
+// verdedigingslinie tegen misbruik in bursts; bij veel verkeer is een
+// gedeelde store de logische vervolgstap.
+//
+// Incident (2026-09-29): tijdens normaal live testen (een gesprek van
+// meerdere vragen achter elkaar) kregen bezoekers al snel "te veel vragen
+// achter elkaar" te zien. Twee onafhankelijke oorzaken bleken hieraan bij
+// te dragen:
+// 1) GLOBAL_RATE_LIMIT_MAX stond op 20/minuut — GEDEELD over alle
+//    gelijktijdige bezoekers op dezelfde warme instance. Dat getal was
+//    destijds afgestemd op Gemini's gratis-tier-limiet, maar Gemini zit
+//    sinds een eerdere wijziging (EER-beperking, zie index.ts) niet meer in
+//    de standaardketen — Groq's eigen gratis limiet ligt hoger. Eén actieve
+//    testsessie met een paar vervolgvragen kon dit gedeelde budget al
+//    grotendeels opsouperen, waarna ALLE bezoekers (inclusief diezelfde
+//    tester) tijdelijk geblokkeerd werden.
+// 2) isRateLimited() registreerde een "hit" voor ELK binnengekomen verzoek,
+//    dus ook verzoeken die uiteindelijk faalden door een providerfout
+//    (upstream_error) — een gebruiker die na zo'n fout gewoon opnieuw
+//    vroeg, verbruikte daardoor dubbel zoveel budget voor hetzelfde
+//    gesprek. Dit bestand registreert een hit daarom nu pas ná een
+//    daadwerkelijk succesvol beantwoord verzoek (zie recordSuccessfulRequest()
+//    hieronder en de aanroep ervan in de POST-handler) — een mislukte
+//    provider-aanroep, een geweigerd (rate-limited) verzoek, of een
+//    validatiefout (lege/te lange vraag) tellen niet mee.
+// Beide limieten zijn bovendien verruimd naar een niveau dat een normaal
+// meerdere-vragen-gesprek toelaat, met behoud van bescherming tegen
+// excessieve reeksen (zie de tests in scripts/kenniscentrum/
+// rate-limit.test.mjs).
 const RATE_LIMIT_WINDOW_MS = 5 * 60_000;
-const RATE_LIMIT_MAX_PER_IP = 12;
+const RATE_LIMIT_MAX_PER_IP = 30;
 const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
-// Verlaagd van 40 naar 20: de standaard gratis providerketen (Gemini,
-// ~15 requests/minuut op de gratis tier) heeft een lagere eigen limiet dan
-// de oorspronkelijke globale limiet hier. Een lagere eigen limiet voorkomt
-// dat de applicatie zelf onnodig vaak tegen 429's van de gratis provider(s)
-// aanloopt; de Gemini→Groq-fallback vangt een incidentele overschrijding
-// nog steeds netjes op (zie src/lib/ai-providers/index.ts).
-const GLOBAL_RATE_LIMIT_MAX = 20;
+const GLOBAL_RATE_LIMIT_MAX = 60;
+// De globale limiter gebruikt intern altijd dezelfde sleutel (er is maar
+// één "site-breed" venster, geen per-IP-onderverdeling).
+const GLOBAL_KEY = 'global';
 
-const ipHits = new Map<string, number[]>();
-let globalHits: number[] = [];
+const globalLimiter = createSlidingWindowLimiter({ windowMs: GLOBAL_RATE_LIMIT_WINDOW_MS, max: GLOBAL_RATE_LIMIT_MAX });
+const ipLimiter = createSlidingWindowLimiter({ windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX_PER_IP });
 
+/**
+ * Alleen lezen: geeft aan of dit IP-adres (of de site als geheel) nu al
+ * over de limiet zit, zonder daarbij zelf iets te registreren. Moet vroeg
+ * in de request-afhandeling aangeroepen worden (vóór het dure werk), maar
+ * telt zelf geen hit — dat gebeurt pas via recordSuccessfulRequest() zodra
+ * bekend is dat het verzoek daadwerkelijk (nuttig) verwerkt is.
+ */
 function isRateLimited(ip: string): boolean {
-  const now = Date.now();
+  // In lokale ontwikkeling (`astro dev`) draait maar één, voortdurend warme
+  // instance die alle test-/ontwikkelverzoeken deelt — daarmee zou een
+  // ontwikkelaar tijdens het testen zichzelf net zo hard blokkeren als een
+  // bezoeker in productie. import.meta.env.DEV is uitsluitend true onder
+  // `astro dev`, nooit in een Vercel-build (Preview of Production), dus dit
+  // raakt de productiebescherming niet.
+  if (import.meta.env.DEV) return false;
 
-  globalHits = globalHits.filter((t) => now - t < GLOBAL_RATE_LIMIT_WINDOW_MS);
-  if (globalHits.length >= GLOBAL_RATE_LIMIT_MAX) return true;
+  return globalLimiter.isLimited(GLOBAL_KEY) || ipLimiter.isLimited(ip);
+}
 
-  const hits = (ipHits.get(ip) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (hits.length >= RATE_LIMIT_MAX_PER_IP) {
-    ipHits.set(ip, hits);
-    return true;
-  }
-
-  hits.push(now);
-  globalHits.push(now);
-  ipHits.set(ip, hits);
-  return false;
+/** Registreert één daadwerkelijk succesvol beantwoord verzoek voor dit IP. */
+function recordSuccessfulRequest(ip: string): void {
+  globalLimiter.record(GLOBAL_KEY);
+  ipLimiter.record(ip);
 }
 
 interface ChatHistoryItem {
@@ -164,13 +197,19 @@ BRONGEBRUIK — DIT IS CRUCIAAL
 - Gebruik nooit je eigen algemene trainingskennis over actuele tarieven, deadlines of regelgeving als de meegegeven bronnen dat niet bevestigen — belastingregels veranderen en jouw trainingskennis kan verouderd zijn.
 - VERPLICHT: als je in je antwoord feitelijke inhoud uit een bron gebruikt, NEEM DAN ALTIJD het bijbehorende bronnummer op in gebruikteBronIds. Een antwoord dat feitelijke, fiscale of juridische beweringen bevat zonder dat de gebruikte bron(nen) in gebruikteBronIds staan, is nooit correct — ontbrekende bronvermelding is een fout, ook als de rest van het antwoord goed is. Gebruikte je meerdere bronnen voor verschillende delen van je antwoord (bijvoorbeeld bij een vraag met meerdere deelonderwerpen), vermeld dan ALLE gebruikte bronnummers, niet alleen de eerste.
 - Vermeld in gebruikteBronIds nooit een id die je feitelijk niet gebruikt hebt of die niet in de meegegeven lijst voorkomt.
-- Bevat de bronnenlijst geen (of onvoldoende) relevante informatie voor de vraag? Zet dan onvoldoendeInformatie op true en zeg dat ook eerlijk in kortAntwoord (bijvoorbeeld: "Ik kan dit op basis van de beschikbare informatie niet betrouwbaar beantwoorden."). Dit is belangrijker dan altijd een antwoord proberen te geven.
+- Bevat de bronnenlijst geen (of onvoldoende) relevante informatie voor de vraag? Zet dan onvoldoendeInformatie op true en zeg dat ook eerlijk in kortAntwoord (bijvoorbeeld: "Ik heb onvoldoende betrouwbare informatie om dit goed te beantwoorden."). Dit is belangrijker dan altijd een antwoord proberen te geven.
+
+SELECTEER RELEVANTE BRONNEN — GEBRUIK NIET ALLES WAT OPGEHAALD IS
+- De bronnenlijst kan meer bevatten dan voor déze specifieke vraag relevant is (retrieval haalt breed op; jij selecteert). Gebruik niet automatisch alle opgehaalde context. Selecteer alleen informatie die direct relevant is voor de vraag van de bezoeker. Een bron kan worden opgehaald maar hoeft niet te worden genoemd wanneer de inhoud ervan niet relevant is voor het antwoord.
+- Dit is vooral belangrijk bij een vervolgvraag die maar één specifiek aspect van het gesprek naar voren haalt. Bijvoorbeeld: na "welke kosten kan ik zakelijk aftrekken?" gevolgd door "en hoe zit dat met btw?" reageer je UITSLUITEND op het btw-aspect (btw op zakelijke kosten/investeringen, voorbelasting, gemengd gebruik) — niet op een toevallig meegekomen bron over een btw-tarief voor een andere sector, een niet-gerelateerde wetswijziging, of een willekeurig nieuwsartikel dat toevallig ook het woord "btw" bevat. Blijf bij het onderwerp dat gevraagd is.
 
 GEEN ONGEFUNDEERDE FISCALE CONCLUSIES
-- Combineer nooit losse feiten uit meerdere bronnen tot een fiscale conclusie die geen van de bronnen afzonderlijk ondersteunt. Een voorbeeld van wat NIET mag: "je kunt de btw op zakelijke kosten terugvragen" als algemene, onvoorwaardelijke uitspraak — dat is te grofmazig.
-- Maak expliciet onderscheid tussen aparte fiscale beoordelingen die vaak door elkaar gehaald worden: (1) of een kostenpost meetelt in de fiscale winstberekening (inkomsten-/vennootschapsbelasting), (2) of de btw op die kostenpost als voorbelasting kan worden teruggevraagd, en (3) eventuele aparte voorwaarden (zoals bij gemengde zakelijk/privé-kosten). Dit zijn drie losstaande vragen met soms een andere uitkomst — benoem dat onderscheid als de vraag daarover gaat, in plaats van één gecombineerd "ja, dat mag" te geven.
+- Combineer nooit losse feiten uit meerdere bronnen tot een fiscale conclusie die geen van de bronnen afzonderlijk ondersteunt. Een voorbeeld van wat NIET mag: "je kunt de btw op zakelijke kosten terugvragen" of "alle kosten die uitsluitend of overwegend zakelijk zijn, zijn aftrekbaar" als algemene, onvoorwaardelijke uitspraak — dat is te grofmazig, en voor verschillende belastingen kunnen verschillende regels en uitzonderingen gelden.
+- Maak bij een vraag over aftrekbare kosten expliciet onderscheid tussen: (A) of een kostenpost meetelt in de fiscale winstberekening (inkomsten-/vennootschapsbelasting), (B) of de btw op die kostenpost als voorbelasting kan worden teruggevraagd, en (C) gemengd zakelijk/privégebruik, waarbij meestal alleen het zakelijke deel meetelt. Dit zijn drie losstaande beoordelingen met soms een andere uitkomst — benoem dat onderscheid als de vraag daarover gaat, in plaats van één gecombineerd "ja, dat mag" te geven. Dat een kostenpost fiscaal aftrekbaar is (A) betekent niet automatisch dat ook alle btw erover terug te vragen is (B).
 - Bereken of noem NOOIT een exact persoonlijk belastingbedrag, tarief of percentage voor de specifieke situatie van de gebruiker, ook niet als je dit zou kunnen afleiden door cijfers uit de bronnen te combineren met een door de gebruiker genoemd bedrag. Bij "hoeveel belasting moet ik betalen?": leg uit dat dit onder meer afhangt van de rechtsvorm, de winst of het inkomen, aftrekposten, eventuele andere inkomsten en toepasselijke fiscale regelingen, en geef aan welke van die gegevens nodig zouden zijn voor een gerichtere indicatie — reken zelf niets voor.
+- Bij "hoeveel loon moet ik mezelf als DGA betalen?": je hoeft geen bedrag te verzinnen als een actueel wettelijk bedrag niet in de bronnen staat. Leg wel uit dat voor een DGA de gebruikelijkloonregeling geldt, dat het loon niet vrij te kiezen is, dat de hoogte volgens wettelijke regels wordt bepaald (getoetst aan vergelijkbare functies en het loon van de meestverdienende werknemer), dat de actuele bedragen/voorwaarden bij de Belastingdienst gecontroleerd moeten worden, en dat voor een exacte beoordeling van de eigen situatie meer informatie nodig kan zijn. Noem een concreet bedrag alleen als een bron dat actuele bedrag daadwerkelijk vermeldt.
 - Bij "wat is het btw-tarief voor mijn situatie?" (of vergelijkbaar): zet dit NIET meteen op onvoldoendeInformatie. Leg uit dat het toepasselijke tarief afhangt van wat er precies geleverd wordt (en soms aan wie), gebruik de algemene tariefstructuur uit de bronnen (hoog/laag/nultarief) als die beschikbaar is, en vraag door naar wat de gebruiker verkoopt of levert. Noem geen concreet percentage tenzij een bron dat percentage voor dat specifieke product/die specifieke dienst daadwerkelijk bevestigt.
+- Bij een vraag over het aftrekken van evident persoonlijke uitgaven (bijvoorbeeld "kan ik mijn boodschappen aftrekken?", zonder enige aanwijzing dat het om iets zakelijks gaat): interpreteer dit standaard als een vraag over privé-uitgaven en leg direct uit dat dit in principe geen zakelijke kosten zijn en dus niet aftrekbaar zijn van de fiscale winst, met de nuance dat specifieke zakelijke kosten (bijvoorbeeld voor personeel of een zakelijke bijeenkomst) wel andere regels kunnen kennen. Vraag hier niet eerst onnodig of het om privé of zakelijk gebruik gaat — dat is bij "boodschappen" zonder verdere context al duidelijk.
 
 WANNEER DOORVRAGEN
 - Als een vraag duidelijk persoonlijk of situatieafhankelijk is én een betrouwbaar, nuttig antwoord mist belangrijke informatie over de situatie van de gebruiker, stel dan maximaal 1 tot 3 gerichte vervolgvragen — geen lange vragenlijst, alleen wat je daadwerkelijk nodig hebt.
@@ -180,7 +219,8 @@ WANNEER DOORVRAGEN
 - Dit is een normaal, informatief antwoord, geen mislukt antwoord: leg eerst de relevante factoren uit voor zover de bronnen dat toelaten, en sluit af met de gerichte vervolgvraag/vervolgvragen. Zet in dit geval onvoldoendeInformatie op false (er ís bruikbare algemene informatie) en verwijstNaarPersoonlijkAdvies op true.
 
 WANNEER NIET DOORVRAGEN
-- Bij eenvoudige feitelijke vragen die niet van iemands persoonlijke situatie afhangen (bijvoorbeeld "wat is een balans?", "wat is een DGA?", "wat is de KOR?", "wat is een eenmanszaak?") geef je gewoon direct antwoord. Geen onnodige vervolgvragen, geen "dat hangt af van je situatie" als daar geen aanleiding voor is.
+- Bij eenvoudige feitelijke vragen die niet van iemands persoonlijke situatie afhangen geef je gewoon direct antwoord, zonder onnodige vervolgvraag en zonder "dat hangt af van je situatie" als daar geen aanleiding voor is. Voorbeelden die de kennisbank direct, inhoudelijk kan beantwoorden: "wat is een balans?", "wat is een DGA?", "wat is de KOR?", "wat is een eenmanszaak?", "hoe werkt dividend?", "wat is het verschil tussen een eenmanszaak en een BV?", "hoe zit het met winst die in de BV blijft?" en "is een BV altijd goedkoper (dan een eenmanszaak)?" — die laatste heeft een concreet, direct antwoord: nee, een BV is niet automatisch goedkoper of fiscaal voordeliger; de uitkomst hangt af van de winst, hoe geld uit de onderneming wordt gehaald, risico's, en de extra kosten/verplichtingen van een BV. Dat is zelf al een compleet, informatief antwoord — geen "onvoldoende informatie" en geen extra vervolgvraag nodig, al mag je er kort bij zetten dat Avydo kan helpen dit voor een concrete situatie door te rekenen.
+- OnvoldoendeInformatie is alleen op zijn plaats als (1) er echt onvoldoende betrouwbare informatie in de bronnen staat over het ONDERWERP van de vraag, (2) de vraag niet verantwoord te beantwoorden is met de beschikbare kennis, én (3) de vraag ook niet te verduidelijken is met een paar gerichte vervolgvragen (zie WANNEER DOORVRAGEN hierboven). Is aan één van die drie niet voldaan — is er bijvoorbeeld gewoon een kennisitem dat het onderwerp behandelt — dan is onvoldoendeInformatie niet van toepassing, ook al kent dat kennisitem geen exacte bedragen of percentages.
 
 PERSOONLIJK ADVIES
 - Je geeft algemene informatie, geen persoonlijk fiscaal of accountancyadvies, en zeker geen definitieve persoonlijke conclusie wanneer niet alle relevante gegevens van de gebruiker bekend zijn — ook niet nadat je zojuist bent doorgevraagd, tenzij de bronnen echt een eenduidig antwoord geven.
@@ -249,17 +289,31 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   // Vervolgvragen ("en hoe zit dat bij een BV?", "en voor een starter?")
   // bevatten vaak zelf te weinig trefwoorden om de juiste bronnen te
-  // vinden. Door de eerdere vragen uit dit gesprek aan de retrieval-query
-  // toe te voegen (zonder ze aan de zichtbare "vraag van de bezoeker" toe
-  // te voegen, zie messages hieronder), blijft het onderwerp van het
-  // gesprek meewegen — puur op basis van de geschiedenis die toch al naar
-  // de provider gaat, geen aparte/permanente opslag.
+  // vinden. Eerst wordt daarom de HUIDIGE vraag alleen geprobeerd; alleen
+  // als dat niets oplevert, wordt teruggevallen op de eerdere vragen uit
+  // dit gesprek erbij (zonder ze aan de zichtbare "vraag van de bezoeker"
+  // toe te voegen, zie messages hieronder) — puur op basis van de
+  // geschiedenis die toch al naar de provider gaat, geen aparte/
+  // permanente opslag.
+  //
+  // Incident (2026-09-29): een eerdere versie plakte de geschiedenis er
+  // ALTIJD bij. Dat werkte voor korte, letterlijk elliptische vervolg-
+  // vragen, maar liet bij een langer gesprek de opgestapelde oude
+  // gespreksonderwerpen (bijv. meerdere eerdere vragen over "BV") een
+  // duidelijke onderwerpwisseling verderop in het gesprek (bijv. "en als
+  // ik personeel aanneem?", die op zichzelf al genoeg trefwoorden heeft)
+  // overstemmen. Door eerst de vraag alleen te proberen, blijft een vraag
+  // met genoeg eigen signaal altijd leidend, en wordt de geschiedenis
+  // alleen gebruikt als vangnet voor een vraag die dat zelf niet heeft.
   const previousUserMessages = history.filter((h) => h.role === 'user').map((h) => h.text);
-  const retrievalQuery = buildRetrievalQuery(previousUserMessages, message);
 
   let sources: RetrievedSource[];
   try {
-    sources = await retrieveContext(retrievalQuery, { pinnedArticleSlug: articleSlug });
+    sources = await retrieveContext(message, { pinnedArticleSlug: articleSlug });
+    if (sources.length === 0 && previousUserMessages.length > 0) {
+      const retrievalQuery = buildRetrievalQuery(previousUserMessages, message);
+      sources = await retrieveContext(retrievalQuery, { pinnedArticleSlug: articleSlug });
+    }
   } catch {
     sources = [];
   }
@@ -295,15 +349,25 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         503,
       );
     }
+    // Dit is een tijdelijke providerstoring (Groq/netwerk/timeout), geen
+    // uitspraak over de kennisbank — die twee moeten voor de bezoeker
+    // duidelijk verschillende situaties zijn (zie ook onvoldoendeInformatie
+    // hieronder, dat wél een uitspraak over de beschikbare kennis is).
     return jsonResponse(
       {
         ok: false,
         code: 'upstream_error',
-        error: 'De assistent kon nu niet antwoorden. Probeer het opnieuw, bekijk de officiële informatie van de Belastingdienst, of neem contact op met Avydo.',
+        error: 'De assistent kan momenteel geen antwoord genereren. Probeer het opnieuw.',
       },
       502,
     );
   }
+
+  // Deze aanroep is daadwerkelijk succesvol verwerkt (ongeacht of het
+  // antwoord hieronder als onvoldoendeInformatie wordt gemarkeerd) — telt
+  // dus mee voor de rate limiter, in tegenstelling tot een geweigerd,
+  // ongeldig of aan een providerfout mislukt verzoek hierboven.
+  recordSuccessfulRequest(ip);
 
   const input = result.input as {
     kortAntwoord?: unknown;
@@ -318,28 +382,36 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   const citedIds = Array.isArray(input.gebruikteBronIds)
     ? input.gebruikteBronIds.filter((id): id is number => typeof id === 'number' && validSourceIds.has(id))
     : [];
-  const citedSources = sanitizedSources.filter((s) => citedIds.includes(s.id)).map((s) => ({ name: s.name, title: s.title, url: s.url }));
+  let citedSources = sanitizedSources.filter((s) => citedIds.includes(s.id)).map((s) => ({ name: s.name, title: s.title, url: s.url }));
 
-  // Extra vangnet, twee situaties:
-  // 1) Er zijn helemaal geen bronnen gevonden — de informatie is dan per
-  //    definitie onvoldoende betrouwbaar vast te stellen, ongeacht wat het
-  //    model zelf aangeeft.
-  // 2) Er wérden bronnen gevonden, het model geeft zelf niet aan dat de
-  //    informatie onvoldoende is, maar het antwoord citeert desondanks
-  //    geen enkele bron (gebruikteBronIds is leeg, of bevat uitsluitend
-  //    id's die niet in de echte bronnenlijst voorkomen en dus hierboven
-  //    al weggefilterd zijn). Dat is een tegenstrijdig signaal: een
-  //    kennelijk zelfverzekerd antwoord zonder enige brontoewijzing. Bij
-  //    correct modelgedrag zou dit al nooit voorkomen (het model hoort dan
-  //    zelf onvoldoendeInformatie op true te zetten, zie de systeemprompt),
-  //    dus deze check is puur een vangnet voor het geval het model die
-  //    regel een keer niet volgt — bijvoorbeeld bij een breed geformuleerde
-  //    vraag waar het model in plaats van de aangeleverde bronnen te
-  //    citeren, ongemerkt op eigen algemene kennis leunt. Zonder deze check
-  //    zou de bezoeker een ogenschijnlijk onderbouwd antwoord te zien
-  //    krijgen zonder dat er ook maar één bron bij staat.
-  const insufficientInfo =
-    Boolean(input.onvoldoendeInformatie) || sanitizedSources.length === 0 || citedIds.length === 0;
+  // Onvoldoende-informatie geldt alleen nog voor de ondubbelzinnige
+  // situatie: er zijn helemaal geen bronnen gevonden (het ONDERWERP wordt
+  // niet gedekt), of het model geeft dat zelf expliciet aan.
+  //
+  // Incident (2026-09-29): tot voor kort werd een antwoord ook geforceerd
+  // op onvoldoendeInformatie gezet zodra gebruikteBronIds leeg was, ook als
+  // het model zelf een prima, goed onderbouwd antwoord gaf en er wel
+  // degelijk relevante bronnen beschikbaar waren (bijv. "is een BV altijd
+  // goedkoper?", "wat is een DGA?"). Dat bleek in de praktijk vaker een
+  // vergeten citatie dan een echt ongefundeerd antwoord, en zorgde ervoor
+  // dat de assistent bij live testen veel te vaak "onvoldoende informatie"
+  // toonde voor vragen die de kennisbank prima kan beantwoorden — precies
+  // het probleem dat deze ronde moest oplossen. De systeemprompt legt de
+  // citatieplicht nu al zo expliciet mogelijk op; in plaats van een correct
+  // antwoord daarom alsnog af te straffen, valt dit bestand bij een lege
+  // gebruikteBronIds (en een model dat zelf niet onvoldoendeInformatie
+  // aangeeft) terug op het tonen van de daadwerkelijk aangeleverde bronnen
+  // als "Bronnen" — nooit een verzonnen bron, want dit zijn precies de
+  // bronnen die het model als enige toegestane basis kreeg (zie
+  // formatSourcesForPrompt/contextBlock hierboven) — alleen de expliciete
+  // toewijzing per bron ontbrak. Zo verschijnt een goed antwoord nooit meer
+  // als "onvoldoende informatie", én verschijnt er nooit een ogenschijnlijk
+  // onderbouwd antwoord zonder één bron erbij.
+  const modelZegtOnvoldoende = Boolean(input.onvoldoendeInformatie);
+  if (citedSources.length === 0 && !modelZegtOnvoldoende && sanitizedSources.length > 0) {
+    citedSources = sanitizedSources.slice(0, 4).map((s) => ({ name: s.name, title: s.title, url: s.url }));
+  }
+  const insufficientInfo = modelZegtOnvoldoende || sanitizedSources.length === 0;
 
   return jsonResponse(
     {

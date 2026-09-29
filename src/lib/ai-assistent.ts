@@ -13,7 +13,7 @@ import { getCollection } from 'astro:content';
 import { knowledgeBase } from '@/data/ai-knowledge';
 import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
-import { overlapScore, retrieveKnowledgeItems, tokenize } from './knowledge-match.mjs';
+import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, tokenize } from './knowledge-match.mjs';
 
 export interface RetrievedSource {
   id: number;
@@ -73,6 +73,14 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
     });
   }
 
+  // MIN_RELEVANCE_SCORE (zelfde drempel als bij de kennisbank): sinds de
+  // retrieval-query ook eerdere gespreksvragen meeweegt (zie
+  // buildRetrievalQuery() in kenniscentrum-chat.ts, nodig voor
+  // vervolgvragen), bevat de query meer tekst en dus meer kans op een
+  // toevallige, inhoudsloze woordovereenkomst met een verder onrelevant
+  // nieuwsartikel — bijvoorbeeld een artikel dat het woord "btw" bevat maar
+  // niets met de gestelde vraag te maken heeft. Eén losse treffer (score 1)
+  // is daarom niet meer genoeg om een artikel als bron mee te geven.
   const scoredArticles = allArticles
     .filter((a) => !opts.pinnedArticleSlug || a.slug !== opts.pinnedArticleSlug)
     .map((article) => ({
@@ -82,7 +90,7 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
         `${article.data.title} ${article.data.summary} ${article.data.category} ${article.data.tags.join(' ')}`,
       ),
     }))
-    .filter((x) => x.score > 0)
+    .filter((x) => x.score >= MIN_RELEVANCE_SCORE)
     .sort((a, b) => b.score - a.score || b.article.data.publishedAt.valueOf() - a.article.data.publishedAt.valueOf())
     .slice(0, MAX_ARTICLE_SOURCES);
 
@@ -115,7 +123,7 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
       deadline,
       score: overlapScore(queryTokens, `${deadline.title} ${deadline.description} ${deadline.taxType} ${deadline.period}`),
     }))
-    .filter((x) => x.score > 0)
+    .filter((x) => x.score >= MIN_RELEVANCE_SCORE)
     .sort((a, b) => b.score - a.score || recencyRank(b.deadline) - recencyRank(a.deadline))
     .slice(0, MAX_DEADLINE_SOURCES);
 

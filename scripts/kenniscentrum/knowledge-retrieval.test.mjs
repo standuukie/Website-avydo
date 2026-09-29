@@ -58,17 +58,42 @@ const SAMPLE_ITEMS = [
     title: 'Verschil tussen een eenmanszaak en een BV',
     category: 'Ondernemingsvormen',
     content:
-      'Een BV is een rechtspersoon, een eenmanszaak niet. Een BV is niet automatisch fiscaal voordeliger dan een eenmanszaak — dit hangt af van de winst en persoonlijke situatie.',
-    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'bv voordeliger', 'is een bv beter'],
+      'Een BV is een rechtspersoon, een eenmanszaak niet. Een BV is niet automatisch goedkoper of fiscaal voordeliger dan een eenmanszaak — dit hangt af van de winst, risico\'s en persoonlijke situatie.',
+    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'bv voordeliger', 'is een bv beter', 'bv goedkoper', 'is een bv altijd goedkoper'],
     priority: 3,
   },
   {
     id: 'zakelijke-versus-prive-kosten',
     title: 'Zakelijke kosten versus privékosten',
     category: 'Inkomstenbelasting',
-    content: 'Gemengde kosten zoals een telefoon zijn deels aftrekbaar. Een privételefoon is niet zonder meer volledig aftrekbaar.',
-    tags: ['zakelijke kosten', 'privékosten', 'privételefoon aftrekken', 'gemengde kosten'],
+    content:
+      'Gemengde kosten zoals een telefoon zijn deels aftrekbaar. Een privételefoon is niet zonder meer volledig aftrekbaar. Boodschappen voor privégebruik zijn geen zakelijke kosten en dus niet aftrekbaar.',
+    tags: ['zakelijke kosten', 'privékosten', 'privételefoon aftrekken', 'gemengde kosten', 'boodschappen aftrekken', 'privéboodschappen'],
     priority: 3,
+  },
+  {
+    id: 'winst-in-de-bv',
+    title: 'Winst in de BV laten (winst reserveren)',
+    category: 'BV en vennootschapsbelasting',
+    content: 'Winst die in de BV blijft, wordt niet automatisch als dividend uitgekeerd. Dividend ontstaat pas als de BV daadwerkelijk uitkeert.',
+    tags: ['winst in de bv laten', 'winst reserveren', 'winst in bv houden', 'winst niet uitkeren', 'winstreserve'],
+    priority: 3,
+  },
+  {
+    id: 'gebruikelijk-loon',
+    title: 'Gebruikelijk loon',
+    category: 'BV en vennootschapsbelasting',
+    content: 'De gebruikelijkloonregeling verplicht een DGA zichzelf een gebruikelijk loon toe te kennen, getoetst aan wettelijke regels.',
+    tags: ['gebruikelijk loon', 'gebruikelijkloonregeling', 'dga salaris', 'hoeveel loon dga', 'loon mezelf uitbetalen'],
+    priority: 3,
+  },
+  {
+    id: 'bedrijfsverzekeringen',
+    title: 'Bedrijfsverzekeringen',
+    category: 'Ondernemingsvormen',
+    content: 'Welke verzekeringen nodig of verstandig zijn hangt af van activiteiten, personeel, bedrijfspand en risico\'s.',
+    tags: ['bedrijfsverzekeringen', 'verzekeringen ondernemer', 'aansprakelijkheidsverzekering', 'welke verzekeringen nodig'],
+    priority: 1,
   },
   {
     id: 'voorlopige-aanslag',
@@ -195,6 +220,10 @@ test('retrieveKnowledgeItems vindt het juiste kennisitem voor elke verplichte te
     ['Is een BV voor mij voordeliger?', 'verschil-eenmanszaak-en-bv'],
     ['Wat is momenteel het btw-tarief voor mijn situatie?', 'btw-tarieven'],
     ['Kan ik mijn privéboodschappen volledig aftrekken?', 'zakelijke-versus-prive-kosten'],
+    ['Is een BV altijd goedkoper?', 'verschil-eenmanszaak-en-bv'],
+    ['Hoeveel loon moet ik mezelf als DGA betalen?', 'gebruikelijk-loon'],
+    ['Kan ik mijn boodschappen aftrekken?', 'zakelijke-versus-prive-kosten'],
+    ['Welke verzekeringen heb ik nodig?', 'bedrijfsverzekeringen'],
   ];
   for (const [question, expectedId] of cases) {
     const results = retrieveKnowledgeItems(question, SAMPLE_ITEMS);
@@ -233,6 +262,46 @@ test('vervolgvragen vinden het juiste kennisitem via de gecombineerde gespreksqu
       results.some((r) => r.id === expectedId),
       `verwachtte "${expectedId}" voor vervolgvraag "${currentMessage}" (na "${previousUserMessages.join(' / ')}"), kreeg ${results.map((r) => r.id)}`,
     );
+  }
+});
+
+// Spiegelt de twee-staps retrieval uit kenniscentrum-chat.ts: eerst de
+// huidige vraag alleen, en alléén als dat niets oplevert de gecombineerde
+// query (geschiedenis + vraag) als vangnet. Zie het incident hierboven
+// (buildRetrievalQuery-aanroep) voor waarom "altijd combineren" niet goed
+// genoeg was.
+function retrieveWithFallback(previousUserMessages, message, items) {
+  let results = retrieveKnowledgeItems(message, items);
+  if (results.length === 0 && previousUserMessages.length > 0) {
+    results = retrieveKnowledgeItems(buildRetrievalQuery(previousUserMessages, message), items);
+  }
+  return results;
+}
+
+// Repliceert exact het langere testgesprek uit de opdracht: "is een BV voor
+// mij voordeliger?" -> "en hoe zit dat bij een BV?" -> "en hoe zit het met
+// dividend?" -> "en als ik de winst in de BV laat?" -> "en als ik personeel
+// aanneem?". Elke stap moet het juiste kennisitem vinden — met name de
+// laatste twee vragen zijn de regressie: "winst in de BV" mag niet op
+// onvoldoendeInformatie uitkomen, en de latere onderwerpwisseling naar
+// "personeel aannemen" mag niet verdronken worden door de opgestapelde
+// eerdere BV-vragen.
+test('het volledige testgesprek uit de opdracht blijft bij elke stap relevante context vinden', () => {
+  const history = [];
+  const steps = [
+    ['Is een BV voor mij voordeliger?', 'verschil-eenmanszaak-en-bv'],
+    ['En hoe zit dat bij een BV?', 'verschil-eenmanszaak-en-bv'],
+    ['En hoe zit het met dividend?', 'dividend'],
+    ['En als ik de winst in de BV laat?', 'winst-in-de-bv'],
+    ['En als ik personeel aanneem?', 'werknemer-aannemen'],
+  ];
+  for (const [message, expectedId] of steps) {
+    const results = retrieveWithFallback(history, message, SAMPLE_ITEMS);
+    assert.ok(
+      results.some((r) => r.id === expectedId),
+      `verwachtte "${expectedId}" bij "${message}" (gesprek tot nu toe: ${JSON.stringify(history)}), kreeg ${results.map((r) => r.id)}`,
+    );
+    history.push(message);
   }
 });
 

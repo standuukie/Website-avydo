@@ -34,13 +34,22 @@ export const inkomstenbelastingItems: KnowledgeItem[] = [
     title: 'Zakelijke kosten versus privékosten',
     category: 'Inkomstenbelasting',
     content:
-      'Kosten die uitsluitend of overwegend zakelijk worden gemaakt, verlagen doorgaans de fiscale winst waarover u inkomsten- of vennootschapsbelasting betaalt; puur privékosten doen dat niet. Bij gemengde kosten (zowel zakelijk als privé gebruikt — een auto, een telefoon, of een werkruimte thuis zijn de bekendste voorbeelden) mag doorgaans alleen het zakelijke deel worden afgetrokken, en gelden vaak specifieke fiscale regels om dat deel te bepalen; een privételefoon die u af en toe zakelijk gebruikt is dus niet zonder meer volledig aftrekbaar. Let op: dit gaat over de aftrekbaarheid voor de winstberekening (inkomsten-/vennootschapsbelasting) — of over dezelfde kosten ook btw kan worden teruggevraagd, is een aparte beoordeling met eigen regels (zie het kennisitem "Btw bij zakelijke kosten en diensten"). Het is belangrijk zakelijke en privé-uitgaven goed gescheiden te administreren, omdat een onterecht als zakelijk geboekte kostenpost bij een controle kan worden gecorrigeerd.',
+      'Kosten die uitsluitend of overwegend zakelijk worden gemaakt, verlagen doorgaans de fiscale winst waarover u inkomsten- of vennootschapsbelasting betaalt; puur privékosten doen dat niet. Boodschappen voor privégebruik zijn hiervan een duidelijk voorbeeld: dat zijn in principe geen zakelijke kosten en dus niet aftrekbaar van de fiscale winst. Gaat het om specifieke zakelijke uitgaven — bijvoorbeeld eten en drinken voor personeel, een zakelijke bijeenkomst of een ander concreet bedrijfsdoel — dan kunnen daar andere regels voor gelden. Bij gemengde kosten (zowel zakelijk als privé gebruikt — een auto, een telefoon, of een werkruimte thuis zijn de bekendste voorbeelden) mag doorgaans alleen het zakelijke deel worden afgetrokken, en gelden vaak specifieke fiscale regels om dat deel te bepalen; een privételefoon die u af en toe zakelijk gebruikt is dus niet zonder meer volledig aftrekbaar. Let op: dit gaat over de aftrekbaarheid voor de winstberekening (inkomsten-/vennootschapsbelasting) — of over dezelfde kosten ook btw kan worden teruggevraagd, is een aparte beoordeling met eigen regels (zie het kennisitem "Btw bij zakelijke kosten en diensten"). Het is belangrijk zakelijke en privé-uitgaven goed gescheiden te administreren, omdat een onterecht als zakelijk geboekte kostenpost bij een controle kan worden gecorrigeerd.',
     targetAudience: ['zzp', 'mkb-ondernemer'],
     sourceName: 'Belastingdienst',
     sourceUrl:
       'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/winst_uit_onderneming',
-    lastVerified: '2026-09-28',
-    tags: ['zakelijke kosten', 'privékosten', 'aftrekbare kosten', 'welke kosten aftrekbaar', 'privételefoon aftrekken', 'gemengde kosten'],
+    lastVerified: '2026-09-29',
+    tags: [
+      'zakelijke kosten',
+      'privékosten',
+      'aftrekbare kosten',
+      'welke kosten aftrekbaar',
+      'privételefoon aftrekken',
+      'gemengde kosten',
+      'boodschappen aftrekken',
+      'privéboodschappen',
+    ],
     priority: 3,
   },
   {

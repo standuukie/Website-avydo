@@ -93,12 +93,20 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Verschil tussen een eenmanszaak en een BV',
     category: 'Ondernemingsvormen',
     content:
-      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door op meerdere vlakken. Aansprakelijkheid: bij een eenmanszaak bent u in privé aansprakelijk voor zakelijke schulden, bij een BV is in beginsel de BV zelf aansprakelijk. Belastingheffing: een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met daarnaast loonheffing over het loon van de directeur-grootaandeelhouder (DGA) en mogelijk dividendbelasting bij een winstuitkering. Administratie: een BV heeft aanvullende verplichtingen, zoals het jaarlijks deponeren van een jaarrekening bij de KVK, die een eenmanszaak niet kent. Oprichting en complexiteit: een eenmanszaak richt u eenvoudig op via inschrijving bij de KVK, terwijl een BV wordt opgericht via een notariële akte, wat meer tijd en kosten met zich meebrengt. Een BV is niet automatisch fiscaal voordeliger dan een eenmanszaak — of dat in een concrete situatie zo is, hangt af van de hoogte van de winst, risico\'s en persoonlijke voorkeuren, en verschilt van geval tot geval. Avydo kan dit voor uw situatie doorrekenen.',
+      'Het belangrijkste verschil is rechtspersoonlijkheid: een BV is een rechtspersoon met een eigen vermogen, een eenmanszaak niet. Dat werkt door op meerdere vlakken. Aansprakelijkheid: bij een eenmanszaak bent u in privé aansprakelijk voor zakelijke schulden, bij een BV is in beginsel de BV zelf aansprakelijk. Belastingheffing: een eenmanszaak valt onder de inkomstenbelasting, een BV onder de vennootschapsbelasting, met daarnaast loonheffing over het loon van de directeur-grootaandeelhouder (DGA) en mogelijk dividendbelasting bij een winstuitkering. Administratie: een BV heeft aanvullende verplichtingen, zoals het jaarlijks deponeren van een jaarrekening bij de KVK, die een eenmanszaak niet kent. Oprichting en complexiteit: een eenmanszaak richt u eenvoudig op via inschrijving bij de KVK, terwijl een BV wordt opgericht via een notariële akte, wat extra kosten en verplichtingen met zich meebrengt (zoals de jaarrekening). Een BV is niet automatisch goedkoper of fiscaal voordeliger dan een eenmanszaak (en omgekeerd) — de uitkomst hangt onder meer af van de hoogte van de winst, de manier waarop geld uit de onderneming wordt gehaald, risico\'s, en de extra kosten en verplichtingen van een BV, en verschilt van geval tot geval. Avydo kan dit voor uw situatie doorrekenen.',
     targetAudience: ['zzp', 'bv-dga', 'mkb-ondernemer'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/starten/een-eenmanszaak-of-bv-als-rechtsvorm-kiezen/',
     lastVerified: '2026-09-28',
-    tags: ['verschil eenmanszaak bv', 'eenmanszaak of bv', 'eenmanszaak versus bv', 'bv voordeliger', 'is een bv beter'],
+    tags: [
+      'verschil eenmanszaak bv',
+      'eenmanszaak of bv',
+      'eenmanszaak versus bv',
+      'bv voordeliger',
+      'is een bv beter',
+      'bv goedkoper',
+      'is een bv altijd goedkoper',
+    ],
     priority: 3,
   },
   {
@@ -106,12 +114,12 @@ export const ondernemingsvormenItems: KnowledgeItem[] = [
     title: 'Bedrijfsverzekeringen',
     category: 'Ondernemingsvormen',
     content:
-      'Welke verzekeringen een onderneming nodig heeft, verschilt per situatie: sommige zijn wettelijk verplicht (zoals een opstalverzekering bij een eigen bedrijfspand, en de verplichte sociale verzekeringen voor iedereen die in Nederland woont of werkt), andere zijn niet verplicht maar wel verstandig, zoals een bedrijfsaansprakelijkheidsverzekering (AVB, dekt schade die u, uw personeel of uw producten bij anderen veroorzaken) of een bedrijfsschadeverzekering (dekt doorlopende kosten bij bedrijfsonderbreking, bijvoorbeeld door brand). Zelfstandigen kunnen daarnaast hun eigen inkomen verzekeren, bijvoorbeeld met een arbeidsongeschiktheidsverzekering. Welke verzekeringen in uw situatie relevant zijn, hangt af van de aard van de onderneming en de risico\'s die u loopt.',
+      'Welke verzekeringen nodig of verstandig zijn, hangt af van uw activiteiten, personeel, bedrijfspand en risico\'s — er is geen vaste lijst die voor iedere ondernemer geldt. Daarbij zijn drie soorten te onderscheiden. Wettelijk verplicht: bijvoorbeeld een opstalverzekering bij een eigen bedrijfspand, en de verplichte sociale verzekeringen voor iedereen die in Nederland woont of werkt. Afhankelijk van sector/activiteit: sommige beroepen of sectoren kennen een verplichte of sterk gebruikelijke verzekering die niet voor elke onderneming geldt. Vrijwillig, om specifieke bedrijfsrisico\'s af te dekken: bijvoorbeeld een bedrijfsaansprakelijkheidsverzekering (AVB, dekt schade die u, uw personeel of uw producten bij anderen veroorzaken), een bedrijfsschadeverzekering (dekt doorlopende kosten bij bedrijfsonderbreking) of, voor zelfstandigen, een arbeidsongeschiktheidsverzekering. Of een specifieke verzekering voor een onderneming verplicht is, is dus geen algemene regel maar hangt af van het geval — dat is per verzekering en situatie apart te controleren.',
     targetAudience: ['zzp', 'mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://ondernemersplein.kvk.nl/soorten-verzekeringen/',
-    lastVerified: '2026-09-28',
-    tags: ['bedrijfsverzekeringen', 'verzekeringen ondernemer', 'aansprakelijkheidsverzekering', 'avb'],
+    lastVerified: '2026-09-29',
+    tags: ['bedrijfsverzekeringen', 'verzekeringen ondernemer', 'aansprakelijkheidsverzekering', 'avb', 'welke verzekeringen nodig'],
     priority: 1,
   },
 ];
