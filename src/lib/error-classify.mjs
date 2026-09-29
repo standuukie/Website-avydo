@@ -15,13 +15,26 @@
  * responstekst bevat, zie gemini.ts/groq.ts/anthropic.ts) — puur voor
  * diagnose in de serverlogs/foutafhandeling, bevat zelf geen gevoelige data.
  * @param {string} error
- * @returns {'rate_limited' | 'server_error' | 'client_error' | 'timeout' | 'network' | 'malformed_response' | 'not_configured' | 'unknown'}
+ * @returns {'rate_limited' | 'provider_daily_limit' | 'server_error' | 'client_error' | 'timeout' | 'network' | 'malformed_response' | 'not_configured' | 'unknown'}
  */
 export function categorizeProviderError(error) {
   const statusMatch = error.match(/API (\d{3})/);
   if (statusMatch) {
     const status = Number(statusMatch[1]);
-    if (status === 429) return 'rate_limited';
+    if (status === 429) {
+      // Incident 2026-09-30 (ronde 6): een live Production-log liet een
+      // Groq 429 zien met "Limit 200000, Used 198358, Requested 2171" op
+      // "tokens per day (TPD)" — een FUNDAMENTEEL andere situatie dan een
+      // gewone RPM/TPM-429 (die binnen seconden/minuten vanzelf weer ruimte
+      // geeft). Groq's eigen TPD-foutmelding noemt expliciet "tokens per
+      // day" of "TPD" — dat onderscheidt 'm betrouwbaar van een RPM/TPM-429
+      // (die dat niet doet), zonder dat hiervoor een aparte lokale
+      // dagteller nodig is (zie kenniscentrum-chat.ts, punt 7: de
+      // applicatie kan Groq's ACCOUNT-BREDE TPD toch niet betrouwbaar zelf
+      // bijhouden — Groq's eigen 429-respons is hier de bron van waarheid).
+      if (/tokens per day|\bTPD\b/i.test(error)) return 'provider_daily_limit';
+      return 'rate_limited';
+    }
     if (status >= 500) return 'server_error';
     if (status >= 400) return 'client_error';
   }
@@ -45,7 +58,11 @@ export const SERVER_ERROR_JITTER_MS = 400;
  *   VOLGENDE, mogelijk wél succesvolle vraag van de bezoeker nodig heeft.
  *   In plaats daarvan direct doorgeven aan de kennisbank-fallback (indien
  *   beschikbaar) of de nette provider_rate_limited-melding — zie
- *   kenniscentrum-chat.ts.
+ *   kenniscentrum-chat.ts. Dit geldt EXTRA hard voor een TPD-429 (ronde 6,
+ *   errorCategory 'provider_daily_limit'): Retry-After ligt daarbij typisch
+ *   op meerdere MINUTEN tot UREN, dus een retry binnen dit verzoek zou
+ *   sowieso nooit op tijd zijn — nooit automatisch retryen, alleen de
+ *   Retry-After-waarde loggen/gebruiken voor de fallback (zie hieronder).
  * - 5xx: altijd één retry, met vaste basisvertraging + willekeurige jitter
  *   (voorkomt dat meerdere gelijktijdige requests exact tegelijk opnieuw
  *   proberen — "thundering herd"). Een 5xx is typisch een voorbijgaande

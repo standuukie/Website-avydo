@@ -31,7 +31,7 @@ export interface ProviderCallArgs {
 
 export type ProviderCallResult =
   | { ok: true; input: Record<string, unknown>; providerId: string; rateLimitInfo?: string; remainingTokens?: number; limitTokens?: number }
-  | { ok: false; error: string; providerId: string; rateLimitInfo?: string; remainingTokens?: number; limitTokens?: number };
+  | { ok: false; error: string; providerId: string; rateLimitInfo?: string; remainingTokens?: number; limitTokens?: number; retryAfterSeconds?: number };
 
 export interface AiProvider {
   id: string;

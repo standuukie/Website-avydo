@@ -84,6 +84,14 @@ export interface AiCallOutcome {
    */
   remainingTokens?: number;
   limitTokens?: number;
+  /**
+   * Groq's eigen Retry-After (seconden) van de LAATST geprobeerde provider,
+   * indien meegegeven — bij een TPD-429 (errorCategory 'provider_daily_limit')
+   * typisch enkele MINUTEN tot UREN. Uitsluitend voor logging/diagnose en om
+   * de fallback-beslissing te kunnen onderbouwen; wordt NOOIT gebruikt om
+   * automatisch te retryen (zie error-classify.mjs).
+   */
+  retryAfterSeconds?: number;
 }
 
 export async function callAiWithFallback(args: {
@@ -107,6 +115,7 @@ export async function callAiWithFallback(args: {
   let lastErrorCategory = 'unknown';
   let lastRemainingTokens: number | undefined;
   let lastLimitTokens: number | undefined;
+  let lastRetryAfterSeconds: number | undefined;
   for (const provider of chain) {
     attempted.push(provider.id);
     const startedAt = Date.now();
@@ -137,7 +146,8 @@ export async function callAiWithFallback(args: {
       // beantwoorden vanuit de logs alleen.
       const category = categorizeProviderError(result.error);
       lastErrorCategory = category;
-      console.error(`[kenniscentrum-chat] provider "${provider.id}" faalde na ${durationMs}ms (categorie: ${category}): ${result.error}${rateLimitSuffix}`);
+      const retryAfterSuffix = typeof result.retryAfterSeconds === 'number' ? ` retry-after=${result.retryAfterSeconds}s` : '';
+      console.error(`[kenniscentrum-chat] provider "${provider.id}" faalde na ${durationMs}ms (categorie: ${category}): ${result.error}${rateLimitSuffix}${retryAfterSuffix}`);
     } else {
       // Ook bij succes loggen (geen error-niveau): laat zien hoe dicht een
       // sessie bij Groq's eigen TPM/RPM-plafond zit, zodat een opeenvolging
@@ -151,6 +161,7 @@ export async function callAiWithFallback(args: {
     lastError = result.error;
     lastRemainingTokens = result.remainingTokens;
     lastLimitTokens = result.limitTokens;
+    lastRetryAfterSeconds = result.retryAfterSeconds;
   }
 
   return {
@@ -160,5 +171,6 @@ export async function callAiWithFallback(args: {
     errorCategory: lastErrorCategory,
     remainingTokens: lastRemainingTokens,
     limitTokens: lastLimitTokens,
+    retryAfterSeconds: lastRetryAfterSeconds,
   };
 }

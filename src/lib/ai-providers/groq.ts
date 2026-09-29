@@ -55,7 +55,7 @@ const DEFAULT_MODEL = 'openai/gpt-oss-20b';
  * (waar aanwezig) gestructureerd voor de token-boekhouding in
  * kenniscentrum-chat.ts. Nooit user-facing.
  */
-function parseRateLimitHeaders(headers: Headers): { summary?: string; remainingTokens?: number; limitTokens?: number } {
+function parseRateLimitHeaders(headers: Headers): { summary?: string; remainingTokens?: number; limitTokens?: number; retryAfterSeconds?: number } {
   const names = [
     'x-ratelimit-limit-requests',
     'x-ratelimit-remaining-requests',
@@ -74,10 +74,18 @@ function parseRateLimitHeaders(headers: Headers): { summary?: string; remainingT
   const limitTokensRaw = headers.get('x-ratelimit-limit-tokens');
   const remainingTokens = remainingTokensRaw !== null ? Number(remainingTokensRaw) : undefined;
   const limitTokens = limitTokensRaw !== null ? Number(limitTokensRaw) : undefined;
+  // Ronde 6 (2026-09-30): structureel (niet alleen als platte tekst in
+  // `summary`) uitgelezen zodat kenniscentrum-chat.ts deze kan LOGGEN en
+  // eventueel aan de fallback kan koppelen — nooit om automatisch te
+  // retryen (zie shouldRetryProviderError/error-classify.mjs: een 429,
+  // óók een TPD-429, wordt nooit automatisch geretryd).
+  const retryAfterRaw = headers.get('retry-after');
+  const retryAfterSeconds = retryAfterRaw !== null ? Number(retryAfterRaw) : undefined;
   return {
     summary: parts.length > 0 ? parts.join(' ') : undefined,
     remainingTokens: Number.isFinite(remainingTokens) ? remainingTokens : undefined,
     limitTokens: Number.isFinite(limitTokens) ? limitTokens : undefined,
+    retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
   };
 }
 
@@ -159,7 +167,7 @@ export const groqProvider: AiProvider = {
           }),
         });
 
-        const { summary: rateLimitInfo, remainingTokens, limitTokens } = parseRateLimitHeaders(res.headers);
+        const { summary: rateLimitInfo, remainingTokens, limitTokens, retryAfterSeconds } = parseRateLimitHeaders(res.headers);
 
         if (!res.ok) {
           const text = await res.text().catch(() => '');
@@ -169,7 +177,7 @@ export const groqProvider: AiProvider = {
           // GROQ_MODEL-env-var-override te kunnen onderscheiden van een echt
           // ongeldig modelnaam in de code zelf.
           const error = `Groq API ${res.status} (model="${model}"): ${text.slice(0, 300)}`;
-          const result: ProviderCallResult = { ok: false, error, providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens };
+          const result: ProviderCallResult = { ok: false, error, providerId: 'groq', rateLimitInfo, remainingTokens, limitTokens, retryAfterSeconds };
 
           // Retry-BELEID (welke status + welke vertraging) komt uit de
           // gedeelde, puur getestte error-classify.mjs — alleen 5xx (met

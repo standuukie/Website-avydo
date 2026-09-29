@@ -27,6 +27,7 @@ import { callAiWithFallback, type ToolDefinition } from '@/lib/ai-providers';
 import { buildRetrievalQuery, findDeterministicFallbackItem } from '@/lib/knowledge-match.mjs';
 import { createSlidingWindowLimiter } from '@/lib/rate-limit.mjs';
 import { estimateTokens, estimateTotalTokens } from '@/lib/token-estimate.mjs';
+import { buildFallbackAnswer, buildSourceFallbackAnswer } from '@/lib/fallback-answer.mjs';
 import { knowledgeBase } from '@/data/ai-knowledge';
 
 export const prerender = false;
@@ -36,7 +37,7 @@ export const prerender = false;
 // zichtbaar voor de bezoeker. Bij twijfel of Production daadwerkelijk de
 // nieuwste code draait: zoek deze string in de live logs. Verhoog bij een
 // volgende ronde die de request-flow raakt.
-const AI_ASSISTANT_VERSION = 'ronde5-2026-09-30-01';
+const AI_ASSISTANT_VERSION = 'ronde6-2026-09-30-01';
 
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_MESSAGE_LENGTH = 600;
@@ -381,53 +382,55 @@ const SYSTEM_PROMPT = buildSystemPrompt();
 const SYSTEM_PROMPT_TOKENS = estimateTokens(SYSTEM_PROMPT);
 const TOOL_SCHEMA_TOKENS = estimateTokens(JSON.stringify(ANSWER_TOOL.schema)) + estimateTokens(ANSWER_TOOL.description);
 
-// PROVIDER-FALLBACK — laatste redmiddel wanneer Groq zelf (na de ingebouwde
-// retry in groq.ts) alsnog faalt: voor een klein, bewust gemarkeerd deel van
-// de kennisbank (KnowledgeItem.deterministicFallback === true — uitsluitend
-// zuiver definitorische items zonder actuele bedragen/percentages, zonder
-// persoonlijke berekening en zonder interpretatie van actuele wetgeving,
-// zie types.ts) kan findDeterministicFallbackItem() (knowledge-match.mjs)
-// een kant-en-klaar antwoord rechtstreeks uit de kennisbank leveren in
-// plaats van een harde foutmelding — zie daar voor de (bewust
-// conservatieve) matchlogica. Wordt hieronder bewust op de RUWE, huidige
-// vraag toegepast, nooit de geschiedenis-gecombineerde retrieval-query —
-// geen giswerk over wat een elliptische vervolgvraag zou kunnen betekenen
-// zonder dat de AI het gesprek zelf kan interpreteren.
-
-/** Zet een kennisitem om in dezelfde antwoordvorm als een normaal, geslaagd AI-antwoord. */
-function buildFallbackAnswer(item: (typeof knowledgeBase)[number]) {
-  const sentences = item.content.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
-  const shortAnswer = sentences[0] ?? item.content;
-  const explanation = sentences.slice(1).join(' ');
-  return {
-    ok: true as const,
-    shortAnswer,
-    explanation,
-    note: 'Dit antwoord komt rechtstreeks uit de Avydo-kennisbank; de AI-assistent is op dit moment tijdelijk niet bereikbaar voor een uitgebreidere, op maat gemaakte toelichting.',
-    insufficientInfo: false,
-    personalAdviceNeeded: false,
-    sources: [{ name: `Avydo kennisbank (bron: ${item.sourceName})`, title: item.title, url: item.sourceUrl }],
-    fallback: true,
-  };
-}
+// Laatste redmiddel wanneer Groq zelf (na de ingebouwde retry in groq.ts)
+// alsnog faalt of wanneer onze eigen RPM/TPM-limiter een verzoek blokkeert:
+// zie de PROVIDER-FALLBACK-sectie verderop in de POST-handler voor de
+// volledige, actuele toelichting (twee niveaus, in een bewuste volgorde).
+//
+// buildFallbackAnswer/buildSourceFallbackAnswer zijn (ronde 6) verplaatst
+// naar src/lib/fallback-answer.mjs — een puur, framework-onafhankelijk
+// bestand, zelfde patroon als knowledge-match.mjs/rate-limit.mjs, zodat de
+// daadwerkelijke fallback-inhoud rechtstreeks (zonder TS-transpilatie of een
+// live Groq-aanroep) te testen is met Node's ingebouwde testrunner. Zie daar
+// voor de twee niveaus: een ondubbelzinnige match op één kennisitem, of —
+// wanneer die ontbreekt — een antwoord opgebouwd uit de gewone,
+// context-bewuste retrieval-bronnen.
 
 /**
  * Antwoord voor een geblokkeerd verzoek (eigen RPM- óf TPM-limiet): probeert
- * EERST de deterministische kennisbank-fallback (zie hierboven), precies
- * dezelfde die ook bij een echte providerstoring wordt gebruikt. Vanuit de
- * bezoeker gezien is "onze eigen limiter grijpt in" functioneel hetzelfde
- * als "Groq is nu niet bereikbaar" — beide betekenen dat er nu geen
- * Groq-aanroep gedaan wordt — dus verdienen hetzelfde vangnet. Dit is geen
- * "standaardmodus": het antwoord komt nog altijd van Groq zodra er weer
- * ruimte in het budget is, en de fallback dekt bewust maar een klein,
- * zuiver definitorisch deel van de kennisbank (zie deterministicFallback in
- * types.ts) — een vraag die nuance nodig heeft, krijgt nooit stilzwijgend
- * een te simpel antwoord, ook niet onder tijdsdruk op het budget.
+ * eerst een kennisbank-fallback, precies dezelfde twee niveaus die ook bij
+ * een echte providerstoring worden gebruikt (zie hieronder bij de
+ * providerfout-afhandeling voor de volledige toelichting op de VOLGORDE).
+ * Vanuit de bezoeker gezien is "onze eigen limiter grijpt in" functioneel
+ * hetzelfde als "Groq is nu niet bereikbaar" — beide betekenen dat er nu
+ * geen Groq-aanroep gedaan wordt — dus verdienen hetzelfde vangnet. Dit is
+ * geen "standaardmodus": het antwoord komt nog altijd van Groq zodra er
+ * weer ruimte in het budget is.
  */
-function rateLimitedResponse(message: string, reason: string, diagnostics: Record<string, string | number | boolean | undefined>): Response {
+function rateLimitedResponse(
+  message: string,
+  reason: string,
+  diagnostics: Record<string, string | number | boolean | undefined>,
+  sources: RetrievedSource[] = [],
+): Response {
+  // Ronde 6: de context-bewuste, meerdere-bronnen-retrieval (`sources`, hier
+  // `sanitizedSources`) EERST proberen, vóór de smallere, enkelvoudige
+  // deterministische match — zie de uitgebreide toelichting bij de
+  // providerfout-afhandeling verderop in dit bestand voor waarom (het
+  // "winst in de BV laten"-voorbeeld: een los kennisitem kan daar per
+  // ongeluk op het verkeerde, generieke onderwerp matchen, terwijl de volle
+  // retrieval het juiste, specifieke item al correct bovenaan zette). Voor
+  // de RPM-precheck (vóór het ophalen van bronnen) is `sources` nog leeg,
+  // dus valt dit terug op de deterministische match en daarna de kale
+  // blokkademelding — geen wijziging van de RPM/TPM-limietlogica zelf,
+  // alleen van wat er getoond wordt als die blokkeert.
+  if (sources.length > 0) {
+    logDecision({ ...diagnostics, decision: 'blocked_with_fallback', fallback_type: 'sources', reason, fallback_source_count: sources.length });
+    return jsonResponse(buildSourceFallbackAnswer(sources), 200);
+  }
   const fallbackItem = findDeterministicFallbackItem(message, knowledgeBase);
   if (fallbackItem) {
-    logDecision({ ...diagnostics, decision: 'blocked_with_fallback', reason, fallback_item: fallbackItem.id });
+    logDecision({ ...diagnostics, decision: 'blocked_with_fallback', fallback_type: 'deterministic', reason, fallback_item: fallbackItem.id });
     return jsonResponse(buildFallbackAnswer(fallbackItem), 200);
   }
   logDecision({ ...diagnostics, decision: 'blocked', reason });
@@ -501,6 +504,35 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     .map((item) => ({ role: item.role, text: item.text.slice(0, MAX_MESSAGE_LENGTH) }))
     .slice(-MAX_HISTORY_MESSAGES);
 
+  // Ronde 6 (2026-09-30, punt 5 — "verminder onnodig Groq-verbruik"): een
+  // eenvoudige, op zichzelf staande definitievraag ZONDER voorgaande
+  // gespreksgeschiedenis (dus geen vervolgvraag — bij een vervolgvraag is
+  // gesprekcontext nodig, zie GESPREKSCONTEXT/punt 6 hieronder, en gaat de
+  // vraag gewoon naar Groq) met een ondubbelzinnige match in de kennisbank
+  // (dezelfde strenge, conservatieve matchlogica als de provider-fallback
+  // verderop — findDeterministicFallbackItem sluit een vergelijkende,
+  // persoonlijke of bedrag-vraag altijd al uit, zie
+  // FALLBACK_EXCLUDED_PATTERN in knowledge-match.mjs) hoeft Groq HELEMAAL
+  // NIET aangeroepen te worden: het antwoord komt rechtstreeks,
+  // deterministisch uit de kennisbank. Dit is bewust GEEN algemene
+  // zoekmachine-vervanging voor de hele assistent — elke vraag buiten deze
+  // smalle, curated lijst (vervolgvragen, vergelijkingen, samengestelde
+  // vragen, vragen die meerdere kennisitems combineren) gaat gewoon naar
+  // Groq, waar nuance/doorvragen wél nodig is. Telt bewust NIET mee voor de
+  // RPM/TPM-limiters hieronder (die beschermen specifiek Groq's eigen
+  // budget; dit verzoek raakt Groq niet) — de RPM-precheck hierboven blijft
+  // wél gelden, dus dit pad is niet vrij van misbruikbescherming. Als
+  // bijkomend voordeel: dit vermindert ook het aantal Groq-aanroepen dat kan
+  // bijdragen aan Groq's dagelijkse TPD-limiet (zie het TPD-incident
+  // hierboven).
+  if (history.length === 0) {
+    const directItem = findDeterministicFallbackItem(message, knowledgeBase);
+    if (directItem) {
+      logDecision({ request: requestId, version: AI_ASSISTANT_VERSION, decision: 'direct_kb_answer', fallback_item: directItem.id });
+      return jsonResponse(buildFallbackAnswer(directItem), 200);
+    }
+  }
+
   const articleSlug = typeof body.articleSlug === 'string' && body.articleSlug.length < 200 ? body.articleSlug : undefined;
 
   // Vervolgvragen ("en hoe zit dat bij een BV?", "en voor een starter?")
@@ -570,15 +602,20 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // fallback (zie rateLimitedResponse) vóór de kale blokkademelding —
     // dat is precies waarom findDeterministicFallbackItem() hier, vóór de
     // Groq-aanroep, al bruikbaar moet zijn, niet alleen ná een providerfout.
-    return rateLimitedResponse(message, 'tpm', {
-      request: requestId,
-      version: AI_ASSISTANT_VERSION,
-      tpm_before: tpmBefore,
-      estimated_tokens: totalEstimate,
-      tpm_limit: GROQ_TPM_LIMIT,
-      rpm_global_before: rpmBeforeGlobal,
-      rpm_ip_before: rpmBeforeIp,
-    });
+    return rateLimitedResponse(
+      message,
+      'tpm',
+      {
+        request: requestId,
+        version: AI_ASSISTANT_VERSION,
+        tpm_before: tpmBefore,
+        estimated_tokens: totalEstimate,
+        tpm_limit: GROQ_TPM_LIMIT,
+        rpm_global_before: rpmBeforeGlobal,
+        rpm_ip_before: rpmBeforeIp,
+      },
+      sanitizedSources,
+    );
   }
   // Reservering VÓÓRDAT het verzoek verstuurd wordt, ongeacht het latere
   // resultaat (in tegenstelling tot recordSuccessfulRequest() voor de
@@ -632,6 +669,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     tpm_after: tpmLimiter.usage(GLOBAL_KEY, now),
     groq_remaining_tokens: result.remainingTokens,
     groq_limit_tokens: result.limitTokens,
+    retry_after: result.ok ? undefined : result.retryAfterSeconds,
   });
 
   if (!result.ok) {
@@ -649,28 +687,87 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       );
     }
 
-    // PROVIDER-FALLBACK: bij een echte providerstoring (Groq zelf faalde,
-    // dit is geen eigen rate limit) eerst proberen of de vraag een
-    // ondubbelzinnige, deterministische match in de kennisbank heeft (zie
-    // findDeterministicFallback hierboven) — zo blijft de assistent
-    // bruikbaar voor eenvoudige, definitorische vragen ("wat is een
-    // balans?") ook wanneer Groq tijdelijk niet bereikbaar is. Gebruikt
-    // bewust de RUWE huidige vraag, niet de geschiedenis-gecombineerde
-    // retrieval-query.
+    // PROVIDER-FALLBACK (ronde 6, punt 3/6/7 — het Groq TPD-incident van
+    // 2026-09-30): bij een echte providerstoring (Groq zelf faalde, dit is
+    // geen eigen rate limit) eerst de gewone, context-bewuste retrieval
+    // proberen (`sanitizedSources` — dezelfde bronnen die anders naar Groq
+    // zouden gaan, dus INCLUSIEF de geschiedenis-gecombineerde
+    // retrieval-query bij een vervolgvraag als "en hoe zit het met
+    // dividend?" of "en als ik de winst in de BV laat?", zie hierboven).
+    //
+    // BEWUST in deze volgorde (eerst sources, dan pas het enkelvoudige
+    // deterministische kennisitem) — niet andersom: bij live-verificatie
+    // bleek dat de smalle, EEN-item-match voor een vervolgvraag als "en als
+    // ik de winst in de BV laat?" per ongeluk op het losse, generieke "bv"-
+    // kennisitem kan matchen (dat woord komt toevallig ook voor), terwijl de
+    // volledige, meerdere-bronnen-retrieval het specifiekere en correcte
+    // item ("winst in de BV laten") al zelf bovenaan had gezet. De
+    // context-bewuste retrieval is dus zowel vollediger (meerdere bronnen,
+    // ook artikelen/deadlines) als preciezer (dezelfde ranking die ook naar
+    // Groq zou zijn gegaan) dan de smalle deterministische match — die laatste
+    // blijft uitsluitend een vangnet voor het geval de gewone retrieval,
+    // ondanks een duidelijke definitievraag, zelf niets vond.
+    if (sanitizedSources.length > 0) {
+      logDecision({
+        request: requestId,
+        version: AI_ASSISTANT_VERSION,
+        decision: 'provider_error_with_fallback',
+        fallback_type: 'sources',
+        reason: result.errorCategory,
+        retry_after: result.retryAfterSeconds,
+        fallback_source_count: sanitizedSources.length,
+      });
+      return jsonResponse(buildSourceFallbackAnswer(sanitizedSources), 200);
+    }
+    // Gebruikt bewust de RUWE huidige vraag, niet de geschiedenis-
+    // gecombineerde retrieval-query — dit is uitsluitend het vangnet voor
+    // wanneer de gewone retrieval hierboven leeg bleef.
     const fallbackItem = findDeterministicFallbackItem(message, knowledgeBase);
     if (fallbackItem) {
-      logDecision({ request: requestId, version: AI_ASSISTANT_VERSION, decision: 'provider_error_with_fallback', reason: result.errorCategory, fallback_item: fallbackItem.id });
+      logDecision({
+        request: requestId,
+        version: AI_ASSISTANT_VERSION,
+        decision: 'provider_error_with_fallback',
+        fallback_type: 'deterministic',
+        reason: result.errorCategory,
+        retry_after: result.retryAfterSeconds,
+        fallback_item: fallbackItem.id,
+      });
       return jsonResponse(buildFallbackAnswer(fallbackItem), 200);
     }
-    // Dit is een tijdelijke providerstoring, geen uitspraak over de
-    // kennisbank — die twee moeten voor de bezoeker duidelijk verschillende
-    // situaties zijn (zie ook onvoldoendeInformatie hieronder, dat wél een
-    // uitspraak over de beschikbare kennis is). Binnen "providerstoring"
-    // wordt nu ook onderscheid gemaakt: Groq's EIGEN rate limit (429, een
-    // andere situatie dan onze eigen RPM/TPM-limiter hierboven, al is de
-    // onderliggende oorzaak vaak hetzelfde TPM-plafond) krijgt een andere
-    // melding dan een echte storing (5xx/timeout/netwerkfout/misvormd
-    // antwoord) — zie categorizeProviderError() in ai-providers/index.ts.
+
+    logDecision({
+      request: requestId,
+      version: AI_ASSISTANT_VERSION,
+      decision: 'provider_error_no_fallback',
+      reason: result.errorCategory,
+      retry_after: result.retryAfterSeconds,
+    });
+
+    // Vanaf hier is er ECHT geen bruikbaar kennisbank-antwoord beschikbaar
+    // (geen deterministisch item, geen relevante bronnen) — dit is een
+    // tijdelijke providerstoring, geen uitspraak over de kennisbank (zie ook
+    // onvoldoendeInformatie hieronder, dat wél een uitspraak over de
+    // beschikbare kennis is). Drie duidelijk verschillende situaties, elk
+    // met een eigen, eerlijke melding — zie categorizeProviderError() in
+    // ai-providers/index.ts:
+    // - provider_daily_limit (ronde 6): Groq's TPD (tokens/dag) is bereikt —
+    //   dit herstelt typisch pas na uren, niet na een paar minuten, dus een
+    //   andere, eerlijkere melding dan de generieke "veel aanvragen".
+    // - rate_limited: Groq's eigen RPM/TPM-429 (herstelt binnen het
+    //   eerstvolgende venster, seconden tot een minuut).
+    // - overig (5xx/timeout/netwerkfout/misvormd antwoord): een echte
+    //   storing, geen limietprobleem.
+    if (result.errorCategory === 'provider_daily_limit') {
+      return jsonResponse(
+        {
+          ok: false,
+          code: 'provider_daily_limit',
+          error: 'De uitgebreide AI-beantwoording is tijdelijk niet beschikbaar. Voor betrouwbare informatie kun je de officiële bronnen (zoals de Belastingdienst of KVK) raadplegen, of het later opnieuw proberen.',
+        },
+        503,
+      );
+    }
     if (result.errorCategory === 'rate_limited') {
       return jsonResponse(
         {
