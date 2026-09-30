@@ -1,19 +1,25 @@
 ---
+// Alleen gebruikt op de homepage (src/pages/index.astro) — de nummering en
+// styling zijn daarom bewust afgestemd op het "index"-systeem van scène 3
+// (diensten) op diezelfde pagina, i.p.v. een losstaand FAQ-widget.
 interface FAQItem { question: string; answer: string }
 interface Props { items: FAQItem[] }
 const { items } = Astro.props;
 ---
 
-<div class="divide-y divide-ink-100 border-t border-b border-ink-100">
-  {items.map((item) => (
-    <details class="group py-5" name="faq">
-      <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-left">
-        <span class="font-display text-lg font-medium text-ink-900">{item.question}</span>
-        <svg class="h-5 w-5 shrink-0 text-brand-500 transition-transform duration-200 group-open:rotate-45" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+<div class="border-t border-ink-200">
+  {items.map((item, i) => (
+    <details class="group border-b border-ink-200 py-6" name="faq">
+      <summary class="flex cursor-pointer list-none items-start justify-between gap-6 text-left">
+        <span class="flex items-baseline gap-4">
+          <span class="font-display text-sm text-ink-400">{String(i + 1).padStart(2, '0')}</span>
+          <span class="font-display text-xl font-medium text-ink-900">{item.question}</span>
+        </span>
+        <svg class="mt-1.5 h-5 w-5 shrink-0 text-brand-500 transition-transform duration-200 group-open:rotate-45" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
           <path d="M10 3a.75.75 0 0 1 .75.75v5.5h5.5a.75.75 0 0 1 0 1.5h-5.5v5.5a.75.75 0 0 1-1.5 0v-5.5h-5.5a.75.75 0 0 1 0-1.5h5.5v-5.5A.75.75 0 0 1 10 3Z" />
         </svg>
       </summary>
-      <p class="mt-3 text-ink-600 leading-relaxed max-w-3xl">{item.answer}</p>
+      <p class="mt-3 pl-9 text-ink-600 leading-relaxed max-w-3xl">{item.answer}</p>
     </details>
   ))}
 </div>

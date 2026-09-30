@@ -1,10 +1,19 @@
 ---
+// "Het Pand" — homepage-redesign (2026-09-30). Dezelfde content, teksten en
+// inhoudelijke volgorde als voorheen, maar opnieuw ontworpen als één
+// doorlopende, architecturale/editorial ervaring rond de échte gevelfoto
+// van het Avydo-pand (public/images/avydo-gebouw.jpg — gevonden in
+// public/downloads/avydo-brochure.pdf, bewerkt naar bijna-monochroom met
+// het rode gevellogo als enig kleuraccent). Geen icoon-kaarten meer; elke
+// sectie ("scène") gebruikt een eigen compositievorm.
+//
+// ServiceCard/TestimonialCard/CTASection worden hier NIET meer gebruikt
+// (wel nog op /diensten, /referenties en vrijwel elke andere pagina — die
+// bestanden blijven daarom ongewijzigd). HeroGraphic.astro wordt hier ook
+// niet meer gebruikt; het bestand blijft ongewijzigd en onaangeroepen
+// staan, mocht het elders nog van pas komen.
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import HeroGraphic from '@/components/HeroGraphic.astro';
-import ServiceCard from '@/components/ServiceCard.astro';
-import TestimonialCard from '@/components/TestimonialCard.astro';
 import FAQAccordion from '@/components/FAQAccordion.astro';
-import CTASection from '@/components/CTASection.astro';
 import { services } from '@/data/services';
 import { testimonials } from '@/data/testimonials';
 import { company } from '@/data/company';
@@ -31,6 +40,21 @@ const faqs = [
     answer: `U kunt bellen naar ${company.phone}, mailen naar ${company.email} of het contactformulier invullen. Wij nemen dan snel contact met u op om een kennismakingsgesprek in te plannen.`,
   },
 ];
+
+const bewijspunten = [
+  { title: 'Vast aanspreekpunt', text: 'U krijgt uw eigen relatiebeheerder, die samen met u uw bedrijfsvoering analyseert en écht meedenkt.' },
+  { title: 'Ondernemersperspectief', text: 'Onze partners zijn zelf ondernemer geweest en adviseren vanuit die praktijkervaring.' },
+  { title: 'Kwaliteit van een groot kantoor', text: 'Avydo biedt dezelfde kwaliteit als grotere accountantskantoren, tegen een gunstigere prijsstelling.' },
+  { title: 'NBA-getoetst', text: 'Onze kwaliteitsbeheersing is getoetst door de NBA en voldoet aan de Wet op het accountantsberoep.' },
+];
+
+const steps = [
+  { step: '01', title: 'Kennismakingsgesprek', text: 'We bespreken vrijblijvend uw situatie, uw onderneming en waar u tegenaan loopt.' },
+  { step: '02', title: 'Analyse & vast aanspreekpunt', text: 'Uw relatiebeheerder analyseert samen met u uw bedrijfsvoering en stelt een aanpak voor.' },
+  { step: '03', title: 'Doorlopend advies', text: 'U kunt blijvend rekenen op advies en uitvoering, met één vast aanspreekpunt.' },
+];
+
+const arrow = '<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>';
 ---
 
 <BaseLayout
@@ -38,158 +62,177 @@ const faqs = [
   description="Avydo is uw accountant in Venray voor mkb-ondernemers in Vierlingsbeek, Horst-Sevenum en Nieuw-Bergen. Accountancy, belastingadvies en loonadministratie onder één dak, met een vast aanspreekpunt."
   path="/"
 >
-  <!-- Motion-laag (2026-09-30): zonder JavaScript blijft alles gewoon
-       zichtbaar (zie het script onderaan, dat html.js-reveal-ready pas ná
-       een succesvolle start toevoegt); deze noscript-regel is een extra,
-       expliciete garantie voor de zeldzame no-JS-situatie. -->
   <noscript>
-    <style>[data-reveal] { opacity: 1 !important; transform: none !important; }</style>
+    <style>[data-reveal] { opacity: 1 !important; transform: none !important; clip-path: none !important; }</style>
   </noscript>
 
-  <!-- HERO -->
-  <section id="hero" class="relative overflow-hidden bg-ink-900 text-white">
-    <div class="container max-w-content py-16 md:py-24 grid lg:grid-cols-2 gap-12 items-center">
-      <div>
-        <p class="eyebrow text-brand-300 motion-safe:animate-fade-up [animation-delay:0ms]">Accountant &amp; belastingadviseur in Venray</p>
-        <h1 class="mt-4 text-4xl md:text-[3.25rem] leading-[1.1] font-display font-semibold text-white motion-safe:animate-fade-up [animation-delay:90ms]">
+  <!-- SCÈNE 1 — HET PAND -->
+  <section id="scene-hero" class="relative isolate flex min-h-[86svh] flex-col justify-end overflow-hidden bg-ink-950 text-white">
+    <div class="absolute inset-0 -z-10">
+      <div id="hero-image-frame" class="absolute inset-0 motion-safe:animate-hero-image-open">
+        <img
+          src="/images/avydo-gebouw.jpg"
+          alt="Het pand van Avydo Accountants & Belastingadviseurs aan het Keizersveld in Venray"
+          width="1758"
+          height="1114"
+          fetchpriority="high"
+          id="hero-building-img"
+          class="h-full w-full object-cover object-[38%_48%] motion-safe:animate-hero-image-settle"
+        />
+      </div>
+      <div class="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/35 to-ink-950/10"></div>
+    </div>
+
+    <div class="container max-w-content pb-14 pt-28 md:pb-16">
+      <p class="eyebrow text-brand-300 motion-safe:animate-fade-up">Accountant &amp; belastingadviseur in Venray</p>
+      <div class="mask-reveal mt-5 overflow-hidden" data-reveal="mask">
+        <h1 class="mask-reveal-inner max-w-4xl text-[2.5rem] font-display font-semibold leading-[1.05] text-white sm:text-6xl md:text-[4.25rem]">
           Een ervaren accountant die uw onderneming écht begrijpt
         </h1>
-        <p class="mt-6 text-lg text-ink-200 leading-relaxed max-w-xl motion-safe:animate-fade-up [animation-delay:220ms]">
-          Wet- en regelgeving wordt er niet eenvoudiger op, en ondernemen is al complex genoeg. Avydo is uw vaste partner in bedrijfsvoering in Venray en omstreken, met accountancy, belastingadvies en loonadministratie onder één dak.
-        </p>
-        <div class="mt-8 flex flex-col sm:flex-row sm:flex-wrap gap-3 motion-safe:animate-fade-up [animation-delay:360ms]">
-          <a href="/contact" class="btn-primary">Maak een afspraak</a>
-          <a href="/diensten" class="btn-ghost-light">Bekijk onze diensten</a>
-          <a href="/kenniscentrum" class="btn-ghost-light">Nieuws</a>
-        </div>
-        <dl class="mt-10 grid grid-cols-3 gap-6 max-w-md border-t border-ink-700 pt-6 motion-safe:animate-fade-up [animation-delay:480ms]">
-          <div>
-            <dt class="text-xs uppercase tracking-wide text-ink-300">Sinds</dt>
-            <dd class="mt-1 font-display text-xl font-semibold text-white">2006</dd>
-          </div>
-          <div>
-            <dt class="text-xs uppercase tracking-wide text-ink-300">Team</dt>
-            <dd class="mt-1 font-display text-xl font-semibold text-white"><span id="team-count" data-count-to="10">0</span> professionals</dd>
-          </div>
-          <div>
-            <dt class="text-xs uppercase tracking-wide text-ink-300">Getoetst door</dt>
-            <dd class="mt-1 font-display text-xl font-semibold text-white">NBA</dd>
-          </div>
-        </dl>
       </div>
-      <div class="hidden lg:block motion-safe:animate-fade-up [animation-delay:560ms]">
-        <div id="hero-graphic-wrap">
-          <HeroGraphic />
-        </div>
+      <p class="mt-7 max-w-xl text-lg leading-relaxed text-ink-100 motion-safe:animate-fade-up [animation-delay:260ms]">
+        Wet- en regelgeving wordt er niet eenvoudiger op, en ondernemen is al complex genoeg. Avydo is uw vaste partner in bedrijfsvoering in Venray en omstreken, met accountancy, belastingadvies en loonadministratie onder één dak.
+      </p>
+      <div class="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4 motion-safe:animate-fade-up [animation-delay:420ms]">
+        <a href="/contact" class="btn-primary">Maak een afspraak</a>
+        <a href="/diensten" class="link-draw inline-flex items-center gap-1.5 text-sm font-semibold text-white">
+          Bekijk onze diensten <Fragment set:html={arrow} />
+        </a>
+        <a href="/kenniscentrum" class="link-draw inline-flex items-center gap-1.5 text-sm font-semibold text-ink-200">
+          Nieuws <Fragment set:html={arrow} />
+        </a>
       </div>
     </div>
+
+    <dl class="relative border-t border-white/15">
+      <div class="container max-w-content grid grid-cols-3 py-5 motion-safe:animate-fade-up [animation-delay:560ms]">
+        <div>
+          <dt class="text-[0.65rem] uppercase tracking-[0.18em] text-ink-300">Sinds</dt>
+          <dd class="mt-1 font-display text-xl font-semibold text-white">2006</dd>
+        </div>
+        <div>
+          <dt class="text-[0.65rem] uppercase tracking-[0.18em] text-ink-300">Team</dt>
+          <dd class="mt-1 font-display text-xl font-semibold text-white"><span id="team-count" data-count-to="10">0</span> professionals</dd>
+        </div>
+        <div>
+          <dt class="text-[0.65rem] uppercase tracking-[0.18em] text-ink-300">Getoetst door</dt>
+          <dd class="mt-1 font-display text-xl font-semibold text-white">NBA</dd>
+        </div>
+      </div>
+    </dl>
   </section>
 
-  <!-- WAARDEPROPOSITIE -->
-  <section class="section">
-    <div class="container max-w-content grid lg:grid-cols-3 gap-10">
-      <div class="lg:col-span-1">
+  <!-- SCÈNE 2 — WAAR AVYDO VOOR STAAT -->
+  <section class="section border-t border-ink-100">
+    <div class="container max-w-content grid gap-10 lg:grid-cols-12 lg:items-start">
+      <div class="lg:col-span-7">
         <p class="eyebrow">Waarom Avydo</p>
-        <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">Duidelijkheid en overzicht, zodat u kunt ondernemen</h2>
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-ink-900 sm:text-5xl md:text-6xl">
+            Duidelijkheid<br />en overzicht,<br /><span class="text-brand-600">zodat u kunt<br />ondernemen.</span>
+          </h2>
+        </div>
       </div>
-      <div class="lg:col-span-2 text-ink-600 leading-relaxed space-y-4 text-lg">
-        <p>
-          Elke ondernemer krijgt te maken met ingewikkelde wet- en regelgeving, terwijl het ondernemen zelf al complex genoeg is. Avydo Accountants &amp; Belastingadviseurs is daarom uw partner in bedrijfsvoering: wij zorgen voor duidelijkheid en overzicht, zodat u zich volledig kunt richten op uw rol als ondernemer.
-        </p>
-        <p>
-          Wij voldoen aan de hoge eisen van de Koninklijke Nederlandse Beroepsorganisatie van Accountants (NBA), zodat u erop kunt vertrouwen dat ons werk correct wordt uitgevoerd.
-        </p>
+      <div class="lg:col-span-5 lg:border-l lg:border-ink-200 lg:pl-10 lg:pt-3" data-reveal="fade" style="--stagger-delay:120ms">
+        <div class="space-y-5 text-lg leading-relaxed text-ink-600">
+          <p>
+            Elke ondernemer krijgt te maken met ingewikkelde wet- en regelgeving, terwijl het ondernemen zelf al complex genoeg is. Avydo Accountants &amp; Belastingadviseurs is daarom uw partner in bedrijfsvoering: wij zorgen voor duidelijkheid en overzicht, zodat u zich volledig kunt richten op uw rol als ondernemer.
+          </p>
+          <p>
+            Wij voldoen aan de hoge eisen van de Koninklijke Nederlandse Beroepsorganisatie van Accountants (NBA), zodat u erop kunt vertrouwen dat ons werk correct wordt uitgevoerd.
+          </p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- DIENSTEN -->
-  <section class="section bg-ink-50/60 border-y border-ink-100">
+  <!-- SCÈNE 3 — DIENSTEN -->
+  <section class="section bg-paper-muted border-y border-ink-100">
     <div class="container max-w-content">
       <div class="max-w-2xl">
         <p class="eyebrow">Onze diensten</p>
-        <h2 class="mt-3 text-3xl md:text-4xl font-display font-semibold text-ink-900">Een compleet dienstenpakket, onder één dak</h2>
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-ink-900 sm:text-5xl">
+            Een compleet dienstenpakket, onder één dak
+          </h2>
+        </div>
         <p class="mt-4 text-ink-600 leading-relaxed">
           Van jaarrekening tot loonstrook: Avydo biedt mkb-ondernemers in de regio Venray alles wat nodig is voor een gezonde bedrijfsvoering.
         </p>
       </div>
-      <div class="mt-10 grid md:grid-cols-3 gap-6">
+
+      <div class="mt-14 border-t border-ink-200">
         {services.map((service, i) => (
-          <div class="service-reveal grid" data-reveal="service" style={`--stagger-delay:${i * 90}ms`}>
-            <ServiceCard name={service.name} description={service.short} href={`/diensten/${service.slug}`} index={i} />
-          </div>
+          <a
+            href={`/diensten/${service.slug}`}
+            class="index-row group relative block border-b border-ink-200 py-8 transition-colors md:py-10"
+            data-reveal="index-row"
+            style={`--stagger-delay:${i * 130}ms`}
+          >
+            <div class="grid items-baseline gap-x-6 gap-y-3 md:grid-cols-12">
+              <span class="font-display text-sm text-ink-400 md:col-span-1">{String(i + 1).padStart(2, '0')}</span>
+              <span class="index-row-name block font-display text-4xl font-semibold text-ink-900 transition-colors duration-300 group-hover:text-brand-600 sm:text-5xl md:col-span-7 md:text-6xl">
+                {service.name}
+              </span>
+              <p class="text-ink-600 leading-relaxed md:col-span-4">{service.short}</p>
+            </div>
+          </a>
         ))}
       </div>
+
       <div class="mt-8">
-        <a href="/diensten/aanvullende-diensten" class="link-draw text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5">
-          Bekijk ook onze aanvullende diensten
-          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+        <a href="/diensten/aanvullende-diensten" class="link-draw inline-flex items-center gap-1.5 text-sm font-semibold text-ink-800">
+          Bekijk ook onze aanvullende diensten <Fragment set:html={arrow} />
         </a>
       </div>
     </div>
   </section>
 
-  <!-- ONDERSCHEIDEND VERMOGEN -->
-  <section class="section">
+  <!-- SCÈNE 4 — WAAROM AVYDO -->
+  <section class="section bg-brand-600 text-white">
     <div class="container max-w-content">
-      <div class="max-w-2xl mx-auto text-center" data-reveal="heading">
-        <p class="eyebrow">Wat u van ons mag verwachten</p>
-        <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">Een hoogwaardig kantoor met een persoonlijke aanpak</h2>
+      <div class="max-w-3xl">
+        <p class="eyebrow text-white/80">Wat u van ons mag verwachten</p>
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-white sm:text-5xl md:text-6xl">
+            Een hoogwaardig kantoor met een persoonlijke aanpak
+          </h2>
+        </div>
       </div>
-      <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          {
-            title: 'Vast aanspreekpunt',
-            text: 'U krijgt uw eigen relatiebeheerder, die samen met u uw bedrijfsvoering analyseert en écht meedenkt.',
-          },
-          {
-            title: 'Ondernemersperspectief',
-            text: 'Onze partners zijn zelf ondernemer geweest en adviseren vanuit die praktijkervaring.',
-          },
-          {
-            title: 'Kwaliteit van een groot kantoor',
-            text: 'Avydo biedt dezelfde kwaliteit als grotere accountantskantoren, tegen een gunstigere prijsstelling.',
-          },
-          {
-            title: 'NBA-getoetst',
-            text: 'Onze kwaliteitsbeheersing is getoetst door de NBA en voldoet aan de Wet op het accountantsberoep.',
-          },
-        ].map((f, i) => (
-          <div
-            class="point-reveal relative rounded-md border border-ink-100 p-6 hover:border-brand-300 transition-colors overflow-hidden"
-            data-reveal="point"
-            style={`--stagger-delay:${i * 140}ms`}
-          >
-            <div class="h-9 w-9 rounded bg-brand-50 flex items-center justify-center">
-              <svg class="h-5 w-5 text-brand-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
-            </div>
-            <h3 class="mt-4 font-display font-semibold text-ink-900">{f.title}</h3>
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">{f.text}</p>
+
+      <div class="mt-16 grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-4 lg:border-t lg:border-white/25 lg:pt-10">
+        {bewijspunten.map((f, i) => (
+          <div class="lg:border-l lg:border-white/25 lg:pl-8 first:lg:border-l-0 first:lg:pl-0" data-reveal="stamp" style={`--stagger-delay:${i * 130}ms`}>
+            <span class="font-display text-2xl font-semibold text-white/50">{String(i + 1).padStart(2, '0')}</span>
+            <h3 class="mt-3 font-display text-xl font-semibold text-white">{f.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-white/80">{f.text}</p>
           </div>
         ))}
       </div>
     </div>
   </section>
 
-  <!-- WERKWIJZE -->
-  <section class="section bg-ink-900 text-white">
+  <!-- SCÈNE 5 — WERKWIJZE -->
+  <section class="section bg-ink-950 text-white">
     <div class="container max-w-content">
       <div class="max-w-2xl">
         <p class="eyebrow text-brand-300">Zo werkt het</p>
-        <h2 class="mt-3 text-3xl font-display font-semibold text-white">Van eerste gesprek tot vaste partner</h2>
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-white sm:text-5xl">
+            Van eerste gesprek tot vaste partner
+          </h2>
+        </div>
       </div>
-      <div class="mt-12 relative">
-        <div class="werkwijze-line hidden md:block absolute top-0 left-0 right-0 h-px bg-ink-700 origin-left" data-reveal="timeline" aria-hidden="true"></div>
-        <div class="grid md:grid-cols-3 gap-8 md:pt-8">
-          {[
-            { step: '01', title: 'Kennismakingsgesprek', text: 'We bespreken vrijblijvend uw situatie, uw onderneming en waar u tegenaan loopt.' },
-            { step: '02', title: 'Analyse & vast aanspreekpunt', text: 'Uw relatiebeheerder analyseert samen met u uw bedrijfsvoering en stelt een aanpak voor.' },
-            { step: '03', title: 'Doorlopend advies', text: 'U kunt blijvend rekenen op advies en uitvoering, met één vast aanspreekpunt.' },
-          ].map((s, i) => (
-            <div class="step-reveal" data-reveal="step" style={`--stagger-delay:${i * 150}ms`}>
-              <span class="font-display text-3xl font-semibold text-brand-400 inline-block">{s.step}</span>
-              <h3 class="mt-3 font-display text-xl font-semibold text-white">{s.title}</h3>
-              <p class="mt-2 text-ink-300 leading-relaxed text-sm">{s.text}</p>
+
+      <div class="relative mt-16 max-w-2xl">
+        <div class="spine-line absolute bottom-2 left-[0.6rem] top-2 w-px bg-ink-700 sm:left-[0.9rem]" data-reveal="spine" aria-hidden="true"></div>
+        <div class="space-y-14">
+          {steps.map((s, i) => (
+            <div class="relative pl-10 sm:pl-14" data-reveal="spine-step" style={`--stagger-delay:${i * 180}ms`}>
+              <span class="spine-dot absolute left-0 top-1 h-5 w-5 rounded-full border-2 border-ink-700 bg-ink-950 sm:h-7 sm:w-7"></span>
+              <span class="font-display text-2xl font-semibold text-brand-400">{s.step}</span>
+              <h3 class="mt-2 font-display text-xl font-semibold text-white">{s.title}</h3>
+              <p class="mt-2 text-sm leading-relaxed text-ink-300">{s.text}</p>
             </div>
           ))}
         </div>
@@ -197,120 +240,209 @@ const faqs = [
     </div>
   </section>
 
-  <!-- VERTROUWEN / TESTIMONIALS -->
+  <!-- SCÈNE 6 — MENSEN / BEWIJS -->
   <section class="section">
     <div class="container max-w-content">
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+      <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <p class="eyebrow">Wat klanten zeggen</p>
-          <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">De mening van ondernemers</h2>
+          <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+            <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-ink-900 sm:text-5xl">
+              De mening van ondernemers
+            </h2>
+          </div>
         </div>
-        <a href="/referenties" class="link-draw text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5 shrink-0">
-          Bekijk meer referenties
-          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
+        <a href="/referenties" class="link-draw inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-ink-800">
+          Bekijk meer referenties <Fragment set:html={arrow} />
         </a>
       </div>
-      <div class="mt-10 grid md:grid-cols-3 gap-6">
-        {testimonials.map((t, i) => (
-          <div class={`testimonial-reveal testimonial-reveal--${i}`} data-reveal="testimonial" data-parallax-depth={i === 0 ? '0' : i === 1 ? '0.06' : '0.1'} style={`--stagger-delay:${i * 130}ms`}>
-            <TestimonialCard {...t} />
-          </div>
-        ))}
+
+      <div class="mt-16 grid gap-12 lg:grid-cols-12 lg:items-start">
+        <figure class="lg:col-span-7" data-reveal="fade">
+          <blockquote class="font-display text-3xl font-semibold leading-snug text-ink-900 sm:text-4xl">
+            &ldquo;{testimonials[0].quote}&rdquo;
+          </blockquote>
+          <figcaption class="mt-8 flex items-center gap-4">
+            <img
+              src={testimonials[0].logo}
+              alt={`Logo ${testimonials[0].name}`}
+              width={testimonials[0].logoWidth}
+              height={testimonials[0].logoHeight}
+              loading="lazy"
+              class="h-9 w-auto max-w-[110px] object-contain"
+            />
+            <span class="text-sm font-semibold text-ink-700">{testimonials[0].name}</span>
+          </figcaption>
+        </figure>
+
+        <div class="flex flex-col gap-10 lg:col-span-5 lg:border-l lg:border-ink-200 lg:pl-10 lg:pt-2">
+          {testimonials.slice(1).map((t, i) => (
+            <figure class="border-t border-ink-200 pt-6 first:border-t-0 first:pt-0 lg:first:border-t lg:first:pt-6" data-reveal="fade" style={`--stagger-delay:${(i + 1) * 150}ms`}>
+              <blockquote class="leading-relaxed text-ink-700">&ldquo;{t.quote}&rdquo;</blockquote>
+              <figcaption class="mt-4 flex items-center gap-3">
+                <img
+                  src={t.logo}
+                  alt={`Logo ${t.name}`}
+                  width={t.logoWidth}
+                  height={t.logoHeight}
+                  loading="lazy"
+                  class="h-6 w-auto max-w-[90px] object-contain"
+                />
+                <span class="text-xs font-semibold text-ink-600">{t.name}</span>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="section bg-ink-50/60 border-y border-ink-100">
+  <!-- SCÈNE 7 — FAQ -->
+  <section class="section border-t border-ink-100">
     <div class="container max-w-content">
       <div class="max-w-3xl">
         <p class="eyebrow">Veelgestelde vragen</p>
-        <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">Nog vragen?</h2>
-        <div class="mt-8">
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-ink-900 sm:text-5xl">
+            Nog vragen?
+          </h2>
+        </div>
+        <div class="mt-10">
           <FAQAccordion items={faqs} />
         </div>
       </div>
     </div>
   </section>
 
-  <div class="cta-motion">
-    <CTASection />
-  </div>
+  <!-- SCÈNE 8 — CONTACT -->
+  <section class="relative isolate overflow-hidden bg-ink-950 text-white">
+    <div class="absolute inset-0 -z-10">
+      <img
+        src="/images/avydo-gebouw.jpg"
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        width="1758"
+        height="1114"
+        id="closing-building-img"
+        class="h-full w-full object-cover object-[80%_38%] opacity-50"
+      />
+      <div class="absolute inset-0 bg-ink-950/70"></div>
+    </div>
+
+    <div class="container max-w-content py-24 md:py-32">
+      <div class="max-w-2xl">
+        <p class="eyebrow text-brand-300">Maak kennis met uw partner</p>
+        <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner font-display text-4xl font-semibold leading-[1.05] text-white sm:text-5xl md:text-6xl">
+            Bespreek vrijblijvend uw situatie met Avydo.
+          </h2>
+        </div>
+        <p class="mt-6 max-w-lg leading-relaxed text-ink-200" data-reveal="fade" style="--stagger-delay:200ms">
+          U krijgt altijd een vast aanspreekpunt dat uw bedrijfsvoering écht kent.
+        </p>
+      </div>
+      <div class="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-white/15 pt-8" data-reveal="fade" style="--stagger-delay:320ms">
+        <a href="/contact" class="btn-primary">Maak een afspraak</a>
+        <a href={company.phoneHref} class="link-draw text-sm font-semibold text-white">Bel {company.phone}</a>
+        <a href="/downloads/avydo-brochure.pdf" target="_blank" rel="noopener noreferrer" class="link-draw text-sm font-semibold text-ink-300">
+          Brochure bekijken
+        </a>
+      </div>
+    </div>
+  </section>
 </BaseLayout>
 
 <style>
-  /* Basis reveal-mechaniek voor secties buiten de hero (die zelf al via
-     CSS-animation-delay wordt opgebouwd, zie hierboven). Alles met
-     [data-reveal] blijft standaard gewoon zichtbaar; pas zodra het script
-     onderaan de klasse js-reveal-ready op <html> zet (bevestigt dat JS
-     daadwerkelijk draait) wordt de verborgen beginstatus geactiveerd, en
-     onthult IntersectionObserver elk element bij het in beeld komen door
-     .is-visible toe te voegen. Zo kan content nooit permanent onzichtbaar
-     blijven als JS niet laadt. */
-  :global(html.js-reveal-ready) [data-reveal] {
+  /* Basis reveal-mechaniek (zelfde patroon als de vorige motion-ronde):
+     [data-reveal] blijft standaard gewoon zichtbaar; pas als het script
+     onderaan bevestigt dat JS draait (html.js-reveal-ready) wordt de
+     verborgen beginstatus geactiveerd, en onthult IntersectionObserver elk
+     element bij het in beeld komen. Zonder JS blijft alles zichtbaar. */
+  :global(html.js-reveal-ready) [data-reveal="fade"] {
     opacity: 0;
     transform: translateY(14px);
     transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
     transition-delay: var(--stagger-delay, 0ms);
   }
-  :global(html.js-reveal-ready) [data-reveal].is-visible {
+  :global(html.js-reveal-ready) [data-reveal="fade"].is-visible {
     opacity: 1;
     transform: translateY(0);
   }
 
-  /* Testimonials: drie verschillende entreebewegingen i.p.v. drie keer
-     dezelfde fade+translateY (opdracht: "niet alle drie dezelfde
-     animatie"). */
-  :global(html.js-reveal-ready) .testimonial-reveal--1 {
-    transform: translateY(14px) scale(0.97);
+  /* Typografische masker-reveal: de kop zelf blijft normaal gedrukt, alleen
+     zijn overflow-hidden-omhulsel bepaalt wat zichtbaar is. */
+  .mask-reveal-inner {
+    display: block;
   }
-  :global(html.js-reveal-ready) .testimonial-reveal--1.is-visible {
-    transform: translateY(0) scale(1);
+  :global(html.js-reveal-ready) .mask-reveal-inner {
+    transform: translateY(108%);
   }
-  :global(html.js-reveal-ready) .testimonial-reveal--2 {
-    transform: translateX(16px);
+  :global(html.js-reveal-ready) [data-reveal="mask"].is-visible .mask-reveal-inner {
+    animation: maskReveal 850ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  :global(html.js-reveal-ready) .testimonial-reveal--2.is-visible {
+  @keyframes maskReveal {
+    from { transform: translateY(108%); }
+    to { transform: translateY(0); }
+  }
+
+  /* Diensten-index: de dienstnaam "wipet" zich horizontaal open, als een
+     luik — verwijst naar de rij ramen op de gevelfoto. */
+  :global(html.js-reveal-ready) .index-row-name {
+    clip-path: inset(0 100% 0 0);
+  }
+  :global(html.js-reveal-ready) .index-row.is-visible .index-row-name {
+    animation: wipeReveal 750ms cubic-bezier(0.65, 0, 0.35, 1) both;
+    animation-delay: var(--stagger-delay, 0ms);
+  }
+  @keyframes wipeReveal {
+    from { clip-path: inset(0 100% 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
+
+  /* Onderscheidend vermogen: elk bewijspunt "stempelt" zich (hergebruikt
+     dezelfde pop-in-keyframe als HeroGraphic, zie tailwind.config.mjs). */
+  :global(html.js-reveal-ready) [data-reveal="stamp"] {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  :global(html.js-reveal-ready) [data-reveal="stamp"].is-visible {
+    animation: popIn 550ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: var(--stagger-delay, 0ms);
+  }
+
+  /* Werkwijze: verticale spine die van boven naar beneden tekent, en per
+     stap een punt dat activeert (grijs → rood) zodra die stap zichtbaar
+     wordt. */
+  .spine-line {
+    transform-origin: top;
+  }
+  :global(html.js-reveal-ready) .spine-line {
+    transform: scaleY(0);
+    transition: transform 1.1s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  :global(html.js-reveal-ready) .spine-line.is-visible {
+    transform: scaleY(1);
+  }
+  :global(html.js-reveal-ready) [data-reveal="spine-step"] {
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    transition-delay: var(--stagger-delay, 0ms);
+  }
+  :global(html.js-reveal-ready) [data-reveal="spine-step"].is-visible {
+    opacity: 1;
     transform: translateX(0);
   }
-
-  /* Werkwijze: de horizontale lijn "tekent" zich van links naar rechts.
-     Zonder JS blijft de lijn gewoon volledig getekend staan (geen
-     permanent onzichtbaar element). */
-  .werkwijze-line {
-    transform-origin: left;
-  }
-  :global(html.js-reveal-ready) .werkwijze-line {
-    transform: scaleX(0);
-    transition: transform 0.9s cubic-bezier(0.65, 0, 0.35, 1);
-  }
-  :global(html.js-reveal-ready) .werkwijze-line.is-visible {
-    transform: scaleX(1);
-  }
-
-  /* Onderscheidend vermogen: rode accentlijn die zich per bewijspunt
-     "inkt" na het verschijnen van dat punt. */
-  .point-reveal::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 2px;
-    width: 100%;
-    background: #cf2530;
-    transform-origin: left;
-  }
-  :global(html.js-reveal-ready) .point-reveal::before {
-    transform: scaleX(0);
-    transition: transform 0.6s cubic-bezier(0.65, 0, 0.35, 1);
-    transition-delay: calc(var(--stagger-delay, 0ms) + 220ms);
-  }
-  :global(html.js-reveal-ready) .point-reveal.is-visible::before {
-    transform: scaleX(1);
+  :global(html.js-reveal-ready) [data-reveal="spine-step"].is-visible .spine-dot {
+    transition: background-color 0.4s ease, border-color 0.4s ease;
+    transition-delay: calc(var(--stagger-delay, 0ms) + 250ms);
+    background-color: #c8102e;
+    border-color: #c8102e;
   }
 
   /* Elegante underline die zich van links naar rechts tekent bij hover —
-     puur CSS, geen JS nodig. */
+     puur CSS. */
   .link-draw {
     position: relative;
   }
@@ -331,110 +463,13 @@ const faqs = [
   }
 </style>
 
-<style is:global>
-  /* Diensten: interne choreografie (nummer → titel → beschrijving → link)
-     plus een underline die zich onder de titel uittrekt. ServiceCard.astro
-     zelf blijft ongewijzigd (ook gebruikt op /diensten) — dit bereikt de
-     interne elementen puur via afstammelingselectors, alleen binnen de
-     homepage-wrapper .service-reveal. */
-  html.js-reveal-ready .service-reveal .card > span:first-child,
-  html.js-reveal-ready .service-reveal .card h3,
-  html.js-reveal-ready .service-reveal .card p,
-  html.js-reveal-ready .service-reveal .card > span:last-child {
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card > span:first-child {
-    transition-delay: var(--stagger-delay, 0ms);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card h3 {
-    transition-delay: calc(var(--stagger-delay, 0ms) + 90ms);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card p {
-    transition-delay: calc(var(--stagger-delay, 0ms) + 160ms);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card > span:last-child {
-    transition-delay: calc(var(--stagger-delay, 0ms) + 220ms);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card > span:first-child,
-  html.js-reveal-ready .service-reveal.is-visible .card h3,
-  html.js-reveal-ready .service-reveal.is-visible .card p,
-  html.js-reveal-ready .service-reveal.is-visible .card > span:last-child {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .service-reveal .card h3 {
-    position: relative;
-  }
-  .service-reveal .card h3::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: -2px;
-    height: 1px;
-    width: 100%;
-    background: #c8102e;
-    transform-origin: left;
-  }
-  html.js-reveal-ready .service-reveal .card h3::after {
-    transform: scaleX(0);
-    transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
-  }
-  html.js-reveal-ready .service-reveal.is-visible .card h3::after {
-    transition-delay: calc(var(--stagger-delay, 0ms) + 320ms);
-    transform: scaleX(1);
-  }
-  .service-reveal .card:hover h3::after {
-    transform: scaleX(1);
-  }
-  .service-reveal .card:hover > span:first-child {
-    transform: scale(1.08);
-  }
-
-  /* CTA: subtiele accentlijn bij hover op de knoppen — alleen binnen deze
-     homepage-instantie van CTASection.astro (component zelf ongewijzigd,
-     ook gebruikt op vrijwel elke andere pagina). */
-  .cta-motion .btn-primary,
-  .cta-motion .btn-ghost-light {
-    position: relative;
-    overflow: hidden;
-  }
-  .cta-motion .btn-primary::after,
-  .cta-motion .btn-ghost-light::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    height: 2px;
-    width: 100%;
-    background: currentColor;
-    opacity: 0.55;
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
-  }
-  .cta-motion .btn-primary:hover::after,
-  .cta-motion .btn-ghost-light:hover::after {
-    transform: scaleX(1);
-  }
-</style>
-
 <script>
-  // Motion-laag homepage (2026-09-30). Puur vanilla JS, geen dependency.
-  // Verantwoordelijk voor: (1) scroll-reveals via IntersectionObserver,
-  // (2) de count-up van het teamgetal, (3) een zeer subtiele cursor-/
-  // scrollparallax op de HeroGraphic. Respecteert prefers-reduced-motion
-  // expliciet voor alles wat hier zelf waarden zet (de CSS-animaties op de
-  // hero-tekst en de HeroGraphic-lijnen worden al door de bestaande,
-  // globale reduced-motion-regel in global.css afgevangen).
+  // "Het Pand" — motion-laag (2026-09-30). Vanilla JS, geen dependency.
+  // Zelfde, al beproefde patroon als de vorige motion-ronde: (1)
+  // scroll-reveals via IntersectionObserver, (2) de count-up van het
+  // teamgetal, (3) een zeer subtiele scrollparallax op de hero-gebouwfoto.
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Bevestigt dat dit script daadwerkelijk draait — pas dan activeert de
-  // CSS de "verborgen totdat zichtbaar"-status van [data-reveal]. Zonder
-  // JS (of als dit script om wat voor reden dan ook nooit start) blijft
-  // alle content gewoon zichtbaar.
   document.documentElement.classList.add('js-reveal-ready');
 
   // --- 1. Scroll-reveals --------------------------------------------
@@ -459,9 +494,6 @@ const faqs = [
   }
 
   // --- 2. Count-up van het teamgetal ("10 professionals") ------------
-  // Alleen het echte, kleine getal telt op; "2006" en "NBA" zijn geen
-  // zinvolle tellers en worden bewust niet geanimeerd (blijven statische
-  // tekst, onderdeel van de gewone hero-fade-up hierboven).
   const countEl = document.getElementById('team-count');
   if (countEl) {
     const target = Number(countEl.dataset.countTo ?? '0');
@@ -469,7 +501,7 @@ const faqs = [
       countEl.textContent = String(target);
     } else {
       const duration = 700;
-      const startDelay = 560; // valt samen met de fade-up van de statrij
+      const startDelay = 620; // valt samen met de fade-up van de statrij
       const startTime = performance.now() + startDelay;
       const tick = (now: number) => {
         const elapsed = now - startTime;
@@ -486,101 +518,44 @@ const faqs = [
     }
   }
 
-  // --- 3. Hero-graphic: subtiele cursor- en scrollparallax ------------
-  // Alleen op desktop met een precieze pointer (muis) — op mobiel is de
-  // HeroGraphic sowieso niet gerenderd (hidden lg:block), en op
-  // touch-apparaten heeft cursorparallax geen betekenis.
-  const heroGraphicWrap = document.getElementById('hero-graphic-wrap');
-  const heroSection = document.getElementById('hero');
+  // --- 3. Hero-gebouwfoto: zeer subtiele scrollparallax ---------------
+  // Alleen op desktop met precieze pointer; op mobiel/touch blijft de foto
+  // stilstaand (geen onnodige JS/verf-kosten daar).
+  const heroSection = document.getElementById('scene-hero');
+  const heroImg = document.getElementById('hero-building-img');
   const isDesktopPointer = window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
 
-  if (heroGraphicWrap && heroSection && isDesktopPointer && !prefersReducedMotion) {
-    const svg = heroGraphicWrap.querySelector('svg');
-    const layers = svg ? Array.from(svg.querySelectorAll<SVGGElement>('g[data-depth]')) : [];
-
-    let targetX = 0;
-    let targetY = 0;
-    let currentX = 0;
-    let currentY = 0;
-    let scrollOffset = 0;
-    let rafId: number | null = null;
-
-    const applyTransforms = () => {
-      // Lichte demping (lerp) i.p.v. de cursor 1-op-1 te volgen — houdt de
-      // beweging "zeer subtiel" en voorkomt schokkerigheid.
-      currentX += (targetX - currentX) * 0.08;
-      currentY += (targetY - currentY) * 0.08;
-      for (const layer of layers) {
-        const depth = Number(layer.dataset.depth ?? '0');
-        const dx = currentX * depth * 10;
-        const dy = currentY * depth * 10 + scrollOffset * depth * 18;
-        layer.style.transform = `translate(${dx}px, ${dy}px)`;
-      }
-      if (Math.abs(targetX - currentX) > 0.001 || Math.abs(targetY - currentY) > 0.001) {
-        rafId = requestAnimationFrame(applyTransforms);
-      } else {
-        rafId = null;
-      }
-    };
-
-    const scheduleUpdate = () => {
-      if (rafId === null) rafId = requestAnimationFrame(applyTransforms);
-    };
-
-    heroSection.addEventListener('mousemove', (event) => {
-      const rect = heroGraphicWrap.getBoundingClientRect();
-      const relX = (event.clientX - (rect.left + rect.width / 2)) / rect.width;
-      const relY = (event.clientY - (rect.top + rect.height / 2)) / rect.height;
-      targetX = Math.max(-1, Math.min(1, relX));
-      targetY = Math.max(-1, Math.min(1, relY));
-      scheduleUpdate();
-    });
-
-    heroSection.addEventListener('mouseleave', () => {
-      targetX = 0;
-      targetY = 0;
-      scheduleUpdate();
-    });
-
-    window.addEventListener(
-      'scroll',
-      () => {
-        const rect = heroSection.getBoundingClientRect();
-        // Alleen een waarde zolang de hero (deels) in beeld is; normaliseert
-        // naar een kleine, begrensde range zodat de parallax "minimaal" blijft.
-        scrollOffset = Math.max(-1, Math.min(1, -rect.top / Math.max(rect.height, 1)));
-        scheduleUpdate();
-      },
-      { passive: true },
-    );
-  }
-
-  // --- 4. Testimonials: zeer subtiele scrollparallax op kaart 2 en 3 -
-  const parallaxCards = Array.from(document.querySelectorAll<HTMLElement>('[data-parallax-depth]')).filter(
-    (el) => Number(el.dataset.parallaxDepth ?? '0') > 0,
-  );
-  if (parallaxCards.length > 0 && isDesktopPointer && !prefersReducedMotion) {
+  if (heroSection && heroImg && isDesktopPointer && !prefersReducedMotion) {
     let ticking = false;
-    const updateCardParallax = () => {
-      const viewportCenter = window.innerHeight / 2;
-      for (const card of parallaxCards) {
-        const depth = Number(card.dataset.parallaxDepth ?? '0');
-        const rect = card.getBoundingClientRect();
-        const distanceFromCenter = rect.top + rect.height / 2 - viewportCenter;
-        card.style.transform = `translateY(${distanceFromCenter * depth * -0.06}px)`;
-      }
+    const updateParallax = () => {
+      const rect = heroSection.getBoundingClientRect();
+      // Alleen een waarde zolang de hero (deels) in beeld is; kleine,
+      // begrensde range zodat de beweging "minimaal" blijft.
+      const progress = Math.max(0, Math.min(1, -rect.top / Math.max(rect.height, 1)));
+      heroImg.style.transform = `translateY(${progress * 40}px) scale(${1 + progress * 0.05})`;
       ticking = false;
     };
-    window.addEventListener(
-      'scroll',
-      () => {
-        if (!ticking) {
-          ticking = true;
-          requestAnimationFrame(updateCardParallax);
-        }
-      },
-      { passive: true },
-    );
-    updateCardParallax();
+    const armParallax = () => {
+      // De load-animatie (animate-hero-image-settle) houdt haar eigen
+      // eindwaarde vast (fill-mode "both") totdat we haar hier expliciet
+      // loslaten — anders wint de CSS-animatie altijd van een nadien door
+      // JS gezette inline transform, en gebeurt er zichtbaar niets.
+      heroImg.style.animation = 'none';
+      window.addEventListener(
+        'scroll',
+        () => {
+          if (!ticking) {
+            ticking = true;
+            requestAnimationFrame(updateParallax);
+          }
+        },
+        { passive: true },
+      );
+    };
+    heroImg.addEventListener('animationend', armParallax, { once: true });
+    // Vangnet: als de animatie om wat voor reden dan ook nooit eindigt
+    // (bijv. animation-play-state elders gewijzigd), toch na de bekende
+    // duur (1600ms) + marge alsnog activeren.
+    setTimeout(armParallax, 1800);
   }
 </script>

@@ -61,12 +61,21 @@ export default {
       },
       animation: {
         'fade-up': 'fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both',
-        // Motion-laag homepage (2026-09-30): drie kleine, gerichte
-        // toevoegingen bovenop de bestaande fade-up, uitsluitend gebruikt
-        // voor het "tekenen" van de HeroGraphic-lijngrafiek op de homepage.
+        // Ronde "premium motion" (2026-09-30): kleine, gerichte
+        // toevoegingen voor het "tekenen" van de HeroGraphic-lijngrafiek
+        // (HeroGraphic.astro, momenteel niet gebruikt op de homepage, maar
+        // elders nog inzetbaar).
         'draw-line': 'drawLine 1.1s cubic-bezier(0.65, 0, 0.35, 1) both',
         'pop-in': 'popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
         'grow-up': 'growUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
+        // "Het Pand"-redesign (2026-09-30): homepage als geregisseerde
+        // scène-ervaring rond de echte gebouwfoto. Vier nieuwe, gerichte
+        // toevoegingen voor de hero-foto-intro en de typografische
+        // masker-/wipe-reveals die door de hele pagina terugkeren.
+        'mask-reveal': 'maskReveal 850ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'wipe-reveal': 'wipeReveal 750ms cubic-bezier(0.65, 0, 0.35, 1) both',
+        'hero-image-open': 'heroImageOpen 1600ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'hero-image-settle': 'heroImageSettle 1600ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
       keyframes: {
         fadeUp: {
@@ -86,6 +95,29 @@ export default {
         growUp: {
           '0%': { transform: 'scaleY(0)' },
           '100%': { transform: 'scaleY(1)' },
+        },
+        // Tekst "onthult" zich van onder een masker (overflow-hidden
+        // wrapper) in plaats van te faden — gebruikt voor elke grote
+        // sectiekop op de homepage.
+        maskReveal: {
+          '0%': { transform: 'translateY(108%)' },
+          '100%': { transform: 'translateY(0)' },
+        },
+        // Horizontale "blind/luik"-onthulling voor de diensten-index
+        // (verwijst naar de rij ramen op de gebouwfoto).
+        wipeReveal: {
+          '0%': { clipPath: 'inset(0 100% 0 0)' },
+          '100%': { clipPath: 'inset(0 0 0 0)' },
+        },
+        // De hero-foto "opent" zich: van een strakke crop naar de volle
+        // compositie.
+        heroImageOpen: {
+          '0%': { clipPath: 'inset(14% 26% 14% 0%)' },
+          '100%': { clipPath: 'inset(0% 0% 0% 0%)' },
+        },
+        heroImageSettle: {
+          '0%': { transform: 'scale(1.12)' },
+          '100%': { transform: 'scale(1)' },
         },
       },
     },
