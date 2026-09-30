@@ -46,11 +46,24 @@ import { company } from '@/data/company';
     </div>
   </section>
 
-  <section class="section bg-ink-900 text-white">
+  <section class="relative isolate overflow-hidden bg-ink-950" data-reveal="fade">
+    <img
+      src="/images/avydo-gebouw.jpg"
+      alt="Het pand van Avydo Accountants & Belastingadviseurs aan het Keizersveld in Venray"
+      width="1758"
+      height="1114"
+      loading="lazy"
+      class="h-[42vh] w-full object-cover object-[45%_45%] sm:h-[52vh]"
+    />
+  </section>
+
+  <section class="section bg-ink-950 text-white">
     <div class="container max-w-content grid lg:grid-cols-3 gap-10 items-start">
       <div>
         <p class="eyebrow text-brand-300">Kwaliteitsborging</p>
-        <h2 class="mt-3 text-2xl font-display font-semibold text-white">Beoordeeld door de NBA</h2>
+        <div class="mask-reveal mt-3 overflow-hidden" data-reveal="mask">
+          <h2 class="mask-reveal-inner pb-1 font-display text-2xl font-semibold leading-[1.1] text-white">Beoordeeld door de NBA</h2>
+        </div>
       </div>
       <div class="lg:col-span-2 space-y-4 text-ink-200 leading-relaxed">
         <p>
@@ -64,19 +77,21 @@ import { company } from '@/data/company';
   </section>
 
   <section class="section">
-    <div class="container max-w-content grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      <a href="/over-ons/team" class="card p-7 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
-        <h3 class="font-display text-lg font-semibold text-ink-900">Team</h3>
-        <p class="mt-2 text-sm text-ink-600 leading-relaxed">Maak kennis met onze partners en het team achter Avydo.</p>
-      </a>
-      <a href="/over-ons/geschiedenis" class="card p-7 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
-        <h3 class="font-display text-lg font-semibold text-ink-900">Geschiedenis</h3>
-        <p class="mt-2 text-sm text-ink-600 leading-relaxed">Van overname in 2006 tot regionale full-service partner.</p>
-      </a>
-      <a href="/over-ons/mvo" class="card p-7 hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200">
-        <h3 class="font-display text-lg font-semibold text-ink-900">Maatschappelijke betrokkenheid</h3>
-        <p class="mt-2 text-sm text-ink-600 leading-relaxed">Sponsoring en de ontwikkeling van studenten in de regio Venray.</p>
-      </a>
+    <div class="container max-w-content">
+      <div class="border-t border-ink-200">
+        {[
+          { href: '/over-ons/team', title: 'Team', text: 'Maak kennis met onze partners en het team achter Avydo.' },
+          { href: '/over-ons/geschiedenis', title: 'Geschiedenis', text: 'Van overname in 2006 tot regionale full-service partner.' },
+          { href: '/over-ons/mvo', title: 'Maatschappelijke betrokkenheid', text: 'Sponsoring en de ontwikkeling van studenten in de regio Venray.' },
+        ].map((item, i) => (
+          <a href={item.href} class="group flex flex-col gap-2 border-b border-ink-200 py-7 sm:flex-row sm:items-center sm:justify-between sm:gap-8" data-reveal="fade" style={`--stagger-delay:${i * 100}ms`}>
+            <div>
+              <h3 class="font-display text-xl font-semibold text-ink-900 transition-colors group-hover:text-brand-600">{item.title}</h3>
+              <p class="mt-1 max-w-xl text-sm leading-relaxed text-ink-600">{item.text}</p>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   </section>
 

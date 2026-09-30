@@ -5,18 +5,18 @@ interface Props { member: TeamMember }
 const { member } = Astro.props;
 ---
 
-<div class="card p-7 flex flex-col sm:flex-row gap-5">
+<div class="flex flex-col gap-6 border-t border-ink-200 pt-7 sm:flex-row">
   <img
     src={member.photo}
     alt={`${member.name} bij ${company.name}`}
     width="683"
     height="1024"
-    class="w-28 sm:w-32 h-auto aspect-[2/3] rounded-md object-cover object-top shrink-0 border border-ink-100"
+    class="w-32 h-auto aspect-[2/3] object-cover object-top shrink-0 sm:w-40"
     loading="lazy"
   />
   <div>
-    <h3 class="font-display text-lg font-semibold text-ink-900">{member.name}</h3>
-    <p class="text-sm text-brand-600 font-medium">{member.role}</p>
+    <h3 class="font-display text-xl font-semibold text-ink-900">{member.name}</h3>
+    <p class="mt-1 text-sm font-medium text-brand-600">{member.role}</p>
     <div class="mt-4 space-y-3 text-sm text-ink-600 leading-relaxed">
       {member.bio.map((p) => <p>{p}</p>)}
     </div>

@@ -29,44 +29,44 @@ import { company } from '@/data/company';
         <p class="text-ink-500 italic">Meer geschiedenis wordt geschreven&hellip;</p>
       </div>
 
-      <div class="mt-14 border-t border-ink-100 pt-10">
-        <div class="flex gap-6">
-          <div class="hidden sm:flex flex-col items-center pt-1">
-            <span class="h-3 w-3 rounded-full bg-brand-500"></span>
-            <span class="w-px flex-1 bg-ink-200 mt-2"></span>
-          </div>
-          <div>
-            <span class="font-display text-xl font-semibold text-ink-900">{company.foundedYear}</span>
-            <p class="mt-1 text-ink-600 leading-relaxed max-w-xl">
+      <div class="relative mt-14 max-w-2xl pt-2">
+        <div class="spine-line absolute bottom-2 left-[0.6rem] top-2 w-px bg-ink-200 sm:left-[0.9rem]" data-reveal="spine" aria-hidden="true"></div>
+        <div class="space-y-12">
+          <div class="relative pl-10 sm:pl-14" data-reveal="spine-step">
+            <span class="spine-dot absolute left-0 top-1 h-5 w-5 rounded-full border-2 border-ink-300 bg-white sm:h-7 sm:w-7"></span>
+            <span class="font-display text-2xl font-semibold text-brand-600">{company.foundedYear}</span>
+            <p class="mt-2 text-ink-600 leading-relaxed max-w-xl">
               Oprichting van Avydo Accountants &amp; Belastingadviseurs door {company.founders.join(' en ')}, via overname van een bestaande praktijk in Venray.
             </p>
           </div>
-        </div>
-        <div class="flex gap-6 mt-8">
-          <div class="hidden sm:flex flex-col items-center pt-1">
-            <span class="h-3 w-3 rounded-full bg-brand-500"></span>
-            <span class="w-px flex-1 bg-ink-200 mt-2"></span>
-          </div>
-          <div>
-            <span class="font-display text-xl font-semibold text-ink-900">2017</span>
-            <p class="mt-1 text-ink-600 leading-relaxed max-w-xl">
+          <div class="relative pl-10 sm:pl-14" data-reveal="spine-step" style="--stagger-delay:150ms">
+            <span class="spine-dot absolute left-0 top-1 h-5 w-5 rounded-full border-2 border-ink-300 bg-white sm:h-7 sm:w-7"></span>
+            <span class="font-display text-2xl font-semibold text-brand-600">2017</span>
+            <p class="mt-2 text-ink-600 leading-relaxed max-w-xl">
               De NBA voert een kwaliteitstoetsing uit bij Avydo. Conclusie: Avydo voldoet aan de hoge eisen van de Wet op het accountantsberoep.
             </p>
           </div>
-        </div>
-        <div class="flex gap-6 mt-8">
-          <div class="hidden sm:flex flex-col items-center pt-1">
-            <span class="h-3 w-3 rounded-full bg-ink-300"></span>
-          </div>
-          <div>
-            <span class="font-display text-xl font-semibold text-ink-900">Vandaag</span>
-            <p class="mt-1 text-ink-600 leading-relaxed max-w-xl">
+          <div class="relative pl-10 sm:pl-14" data-reveal="spine-step" style="--stagger-delay:300ms">
+            <span class="spine-dot absolute left-0 top-1 h-5 w-5 rounded-full border-2 border-ink-300 bg-white sm:h-7 sm:w-7"></span>
+            <span class="font-display text-2xl font-semibold text-ink-900">Vandaag</span>
+            <p class="mt-2 text-ink-600 leading-relaxed max-w-xl">
               Avydo begeleidt mkb-ondernemers in de regio Venray, Vierlingsbeek, Horst-Sevenum en Nieuw-Bergen met een team van {company.teamSize}.
             </p>
           </div>
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="relative isolate overflow-hidden bg-ink-950" data-reveal="fade">
+    <img
+      src="/images/avydo-gebouw.jpg"
+      alt="Het pand van Avydo Accountants & Belastingadviseurs aan het Keizersveld in Venray"
+      width="1758"
+      height="1114"
+      loading="lazy"
+      class="h-[38vh] w-full object-cover object-[60%_40%] sm:h-[46vh]"
+    />
   </section>
 
   <CTASection />

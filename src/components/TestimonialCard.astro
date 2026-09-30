@@ -9,19 +9,19 @@ interface Props {
 const { name, quote, logo, logoWidth, logoHeight } = Astro.props;
 ---
 
-<figure class="card p-7 flex flex-col h-full">
-  <div class="h-11 flex items-center">
+<figure class="flex h-full flex-col border-t border-ink-200 pt-7">
+  <blockquote class="flex-1 font-display text-xl font-semibold leading-snug text-ink-900">
+    <p>&ldquo;{quote}&rdquo;</p>
+  </blockquote>
+  <figcaption class="mt-6 flex items-center gap-3">
     <img
       src={logo}
       alt={`Logo ${name}`}
       width={logoWidth}
       height={logoHeight}
       loading="lazy"
-      class="max-h-11 max-w-[140px] w-auto h-auto object-contain"
+      class="h-8 max-w-[110px] w-auto object-contain"
     />
-  </div>
-  <blockquote class="mt-5 text-ink-800 leading-relaxed flex-1">
-    <p>&ldquo;{quote}&rdquo;</p>
-  </blockquote>
-  <figcaption class="mt-5 pt-5 border-t border-ink-100 text-sm font-semibold text-ink-900">{name}</figcaption>
+    <span class="text-sm font-semibold text-ink-700">{name}</span>
+  </figcaption>
 </figure>

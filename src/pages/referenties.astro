@@ -19,7 +19,7 @@ import { testimonials } from '@/data/testimonials';
   />
 
   <section class="section">
-    <div class="container max-w-content grid md:grid-cols-3 gap-6">
+    <div class="container max-w-content grid md:grid-cols-3 gap-10" data-reveal="fade">
       {testimonials.map((t) => <TestimonialCard {...t} />)}
     </div>
   </section>

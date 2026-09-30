@@ -11,7 +11,7 @@ const { title, category, priority, publishedAt, summary, relevance, sourceName, 
 ---
 
 <article
-  class:list={['card p-6 flex flex-col h-full', highlighted && 'ring-1 ring-brand-200 border-brand-200']}
+  class:list={['flex flex-col h-full border border-ink-200 p-6 transition-colors hover:border-brand-300', highlighted && 'border-brand-300']}
   data-category={category}
   data-source={sourceName}
   data-title={title.toLowerCase()}
