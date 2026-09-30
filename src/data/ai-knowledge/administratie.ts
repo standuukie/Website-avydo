@@ -60,7 +60,7 @@ export const administratieItems: KnowledgeItem[] = [
     title: 'Winst-en-verliesrekening',
     category: 'Administratie en accountancy',
     content:
-      'De winst-en-verliesrekening geeft een overzicht van de omzet en kosten van een onderneming over een bepaalde periode (meestal een boekjaar) en laat daarmee zien of een onderneming winst heeft gemaakt of verlies heeft geleden. Samen met de balans en een toelichting vormt de winst-en-verliesrekening de jaarrekening. Voor kleine ondernemingen geldt overigens dat deze de winst-en-verliesrekening niet altijd openbaar hoeven te maken bij deponering.',
+      'De winst-en-verliesrekening geeft een overzicht van de omzet en kosten van een onderneming over een bepaalde periode (meestal een boekjaar) en toont daarmee of een onderneming winst heeft gemaakt of verlies heeft geleden. Samen met de balans en een toelichting vormt de winst-en-verliesrekening de jaarrekening. Voor kleine ondernemingen geldt overigens dat deze de winst-en-verliesrekening niet altijd openbaar hoeven te maken bij deponering.',
     targetAudience: ['mkb-ondernemer', 'bv-dga'],
     sourceName: 'KVK',
     sourceUrl: 'https://www.kvk.nl/geldzaken/waarom-een-winst-en-verliesrekening/',

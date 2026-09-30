@@ -13,7 +13,7 @@ import { getCollection } from 'astro:content';
 import { knowledgeBase } from '@/data/ai-knowledge';
 import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
-import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, tokenize } from './knowledge-match.mjs';
+import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, retrieveKnowledgeItemsWithContext, tokenize } from './knowledge-match.mjs';
 
 export interface RetrievedSource {
   id: number;
@@ -48,6 +48,17 @@ const STALE_DEADLINE_DAYS = 400;
 export interface RetrieveOptions {
   /** Slug van een specifiek Kenniscentrum-artikel dat als vaste context moet worden meegenomen (bv. vanaf een artikelpagina). */
   pinnedArticleSlug?: string;
+  /**
+   * Eerdere vragen van de bezoeker in dit gesprek (oud → nieuw), uitsluitend
+   * gebruikt voor de Avydo-kennisbank (zie retrieveKnowledgeItemsWithContext
+   * in knowledge-match.mjs) om een vervolgvraag met een verwijswoord ("die",
+   * "erin", "daar", ...) correct te koppelen aan het onderwerp van de
+   * LAATSTE voorgaande vraag — nooit het hele gesprek, en nooit ten koste
+   * van een reeds ondubbelzinnige huidige vraag (zie de toelichting in
+   * knowledge-match.mjs). Optioneel: zonder deze parameter is het gedrag
+   * exact gelijk aan voorheen (retrieveKnowledgeItems op `query` alleen).
+   */
+  previousUserMessages?: string[];
 }
 
 export async function retrieveContext(query: string, opts: RetrieveOptions = {}): Promise<RetrievedSource[]> {
@@ -75,7 +86,9 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
   // Kenniscentrum-artikelen gezet omdat curated, evergreen uitleg voor een
   // "wat is..."-vraag doorgaans een betrouwbaardere basis is dan een
   // nieuwsartikel dat toevallig dezelfde trefwoorden bevat.
-  const knowledgeMatches = retrieveKnowledgeItems(query, knowledgeBase, { maxItems: MAX_KNOWLEDGE_SOURCES });
+  const knowledgeMatches = opts.previousUserMessages
+    ? retrieveKnowledgeItemsWithContext(query, opts.previousUserMessages, knowledgeBase, { maxItems: MAX_KNOWLEDGE_SOURCES })
+    : retrieveKnowledgeItems(query, knowledgeBase, { maxItems: MAX_KNOWLEDGE_SOURCES });
   for (const item of knowledgeMatches) {
     sources.push({
       id: nextId++,

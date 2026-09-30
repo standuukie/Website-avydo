@@ -21,7 +21,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KB_DIR = path.resolve(__dirname, '../../src/data/ai-knowledge');
 const ROUTE_FILE = path.resolve(__dirname, '../../src/pages/api/kenniscentrum-chat.ts');
 
-const KB_FILES = ['administratie.ts', 'btw.ts', 'bv-dga.ts', 'inkomstenbelasting.ts', 'ondernemingsvormen.ts', 'personeel.ts'];
+// Zelfde volgorde als de spreads in src/data/ai-knowledge/index.ts — belangrijk
+// zodra een test (indirect) op array-volgorde leunt, bv. via een stable-sort
+// tiebreak in retrieveKnowledgeItems(); zie ook context-retrieval.test.mjs.
+const KB_FILES = ['ondernemingsvormen.ts', 'administratie.ts', 'btw.ts', 'inkomstenbelasting.ts', 'bv-dga.ts', 'personeel.ts'];
 const ALLOWED_SOURCE_HOSTS = ['belastingdienst.nl', 'kvk.nl', 'ondernemersplein.kvk.nl', 'rijksoverheid.nl'];
 
 function readKbFile(name) {

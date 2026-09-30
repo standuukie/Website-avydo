@@ -18,7 +18,11 @@ import { retrieveKnowledgeItems, buildRetrievalQuery } from '../../src/lib/knowl
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KB_DIR = path.resolve(__dirname, '../../src/data/ai-knowledge');
-const KB_FILES = ['administratie.ts', 'btw.ts', 'bv-dga.ts', 'inkomstenbelasting.ts', 'ondernemingsvormen.ts', 'personeel.ts'];
+// Zelfde volgorde als de spreads in src/data/ai-knowledge/index.ts — belangrijk
+// omdat deze tests op retrieval-VOLGORDE controleren (welk item bovenaan komt),
+// en gelijke score+priority-gevallen via stable-sort op array-volgorde beslist
+// worden.
+const KB_FILES = ['ondernemingsvormen.ts', 'administratie.ts', 'btw.ts', 'inkomstenbelasting.ts', 'bv-dga.ts', 'personeel.ts'];
 
 /**
  * Extraheert alle kennisitems (id/title/category/content/tags/priority) uit

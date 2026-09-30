@@ -542,29 +542,36 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   const articleSlug = typeof body.articleSlug === 'string' && body.articleSlug.length < 200 ? body.articleSlug : undefined;
 
-  // Vervolgvragen ("en hoe zit dat bij een BV?", "en voor een starter?")
-  // bevatten vaak zelf te weinig trefwoorden om de juiste bronnen te
-  // vinden. Eerst wordt daarom de HUIDIGE vraag alleen geprobeerd; alleen
-  // als dat niets oplevert, wordt teruggevallen op de eerdere vragen uit
-  // dit gesprek erbij (zonder ze aan de zichtbare "vraag van de bezoeker"
-  // toe te voegen, zie messages hieronder) — puur op basis van de
-  // geschiedenis die toch al naar de provider gaat, geen aparte/
-  // permanente opslag.
+  // Vervolgvragen ("en als ik de winst erin laat?", "kan ik die aftrekken?")
+  // bevatten vaak een verwijswoord dat naar de vorige vraag terugwijst, in
+  // plaats van te weinig trefwoorden in het algemeen. retrieveContext()
+  // krijgt daarom altijd previousUserMessages mee; voor de Avydo-kennisbank
+  // gebruikt dat intern retrieveKnowledgeItemsWithContext() (zie
+  // knowledge-match.mjs), die uitsluitend bij een herkend verwijswoord
+  // (isLikelyContextDependent) de LAATSTE voorgaande vraag laat meewegen —
+  // nooit het hele gesprek, en nooit ten koste van een huidige vraag die al
+  // een eigen, duidelijk signaal heeft.
   //
-  // Incident (2026-09-29): een eerdere versie plakte de geschiedenis er
-  // ALTIJD bij. Dat werkte voor korte, letterlijk elliptische vervolg-
-  // vragen, maar liet bij een langer gesprek de opgestapelde oude
-  // gespreksonderwerpen (bijv. meerdere eerdere vragen over "BV") een
-  // duidelijke onderwerpwisseling verderop in het gesprek (bijv. "en als
-  // ik personeel aanneem?", die op zichzelf al genoeg trefwoorden heeft)
-  // overstemmen. Door eerst de vraag alleen te proberen, blijft een vraag
-  // met genoeg eigen signaal altijd leidend, en wordt de geschiedenis
-  // alleen gebruikt als vangnet voor een vraag die dat zelf niet heeft.
+  // Incident 1 (2026-09-29): een eerdere versie plakte de geschiedenis er
+  // ALTIJD bij, wat bij een langer gesprek oude gespreksonderwerpen een
+  // duidelijke onderwerpwisseling liet overstemmen.
+  // Incident 2 (2026-09-30, "winst erin laten"): de daaropvolgende versie
+  // ging pas naar de geschiedenis kijken als de kale huidige vraag NUL
+  // bronnen opleverde — maar een korte vervolgvraag levert zelden nul
+  // treffers op, alleen vaak het VERKEERDE treffer (bijv. "winst" alleen
+  // matcht toevallig ook op "winst-en-verliesrekening"). Zie
+  // retrieveKnowledgeItemsWithContext() in knowledge-match.mjs voor de
+  // huidige, meer gerichte aanpak.
+  //
+  // buildRetrievalQuery() (de VOLLEDIGE geschiedenis) blijft hieronder als
+  // laatste vangnet bestaan, uitsluitend voor het zeldzame geval dat zelfs
+  // de kennisbank-context-aanpak, Kenniscentrum-artikelen én Belasting-
+  // kalender-deadlines samen helemaal niets opleveren.
   const previousUserMessages = history.filter((h) => h.role === 'user').map((h) => h.text);
 
   let sources: RetrievedSource[];
   try {
-    sources = await retrieveContext(message, { pinnedArticleSlug: articleSlug });
+    sources = await retrieveContext(message, { pinnedArticleSlug: articleSlug, previousUserMessages });
     if (sources.length === 0 && previousUserMessages.length > 0) {
       const retrievalQuery = buildRetrievalQuery(previousUserMessages, message);
       sources = await retrieveContext(retrievalQuery, { pinnedArticleSlug: articleSlug });
