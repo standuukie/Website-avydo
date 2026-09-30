@@ -136,13 +136,18 @@ const REAL_LIKE_ITEMS = [
   },
 ];
 
-test('REGRESSIE: "En als ik de winst in de BV laat?" matcht via de smalle deterministische fallback ten onrechte op het losse "bv"-item', () => {
-  // Dit bevestigt WAAROM de volgorde in de route is omgedraaid: als je
-  // uitsluitend findDeterministicFallbackItem zou gebruiken (de oude
-  // volgorde), krijgt de bezoeker een antwoord over "wat is een BV"
-  // in plaats van over winst in de BV laten — verkeerd onderwerp.
+test('de smalle deterministische fallback matcht NIET langer ten onrechte op het losse "bv"-item voor "En als ik de winst in de BV laat?" (wide-match guardrail, 2026-09-30)', () => {
+  // Dit bevestigde voorheen WAAROM de volgorde in de route is omgedraaid:
+  // findDeterministicFallbackItem() alleen gaf hier ten onrechte "bv" terug
+  // in plaats van "winst-in-de-bv". Sindsdien is in findDeterministicFallbackItem()
+  // zelf een gerichte guardrail toegevoegd (WIDE_MATCH_GUARDED_IDS, zie
+  // knowledge-match.mjs) die "bv" blokkeert zodra een ander kennisitem op
+  // dezelfde vraag strikt hoger scoort — dat lost dit specifieke scenario nu
+  // al op dit niveau op. De sources-first-volgorde in de route (hieronder
+  // getest) blijft desondanks bestaan als extra beschermingslaag, dus dit is
+  // geen architectuurwijziging.
   const match = findDeterministicFallbackItem('En als ik de winst in de BV laat?', REAL_LIKE_ITEMS);
-  assert.equal(match?.id, 'bv', 'bevestigt het gerapporteerde risico: de smalle match kiest het verkeerde, generieke item');
+  assert.equal(match, null, 'de wide-match guardrail moet "bv" hier blokkeren omdat "winst-in-de-bv" strikt hoger scoort');
 });
 
 test('FIX: de volledige, context-bewuste retrieval (retrieveKnowledgeItems) zet het juiste item ("winst-in-de-bv") wél bovenaan', () => {

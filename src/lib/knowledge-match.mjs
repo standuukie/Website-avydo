@@ -144,6 +144,18 @@ export const DETERMINISTIC_FALLBACK_MIN_SCORE = 3;
 // plaats van de uitleg van de gebruikelijkloonregeling.
 const FALLBACK_EXCLUDED_PATTERN = /\b(hoeveel|voordeliger|goedkoper|beter|verschil|moet ik|mag ik|kan ik|voor mij|mijn situatie)\b/i;
 
+// Read-only onderzoek (2026-09-30, "guardrail voor het deterministische
+// pad") liet via simulatie tegen de echte kennisbank zien dat deze vijf
+// deterministicFallback-items breed/generiek genoeg zijn (bijv. het enkele
+// gedeelde woord "bv" of "kor") om soms te winnen terwijl een ander,
+// specifieker kennisitem (buiten de deterministicFallback-set, dus met
+// eigen nuance/taalmodel-behandeling) eigenlijk beter bij de vraag past —
+// bijv. "Wat is rekening-courant met mijn BV?" won via het brede "bv"-item
+// in plaats van null te geven. Alleen déze vijf items krijgen daarom de
+// extra marge-toets hieronder; alle overige deterministicFallback-items
+// blijven ongewijzigd.
+const WIDE_MATCH_GUARDED_IDS = new Set(['bv', 'eenmanszaak', 'btw-algemeen', 'kor', 'vof-en-maatschap']);
+
 /**
  * Zoekt, uitsluitend onder items met `deterministicFallback === true`, een
  * ondubbelzinnige match voor `query` — bedoeld als laatste redmiddel
@@ -157,8 +169,15 @@ const FALLBACK_EXCLUDED_PATTERN = /\b(hoeveel|voordeliger|goedkoper|beter|versch
  *   score EN een titel-tiebreak (een treffer in de titel zelf weegt zwaarder
  *   dan een treffer die alleen via een bijkomende tag/lopende tekst komt)
  *   nog steeds gelijk staat met de beste, is de vraag te dubbelzinnig om
- *   zonder het taalmodel te beantwoorden.
- * @template {{ title: string, category: string, content: string, tags: string[], deterministicFallback?: boolean }} T
+ *   zonder het taalmodel te beantwoorden;
+ * - nooit als de winnaar één van de vijf WIDE_MATCH_GUARDED_IDS is én een
+ *   ander kennisitem — ook buiten de deterministicFallback-set — op
+ *   dezelfde vraag een STRIKT hogere score haalt (dezelfde scoreKnowledgeItem
+ *   die hierboven al voor de kandidaten zelf gebruikt wordt): dat betekent
+ *   dat de vraag eigenlijk over dat andere, specifiekere onderwerp gaat. Een
+ *   gelijke score telt niet als "hoger" en verandert dus niets aan de
+ *   bestaande prioriteits-/titel-tiebreak hierboven.
+ * @template {{ id: string, title: string, category: string, content: string, tags: string[], deterministicFallback?: boolean }} T
  * @param {string} query
  * @param {T[]} items
  * @returns {T | null}
@@ -183,7 +202,14 @@ export function findDeterministicFallbackItem(query, items) {
   if (scored.length > 1 && scored[1].score === scored[0].score && scored[1].titleScore === scored[0].titleScore) {
     return null; // nog steeds te dubbelzinnig ná de titel-tiebreak
   }
-  return scored[0].item;
+
+  const winner = scored[0];
+  if (WIDE_MATCH_GUARDED_IDS.has(winner.item.id)) {
+    const outscored = items.some((item) => item.id !== winner.item.id && scoreKnowledgeItem(queryTokens, item) > winner.score);
+    if (outscored) return null;
+  }
+
+  return winner.item;
 }
 
 /**

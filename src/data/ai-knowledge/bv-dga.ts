@@ -64,7 +64,7 @@ export const bvDgaItems: KnowledgeItem[] = [
     title: 'Winst in de BV laten (winst reserveren)',
     category: 'BV en vennootschapsbelasting',
     content:
-      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt mee in de winst waarover de BV vennootschapsbelasting betaalt. Zolang de BV geen dividend uitkeert, is er in beginsel nog geen dividendbelasting of inkomstenbelasting verschuldigd bij de aandeelhouder; het geld blijft binnen de onderneming, bijvoorbeeld voor investeringen of als buffer voor liquiditeit. Zodra de BV wel besluit dividend uit te keren — mits aan de wettelijke voorwaarden is voldaan — ontstaat die belastingplicht alsnog. Of een BV daardoor per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak, hangt af van de concrete situatie.',
+      'Winst die in de BV blijft (dus niet als dividend wordt uitgekeerd) telt gewoon mee in de winst waarover de BV vennootschapsbelasting betaalt. Voor het reserveren van winst gelden geen aparte wettelijke voorwaarden: zolang er geen dividend wordt uitgekeerd, blijft het geld in de onderneming en is er bij de aandeelhouder in beginsel geen dividendbelasting of box 2-heffing over die niet-uitgekeerde winst. Besluit de BV om die winst later alsnog dividend uit te keren, dan gelden op dat moment de wettelijke voorwaarden voor de dividenduitkering, met de bijbehorende dividendbelasting- en box 2-gevolgen. Of dit per saldo fiscaal voordeliger is dan bijvoorbeeld een eenmanszaak, hangt af van de concrete situatie.',
     targetAudience: ['bv-dga'],
     sourceName: 'Belastingdienst',
     sourceUrl:
