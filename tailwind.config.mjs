@@ -61,11 +61,31 @@ export default {
       },
       animation: {
         'fade-up': 'fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both',
+        // Motion-laag homepage (2026-09-30): drie kleine, gerichte
+        // toevoegingen bovenop de bestaande fade-up, uitsluitend gebruikt
+        // voor het "tekenen" van de HeroGraphic-lijngrafiek op de homepage.
+        'draw-line': 'drawLine 1.1s cubic-bezier(0.65, 0, 0.35, 1) both',
+        'pop-in': 'popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'grow-up': 'growUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
       keyframes: {
         fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(12px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        // Tekent een SVG-lijn (gebruikt met pathLength="1", dus
+        // stroke-dasharray is altijd "1" ongeacht de werkelijke lengte).
+        drawLine: {
+          '0%': { strokeDashoffset: '1' },
+          '100%': { strokeDashoffset: '0' },
+        },
+        popIn: {
+          '0%': { opacity: '0', transform: 'scale(0.8)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        growUp: {
+          '0%': { transform: 'scaleY(0)' },
+          '100%': { transform: 'scaleY(1)' },
         },
       },
     },

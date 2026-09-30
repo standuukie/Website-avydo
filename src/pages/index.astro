@@ -38,30 +38,38 @@ const faqs = [
   description="Avydo is uw accountant in Venray voor mkb-ondernemers in Vierlingsbeek, Horst-Sevenum en Nieuw-Bergen. Accountancy, belastingadvies en loonadministratie onder één dak, met een vast aanspreekpunt."
   path="/"
 >
+  <!-- Motion-laag (2026-09-30): zonder JavaScript blijft alles gewoon
+       zichtbaar (zie het script onderaan, dat html.js-reveal-ready pas ná
+       een succesvolle start toevoegt); deze noscript-regel is een extra,
+       expliciete garantie voor de zeldzame no-JS-situatie. -->
+  <noscript>
+    <style>[data-reveal] { opacity: 1 !important; transform: none !important; }</style>
+  </noscript>
+
   <!-- HERO -->
-  <section class="relative overflow-hidden bg-ink-900 text-white">
+  <section id="hero" class="relative overflow-hidden bg-ink-900 text-white">
     <div class="container max-w-content py-16 md:py-24 grid lg:grid-cols-2 gap-12 items-center">
-      <div class="animate-fade-up">
-        <p class="eyebrow text-brand-300">Accountant &amp; belastingadviseur in Venray</p>
-        <h1 class="mt-4 text-4xl md:text-[3.25rem] leading-[1.1] font-display font-semibold text-white">
+      <div>
+        <p class="eyebrow text-brand-300 motion-safe:animate-fade-up [animation-delay:0ms]">Accountant &amp; belastingadviseur in Venray</p>
+        <h1 class="mt-4 text-4xl md:text-[3.25rem] leading-[1.1] font-display font-semibold text-white motion-safe:animate-fade-up [animation-delay:90ms]">
           Een ervaren accountant die uw onderneming écht begrijpt
         </h1>
-        <p class="mt-6 text-lg text-ink-200 leading-relaxed max-w-xl">
+        <p class="mt-6 text-lg text-ink-200 leading-relaxed max-w-xl motion-safe:animate-fade-up [animation-delay:220ms]">
           Wet- en regelgeving wordt er niet eenvoudiger op, en ondernemen is al complex genoeg. Avydo is uw vaste partner in bedrijfsvoering in Venray en omstreken, met accountancy, belastingadvies en loonadministratie onder één dak.
         </p>
-        <div class="mt-8 flex flex-col sm:flex-row sm:flex-wrap gap-3">
+        <div class="mt-8 flex flex-col sm:flex-row sm:flex-wrap gap-3 motion-safe:animate-fade-up [animation-delay:360ms]">
           <a href="/contact" class="btn-primary">Maak een afspraak</a>
           <a href="/diensten" class="btn-ghost-light">Bekijk onze diensten</a>
           <a href="/kenniscentrum" class="btn-ghost-light">Nieuws</a>
         </div>
-        <dl class="mt-10 grid grid-cols-3 gap-6 max-w-md border-t border-ink-700 pt-6">
+        <dl class="mt-10 grid grid-cols-3 gap-6 max-w-md border-t border-ink-700 pt-6 motion-safe:animate-fade-up [animation-delay:480ms]">
           <div>
             <dt class="text-xs uppercase tracking-wide text-ink-300">Sinds</dt>
             <dd class="mt-1 font-display text-xl font-semibold text-white">2006</dd>
           </div>
           <div>
             <dt class="text-xs uppercase tracking-wide text-ink-300">Team</dt>
-            <dd class="mt-1 font-display text-xl font-semibold text-white">10 professionals</dd>
+            <dd class="mt-1 font-display text-xl font-semibold text-white"><span id="team-count" data-count-to="10">0</span> professionals</dd>
           </div>
           <div>
             <dt class="text-xs uppercase tracking-wide text-ink-300">Getoetst door</dt>
@@ -69,8 +77,10 @@ const faqs = [
           </div>
         </dl>
       </div>
-      <div class="hidden lg:block">
-        <HeroGraphic />
+      <div class="hidden lg:block motion-safe:animate-fade-up [animation-delay:560ms]">
+        <div id="hero-graphic-wrap">
+          <HeroGraphic />
+        </div>
       </div>
     </div>
   </section>
@@ -105,11 +115,13 @@ const faqs = [
       </div>
       <div class="mt-10 grid md:grid-cols-3 gap-6">
         {services.map((service, i) => (
-          <ServiceCard name={service.name} description={service.short} href={`/diensten/${service.slug}`} index={i} />
+          <div class="service-reveal grid" data-reveal="service" style={`--stagger-delay:${i * 90}ms`}>
+            <ServiceCard name={service.name} description={service.short} href={`/diensten/${service.slug}`} index={i} />
+          </div>
         ))}
       </div>
       <div class="mt-8">
-        <a href="/diensten/aanvullende-diensten" class="text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5">
+        <a href="/diensten/aanvullende-diensten" class="link-draw text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5">
           Bekijk ook onze aanvullende diensten
           <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
         </a>
@@ -120,7 +132,7 @@ const faqs = [
   <!-- ONDERSCHEIDEND VERMOGEN -->
   <section class="section">
     <div class="container max-w-content">
-      <div class="max-w-2xl mx-auto text-center">
+      <div class="max-w-2xl mx-auto text-center" data-reveal="heading">
         <p class="eyebrow">Wat u van ons mag verwachten</p>
         <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">Een hoogwaardig kantoor met een persoonlijke aanpak</h2>
       </div>
@@ -142,8 +154,12 @@ const faqs = [
             title: 'NBA-getoetst',
             text: 'Onze kwaliteitsbeheersing is getoetst door de NBA en voldoet aan de Wet op het accountantsberoep.',
           },
-        ].map((f) => (
-          <div class="rounded-md border border-ink-100 p-6 hover:border-brand-300 transition-colors">
+        ].map((f, i) => (
+          <div
+            class="point-reveal relative rounded-md border border-ink-100 p-6 hover:border-brand-300 transition-colors overflow-hidden"
+            data-reveal="point"
+            style={`--stagger-delay:${i * 140}ms`}
+          >
             <div class="h-9 w-9 rounded bg-brand-50 flex items-center justify-center">
               <svg class="h-5 w-5 text-brand-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.2a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg>
             </div>
@@ -162,18 +178,21 @@ const faqs = [
         <p class="eyebrow text-brand-300">Zo werkt het</p>
         <h2 class="mt-3 text-3xl font-display font-semibold text-white">Van eerste gesprek tot vaste partner</h2>
       </div>
-      <div class="mt-12 grid md:grid-cols-3 gap-8">
-        {[
-          { step: '01', title: 'Kennismakingsgesprek', text: 'We bespreken vrijblijvend uw situatie, uw onderneming en waar u tegenaan loopt.' },
-          { step: '02', title: 'Analyse & vast aanspreekpunt', text: 'Uw relatiebeheerder analyseert samen met u uw bedrijfsvoering en stelt een aanpak voor.' },
-          { step: '03', title: 'Doorlopend advies', text: 'U kunt blijvend rekenen op advies en uitvoering, met één vast aanspreekpunt.' },
-        ].map((s) => (
-          <div>
-            <span class="font-display text-3xl font-semibold text-brand-400">{s.step}</span>
-            <h3 class="mt-3 font-display text-xl font-semibold text-white">{s.title}</h3>
-            <p class="mt-2 text-ink-300 leading-relaxed text-sm">{s.text}</p>
-          </div>
-        ))}
+      <div class="mt-12 relative">
+        <div class="werkwijze-line hidden md:block absolute top-0 left-0 right-0 h-px bg-ink-700 origin-left" data-reveal="timeline" aria-hidden="true"></div>
+        <div class="grid md:grid-cols-3 gap-8 md:pt-8">
+          {[
+            { step: '01', title: 'Kennismakingsgesprek', text: 'We bespreken vrijblijvend uw situatie, uw onderneming en waar u tegenaan loopt.' },
+            { step: '02', title: 'Analyse & vast aanspreekpunt', text: 'Uw relatiebeheerder analyseert samen met u uw bedrijfsvoering en stelt een aanpak voor.' },
+            { step: '03', title: 'Doorlopend advies', text: 'U kunt blijvend rekenen op advies en uitvoering, met één vast aanspreekpunt.' },
+          ].map((s, i) => (
+            <div class="step-reveal" data-reveal="step" style={`--stagger-delay:${i * 150}ms`}>
+              <span class="font-display text-3xl font-semibold text-brand-400 inline-block">{s.step}</span>
+              <h3 class="mt-3 font-display text-xl font-semibold text-white">{s.title}</h3>
+              <p class="mt-2 text-ink-300 leading-relaxed text-sm">{s.text}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   </section>
@@ -186,13 +205,17 @@ const faqs = [
           <p class="eyebrow">Wat klanten zeggen</p>
           <h2 class="mt-3 text-3xl font-display font-semibold text-ink-900">De mening van ondernemers</h2>
         </div>
-        <a href="/referenties" class="text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5 shrink-0">
+        <a href="/referenties" class="link-draw text-sm font-semibold text-ink-800 hover:text-brand-600 inline-flex items-center gap-1.5 shrink-0">
           Bekijk meer referenties
           <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>
         </a>
       </div>
       <div class="mt-10 grid md:grid-cols-3 gap-6">
-        {testimonials.map((t) => <TestimonialCard {...t} />)}
+        {testimonials.map((t, i) => (
+          <div class={`testimonial-reveal testimonial-reveal--${i}`} data-reveal="testimonial" data-parallax-depth={i === 0 ? '0' : i === 1 ? '0.06' : '0.1'} style={`--stagger-delay:${i * 130}ms`}>
+            <TestimonialCard {...t} />
+          </div>
+        ))}
       </div>
     </div>
   </section>
@@ -210,5 +233,354 @@ const faqs = [
     </div>
   </section>
 
-  <CTASection />
+  <div class="cta-motion">
+    <CTASection />
+  </div>
 </BaseLayout>
+
+<style>
+  /* Basis reveal-mechaniek voor secties buiten de hero (die zelf al via
+     CSS-animation-delay wordt opgebouwd, zie hierboven). Alles met
+     [data-reveal] blijft standaard gewoon zichtbaar; pas zodra het script
+     onderaan de klasse js-reveal-ready op <html> zet (bevestigt dat JS
+     daadwerkelijk draait) wordt de verborgen beginstatus geactiveerd, en
+     onthult IntersectionObserver elk element bij het in beeld komen door
+     .is-visible toe te voegen. Zo kan content nooit permanent onzichtbaar
+     blijven als JS niet laadt. */
+  :global(html.js-reveal-ready) [data-reveal] {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: var(--stagger-delay, 0ms);
+  }
+  :global(html.js-reveal-ready) [data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Testimonials: drie verschillende entreebewegingen i.p.v. drie keer
+     dezelfde fade+translateY (opdracht: "niet alle drie dezelfde
+     animatie"). */
+  :global(html.js-reveal-ready) .testimonial-reveal--1 {
+    transform: translateY(14px) scale(0.97);
+  }
+  :global(html.js-reveal-ready) .testimonial-reveal--1.is-visible {
+    transform: translateY(0) scale(1);
+  }
+  :global(html.js-reveal-ready) .testimonial-reveal--2 {
+    transform: translateX(16px);
+  }
+  :global(html.js-reveal-ready) .testimonial-reveal--2.is-visible {
+    transform: translateX(0);
+  }
+
+  /* Werkwijze: de horizontale lijn "tekent" zich van links naar rechts.
+     Zonder JS blijft de lijn gewoon volledig getekend staan (geen
+     permanent onzichtbaar element). */
+  .werkwijze-line {
+    transform-origin: left;
+  }
+  :global(html.js-reveal-ready) .werkwijze-line {
+    transform: scaleX(0);
+    transition: transform 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  :global(html.js-reveal-ready) .werkwijze-line.is-visible {
+    transform: scaleX(1);
+  }
+
+  /* Onderscheidend vermogen: rode accentlijn die zich per bewijspunt
+     "inkt" na het verschijnen van dat punt. */
+  .point-reveal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 100%;
+    background: #cf2530;
+    transform-origin: left;
+  }
+  :global(html.js-reveal-ready) .point-reveal::before {
+    transform: scaleX(0);
+    transition: transform 0.6s cubic-bezier(0.65, 0, 0.35, 1);
+    transition-delay: calc(var(--stagger-delay, 0ms) + 220ms);
+  }
+  :global(html.js-reveal-ready) .point-reveal.is-visible::before {
+    transform: scaleX(1);
+  }
+
+  /* Elegante underline die zich van links naar rechts tekent bij hover —
+     puur CSS, geen JS nodig. */
+  .link-draw {
+    position: relative;
+  }
+  .link-draw::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .link-draw:hover::after {
+    transform: scaleX(1);
+  }
+</style>
+
+<style is:global>
+  /* Diensten: interne choreografie (nummer → titel → beschrijving → link)
+     plus een underline die zich onder de titel uittrekt. ServiceCard.astro
+     zelf blijft ongewijzigd (ook gebruikt op /diensten) — dit bereikt de
+     interne elementen puur via afstammelingselectors, alleen binnen de
+     homepage-wrapper .service-reveal. */
+  html.js-reveal-ready .service-reveal .card > span:first-child,
+  html.js-reveal-ready .service-reveal .card h3,
+  html.js-reveal-ready .service-reveal .card p,
+  html.js-reveal-ready .service-reveal .card > span:last-child {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card > span:first-child {
+    transition-delay: var(--stagger-delay, 0ms);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card h3 {
+    transition-delay: calc(var(--stagger-delay, 0ms) + 90ms);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card p {
+    transition-delay: calc(var(--stagger-delay, 0ms) + 160ms);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card > span:last-child {
+    transition-delay: calc(var(--stagger-delay, 0ms) + 220ms);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card > span:first-child,
+  html.js-reveal-ready .service-reveal.is-visible .card h3,
+  html.js-reveal-ready .service-reveal.is-visible .card p,
+  html.js-reveal-ready .service-reveal.is-visible .card > span:last-child {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .service-reveal .card h3 {
+    position: relative;
+  }
+  .service-reveal .card h3::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 1px;
+    width: 100%;
+    background: #c8102e;
+    transform-origin: left;
+  }
+  html.js-reveal-ready .service-reveal .card h3::after {
+    transform: scaleX(0);
+    transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  html.js-reveal-ready .service-reveal.is-visible .card h3::after {
+    transition-delay: calc(var(--stagger-delay, 0ms) + 320ms);
+    transform: scaleX(1);
+  }
+  .service-reveal .card:hover h3::after {
+    transform: scaleX(1);
+  }
+  .service-reveal .card:hover > span:first-child {
+    transform: scale(1.08);
+  }
+
+  /* CTA: subtiele accentlijn bij hover op de knoppen — alleen binnen deze
+     homepage-instantie van CTASection.astro (component zelf ongewijzigd,
+     ook gebruikt op vrijwel elke andere pagina). */
+  .cta-motion .btn-primary,
+  .cta-motion .btn-ghost-light {
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-motion .btn-primary::after,
+  .cta-motion .btn-ghost-light::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: 100%;
+    background: currentColor;
+    opacity: 0.55;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  .cta-motion .btn-primary:hover::after,
+  .cta-motion .btn-ghost-light:hover::after {
+    transform: scaleX(1);
+  }
+</style>
+
+<script>
+  // Motion-laag homepage (2026-09-30). Puur vanilla JS, geen dependency.
+  // Verantwoordelijk voor: (1) scroll-reveals via IntersectionObserver,
+  // (2) de count-up van het teamgetal, (3) een zeer subtiele cursor-/
+  // scrollparallax op de HeroGraphic. Respecteert prefers-reduced-motion
+  // expliciet voor alles wat hier zelf waarden zet (de CSS-animaties op de
+  // hero-tekst en de HeroGraphic-lijnen worden al door de bestaande,
+  // globale reduced-motion-regel in global.css afgevangen).
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Bevestigt dat dit script daadwerkelijk draait — pas dan activeert de
+  // CSS de "verborgen totdat zichtbaar"-status van [data-reveal]. Zonder
+  // JS (of als dit script om wat voor reden dan ook nooit start) blijft
+  // alle content gewoon zichtbaar.
+  document.documentElement.classList.add('js-reveal-ready');
+
+  // --- 1. Scroll-reveals --------------------------------------------
+  const revealTargets = document.querySelectorAll('[data-reveal]');
+  if (revealTargets.length > 0) {
+    if (prefersReducedMotion || !('IntersectionObserver' in window)) {
+      revealTargets.forEach((el) => el.classList.add('is-visible'));
+    } else {
+      const revealObserver = new IntersectionObserver(
+        (entries, observer) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          }
+        },
+        { threshold: 0.15, rootMargin: '0px 0px -60px 0px' },
+      );
+      revealTargets.forEach((el) => revealObserver.observe(el));
+    }
+  }
+
+  // --- 2. Count-up van het teamgetal ("10 professionals") ------------
+  // Alleen het echte, kleine getal telt op; "2006" en "NBA" zijn geen
+  // zinvolle tellers en worden bewust niet geanimeerd (blijven statische
+  // tekst, onderdeel van de gewone hero-fade-up hierboven).
+  const countEl = document.getElementById('team-count');
+  if (countEl) {
+    const target = Number(countEl.dataset.countTo ?? '0');
+    if (prefersReducedMotion || !Number.isFinite(target) || target <= 0) {
+      countEl.textContent = String(target);
+    } else {
+      const duration = 700;
+      const startDelay = 560; // valt samen met de fade-up van de statrij
+      const startTime = performance.now() + startDelay;
+      const tick = (now: number) => {
+        const elapsed = now - startTime;
+        if (elapsed < 0) {
+          requestAnimationFrame(tick);
+          return;
+        }
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        countEl.textContent = String(Math.round(eased * target));
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+  }
+
+  // --- 3. Hero-graphic: subtiele cursor- en scrollparallax ------------
+  // Alleen op desktop met een precieze pointer (muis) — op mobiel is de
+  // HeroGraphic sowieso niet gerenderd (hidden lg:block), en op
+  // touch-apparaten heeft cursorparallax geen betekenis.
+  const heroGraphicWrap = document.getElementById('hero-graphic-wrap');
+  const heroSection = document.getElementById('hero');
+  const isDesktopPointer = window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
+
+  if (heroGraphicWrap && heroSection && isDesktopPointer && !prefersReducedMotion) {
+    const svg = heroGraphicWrap.querySelector('svg');
+    const layers = svg ? Array.from(svg.querySelectorAll<SVGGElement>('g[data-depth]')) : [];
+
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let scrollOffset = 0;
+    let rafId: number | null = null;
+
+    const applyTransforms = () => {
+      // Lichte demping (lerp) i.p.v. de cursor 1-op-1 te volgen — houdt de
+      // beweging "zeer subtiel" en voorkomt schokkerigheid.
+      currentX += (targetX - currentX) * 0.08;
+      currentY += (targetY - currentY) * 0.08;
+      for (const layer of layers) {
+        const depth = Number(layer.dataset.depth ?? '0');
+        const dx = currentX * depth * 10;
+        const dy = currentY * depth * 10 + scrollOffset * depth * 18;
+        layer.style.transform = `translate(${dx}px, ${dy}px)`;
+      }
+      if (Math.abs(targetX - currentX) > 0.001 || Math.abs(targetY - currentY) > 0.001) {
+        rafId = requestAnimationFrame(applyTransforms);
+      } else {
+        rafId = null;
+      }
+    };
+
+    const scheduleUpdate = () => {
+      if (rafId === null) rafId = requestAnimationFrame(applyTransforms);
+    };
+
+    heroSection.addEventListener('mousemove', (event) => {
+      const rect = heroGraphicWrap.getBoundingClientRect();
+      const relX = (event.clientX - (rect.left + rect.width / 2)) / rect.width;
+      const relY = (event.clientY - (rect.top + rect.height / 2)) / rect.height;
+      targetX = Math.max(-1, Math.min(1, relX));
+      targetY = Math.max(-1, Math.min(1, relY));
+      scheduleUpdate();
+    });
+
+    heroSection.addEventListener('mouseleave', () => {
+      targetX = 0;
+      targetY = 0;
+      scheduleUpdate();
+    });
+
+    window.addEventListener(
+      'scroll',
+      () => {
+        const rect = heroSection.getBoundingClientRect();
+        // Alleen een waarde zolang de hero (deels) in beeld is; normaliseert
+        // naar een kleine, begrensde range zodat de parallax "minimaal" blijft.
+        scrollOffset = Math.max(-1, Math.min(1, -rect.top / Math.max(rect.height, 1)));
+        scheduleUpdate();
+      },
+      { passive: true },
+    );
+  }
+
+  // --- 4. Testimonials: zeer subtiele scrollparallax op kaart 2 en 3 -
+  const parallaxCards = Array.from(document.querySelectorAll<HTMLElement>('[data-parallax-depth]')).filter(
+    (el) => Number(el.dataset.parallaxDepth ?? '0') > 0,
+  );
+  if (parallaxCards.length > 0 && isDesktopPointer && !prefersReducedMotion) {
+    let ticking = false;
+    const updateCardParallax = () => {
+      const viewportCenter = window.innerHeight / 2;
+      for (const card of parallaxCards) {
+        const depth = Number(card.dataset.parallaxDepth ?? '0');
+        const rect = card.getBoundingClientRect();
+        const distanceFromCenter = rect.top + rect.height / 2 - viewportCenter;
+        card.style.transform = `translateY(${distanceFromCenter * depth * -0.06}px)`;
+      }
+      ticking = false;
+    };
+    window.addEventListener(
+      'scroll',
+      () => {
+        if (!ticking) {
+          ticking = true;
+          requestAnimationFrame(updateCardParallax);
+        }
+      },
+      { passive: true },
+    );
+    updateCardParallax();
+  }
+</script>

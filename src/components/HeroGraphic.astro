@@ -1,9 +1,48 @@
 ---
 // Abstract editorial motif: layered ledger lines + an upward trend,
 // evoking precision and steady growth without relying on stock photography.
+//
+// Motion-laag (2026-09-30): dezelfde grafiek, dezelfde coördinaten/kleuren
+// als voorheen — uitsluitend uitgebreid met een getekende intro-animatie
+// (SVG stroke-animatie via pathLength="1", zie tailwind.config.mjs:
+// drawLine/popIn/growUp) en drie losse groepen met een data-depth-attribuut
+// voor de subtiele cursor-/scrollparallax in index.astro. Geen wijziging
+// aan de visuele compositie zelf.
+const ledgerLines = [
+  { y: 128, delay: 520 },
+  { y: 240, delay: 570 },
+  { y: 352, delay: 620 },
+];
+
+const trendPoints = [
+  { x: 56, y: 360 },
+  { x: 140, y: 320 },
+  { x: 200, y: 340 },
+  { x: 260, y: 240 },
+  { x: 320, y: 260 },
+  { x: 400, y: 140 },
+];
+const trendPolylinePoints = trendPoints.map((p) => `${p.x},${p.y}`).join(' ');
+const TREND_DRAW_DELAY = 760; // ms, start nadat de ledger-lijnen getekend zijn
+const TREND_DRAW_DURATION = 900; // ms, zie animate-[drawLine_0.9s...] hieronder
+
+const bars = [
+  { x: 56, y: 392, height: 40 },
+  { x: 140, y: 374, height: 58 },
+  { x: 200, y: 384, height: 48 },
+  { x: 260, y: 356, height: 76 },
+  { x: 320, y: 366, height: 66 },
+  { x: 380, y: 330, height: 102 },
+];
 ---
 
-<svg viewBox="0 0 480 480" class="w-full h-auto" role="img" aria-labelledby="hero-graphic-title">
+<svg
+  id="hero-graphic"
+  viewBox="0 0 480 480"
+  class="w-full h-auto motion-safe:will-change-transform"
+  role="img"
+  aria-labelledby="hero-graphic-title"
+>
   <title id="hero-graphic-title">Grafische weergave van financiële groei en overzicht</title>
   <defs>
     <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
@@ -12,29 +51,55 @@
     </linearGradient>
   </defs>
   <rect x="16" y="16" width="448" height="448" rx="14" fill="url(#panel)"/>
-  <g stroke="#56565C" stroke-width="1">
-    <line x1="16" y1="128" x2="464" y2="128"/>
-    <line x1="16" y1="240" x2="464" y2="240"/>
-    <line x1="16" y1="352" x2="464" y2="352"/>
+
+  <g stroke="#56565C" stroke-width="1" data-depth="0.12">
+    {ledgerLines.map((line) => (
+      <line
+        x1="16"
+        y1={line.y}
+        x2="464"
+        y2={line.y}
+        pathLength="1"
+        class="motion-safe:animate-draw-line"
+        style={`stroke-dasharray:1; animation-delay:${line.delay}ms`}
+      />
+    ))}
   </g>
-  <g stroke="#DC4B54" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="56,360 140,320 200,340 260,240 320,260 400,140" />
+
+  <g stroke="#DC4B54" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" data-depth="0.35">
+    <polyline
+      points={trendPolylinePoints}
+      pathLength="1"
+      class="motion-safe:animate-draw-line"
+      style={`stroke-dasharray:1; animation-delay:${TREND_DRAW_DELAY}ms; animation-duration:${TREND_DRAW_DURATION}ms`}
+    />
   </g>
-  <g fill="#DC4B54">
-    <circle cx="56" cy="360" r="5"/>
-    <circle cx="140" cy="320" r="5"/>
-    <circle cx="200" cy="340" r="5"/>
-    <circle cx="260" cy="240" r="5"/>
-    <circle cx="320" cy="260" r="5"/>
-    <circle cx="400" cy="140" r="6"/>
+
+  <g fill="#DC4B54" data-depth="0.35">
+    {trendPoints.map((p, i) => (
+      <circle
+        cx={p.x}
+        cy={p.y}
+        r={i === trendPoints.length - 1 ? 6 : 5}
+        class="motion-safe:animate-pop-in"
+        style={`transform-origin: ${p.x}px ${p.y}px; animation-delay:${TREND_DRAW_DELAY + TREND_DRAW_DURATION - 120 + i * 70}ms`}
+      />
+    ))}
   </g>
-  <g fill="#9C9CA3" opacity="0.9">
-    <rect x="56" y="392" width="18" height="40" rx="2"/>
-    <rect x="140" y="374" width="18" height="58" rx="2"/>
-    <rect x="200" y="384" width="18" height="48" rx="2"/>
-    <rect x="260" y="356" width="18" height="76" rx="2"/>
-    <rect x="320" y="366" width="18" height="66" rx="2"/>
-    <rect x="380" y="330" width="18" height="102" rx="2"/>
+
+  <g fill="#9C9CA3" opacity="0.9" data-depth="0.2">
+    {bars.map((bar, i) => (
+      <rect
+        x={bar.x}
+        y={bar.y}
+        width="18"
+        height={bar.height}
+        rx="2"
+        class="motion-safe:animate-grow-up"
+        style={`transform-origin: ${bar.x + 9}px ${bar.y + bar.height}px; animation-delay:${TREND_DRAW_DELAY + TREND_DRAW_DURATION + i * 60}ms`}
+      />
+    ))}
   </g>
+
   <rect x="16" y="16" width="448" height="448" rx="14" fill="none" stroke="#75757C" stroke-width="1"/>
 </svg>
