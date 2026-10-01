@@ -620,6 +620,20 @@ export function isKvkProcedurePage(text) {
   return kvkProcedureKeywords.some((kw) => lower.includes(kw));
 }
 
+// Eerste padsegment van een KVK-URL (bijv. "deponeren" voor
+// kvk.nl/deponeren/jaarrekening-deponeren/), gedeeld door de hub-/dienst-/
+// productpagina-detectie hieronder én door de dry-run-rapportage
+// (dry-run-kvk.mjs) om kandidaten per sectie te kunnen tellen.
+export function kvkFirstPathSegment(url) {
+  try {
+    const { pathname } = new URL(url);
+    const [firstSegment] = pathname.split('/').filter(Boolean);
+    return (firstSegment ?? '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 // Hub-/overzichtspagina's (bijv. /onderwerp/prinsjesdag/) zijn geen concreet
 // kennisartikel maar een verzameling verwijzingen naar andere pagina's.
 // Generiek op het eerste padsegment, niet op een exacte URL-lijst — zodat
@@ -627,13 +641,58 @@ export function isKvkProcedurePage(text) {
 const KVK_HUB_PATH_SEGMENTS = new Set(['onderwerp', 'onderwerpen']);
 
 export function isKvkHubPage(url) {
-  try {
-    const { pathname } = new URL(url);
-    const [firstSegment] = pathname.split('/').filter(Boolean);
-    return KVK_HUB_PATH_SEGMENTS.has((firstSegment ?? '').toLowerCase());
-  } catch {
-    return false;
-  }
+  return KVK_HUB_PATH_SEGMENTS.has(kvkFirstPathSegment(url));
+}
+
+// --- KVK-dienst-/productpagina's (dry-run 3 -> 4) ---
+//
+// Dry-run 3 liet zien dat "jaarrekening" als sterk signaal ook KVK's eigen
+// deponerings-/bestel-/perspagina's naar tier 'hoog' tilde (bijv.
+// "Jaarrekening deponeren bedrijfsklasse groot", "KVK Dataservice
+// Jaarrekeningen", "Presskit KVK - Beeldbank") — dit zijn procedure-,
+// product- of mediapagina's, geen accountancy-inhoud. Bewust GEEN blokkade
+// van het woord "jaarrekening" zelf: inhoudelijke artikelen als
+// "Jaarrekening wel of niet deponeren?" of "Waaruit bestaat de
+// jaarrekening?" moeten gewoon door kunnen blijven gaan. Daarom twee
+// aparte, specifiekere signalen:
+//
+// 1. Padniveau: /producten-bestellen/ en /pers/ zijn, op basis van alle tot
+//    nu toe geziene voorbeelden, uitsluitend commerciële product-/dataservice-
+//    resp. pers-/mediapagina's — hier is nog geen enkel inhoudelijk
+//    accountancy-artikel in aangetroffen, dus een hard padniveau-blok is
+//    verantwoord. /deponeren/ bevat WEL een mix van procedure- én
+//    inhoudelijke pagina's en wordt daarom NIET als geheel geblokkeerd.
+// 2. Titelniveau: specifieke, administratieve/procedurele termen
+//    ("bedrijfsklasse", "uiterste termijn/datum", "handleiding", de kale
+//    actie-titel "jaarrekening(en) deponeren" zonder toelichting) die
+//    wijzen op KVK's eigen proces i.p.v. uitleg over de jaarrekening zelf.
+const KVK_SERVICE_PATH_SEGMENTS = new Set(['producten-bestellen', 'pers']);
+
+export function isKvkServiceOrProductPath(url) {
+  return KVK_SERVICE_PATH_SEGMENTS.has(kvkFirstPathSegment(url));
+}
+
+export const kvkServiceOrProductKeywords = [
+  'bedrijfsklasse',
+  'uiterste termijn',
+  'uiterste datum',
+  'handleiding',
+  'jaarrekening deponeren', // kale actie-titel zonder toelichting, bijv. "Jaarrekeningen deponeren"
+  'jaarrekeningen deponeren',
+  'open dataset',
+  'open data',
+  'dataservice',
+  'bestellen',
+  'presskit',
+  'beeldbank',
+  'persmateriaal',
+  'mediamateriaal',
+];
+
+export function isKvkServiceOrProductPage(url, text) {
+  if (isKvkServiceOrProductPath(url)) return true;
+  const lower = normalizeKvkText(text);
+  return kvkServiceOrProductKeywords.some((kw) => lower.includes(normalizeKvkText(kw)));
 }
 
 // --- Redactionele relevantielaag (dry-run 2 -> 3) ---
@@ -737,6 +796,29 @@ export function classifyKvkRelevance(text) {
   return { tier: 'twijfel', reason: 'alleen een brede trefwoordtreffer, geen sterk fiscaal signaal — handmatige beoordeling aanbevolen' };
 }
 
+// Extra waarborg tegen onbetrouwbare extractie (zie de "Presskit KVK -
+// Beeldbank"-casus uit dry-run 3): die pagina kreeg tier 'hoog' puur via de
+// samenvatting, terwijl de titel zelf geen enkel fiscaal/categorie-signaal
+// bevatte — een aanwijzing dat de samenvatting-fallback in
+// extractKvkArticleFields (eerste substantiële <p>) niet-gerelateerde
+// pagina-/navigatietekst kan hebben opgepikt. Een "hoog"-classificatie die
+// uitsluitend op de samenvatting steunt, zonder dat de titel zelf ook maar
+// één signaal geeft, wordt daarom teruggezet naar 'twijfel' i.p.v. blind
+// vertrouwd. Raakt alleen tier 'hoog'; 'twijfel' en 'afgewezen' blijven
+// zoals ze waren.
+export function downgradeIfTitleHasNoSignal(title, classification) {
+  if (classification.tier !== 'hoog') return classification;
+  const normalizedTitle = normalizeKvkText(title);
+  const titleHasSignal = Object.keys(scoreCategories(title)).length > 0
+    || kvkStrongFiscalKeywords.some((kw) => normalizedTitle.includes(normalizeKvkText(kw)))
+    || kvkComparisonKeywords.some((kw) => normalizedTitle.includes(normalizeKvkText(kw)));
+  if (titleHasSignal) return classification;
+  return {
+    tier: 'twijfel',
+    reason: 'alleen de samenvatting bevat een signaal, niet de titel zelf — mogelijk onbetrouwbare extractie, handmatige beoordeling aanbevolen',
+  };
+}
+
 const KVK_TIER_ORDER = { hoog: 0, twijfel: 1 };
 
 // Zuiver filter-/selectiepad, gedeeld door de productie-run (processKvkSource)
@@ -744,9 +826,10 @@ const KVK_TIER_ORDER = { hoog: 0, twijfel: 1 };
 // sorteert op lastmod (meest recent eerst), past het URL-vormfilter toe
 // (bevestigde artikel-URL's volgen het patroon kvk.nl/<categorie>/<slug>/,
 // precies twee padsegmenten, geen hub-/overzichtspagina zoals
-// /onderwerp/...), daarna de procedure-/formuliersignaal-uitsluiting en de
-// redactionele relevantiefilter (classifyKvkRelevance) op de URL-slug, en
-// ten slotte een rangschikking vóór er ook maar één pagina wordt opgehaald:
+// /onderwerp/...), daarna de procedure-/formuliersignaal- en de dienst-/
+// productpagina-uitsluiting (isKvkServiceOrProductPage) en de redactionele
+// relevantiefilter (classifyKvkRelevance) op de URL-slug, en ten slotte een
+// rangschikking vóór er ook maar één pagina wordt opgehaald:
 // eerst tier 'hoog', dan 'twijfel', met lastmod als tie-breaker binnen een
 // tier. Hergebruikt bewust dezelfde categoryKeywords/scoreCategories als de
 // andere bronnen — geen tweede, parallel filtersysteem.
@@ -777,6 +860,7 @@ export function selectKvkCandidates(entries, existingUrls) {
   const afterRelevanceFilter = afterUrlFilter.filter((e) => {
     const text = kvkSlugToText(e.loc);
     if (isKvkProcedurePage(text)) return false;
+    if (isKvkServiceOrProductPage(e.loc, text)) return false;
     return classifyKvkRelevance(text).tier !== 'afgewezen';
   });
 
@@ -969,8 +1053,13 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
       log(`  - overgeslagen (formulier-/product-/procedure-/servicepagina, geen kennisartikel): ${candidate.loc}`);
       continue;
     }
+    if (isKvkServiceOrProductPage(candidate.loc, combinedText)) {
+      log(`  - overgeslagen (KVK-dienst-/productpagina, geen accountancy-inhoud): ${candidate.loc}`);
+      continue;
+    }
 
-    const classification = classifyKvkRelevance(combinedText);
+    let classification = classifyKvkRelevance(combinedText);
+    classification = downgradeIfTitleHasNoSignal(meta.title, classification);
     if (classification.tier === 'afgewezen') {
       log(`  - overgeslagen (${classification.reason}): ${candidate.loc}`);
       continue;

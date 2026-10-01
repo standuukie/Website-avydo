@@ -28,6 +28,10 @@ import {
   classifyKvkRelevance,
   isKvkPureDefinitionTitle,
   findOverlappingArticle,
+  isKvkServiceOrProductPath,
+  isKvkServiceOrProductPage,
+  downgradeIfTitleHasNoSignal,
+  kvkFirstPathSegment,
 } from './fetch-articles.mjs';
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
@@ -503,4 +507,116 @@ test('findOverlappingArticle geeft null bij een duidelijk ander onderwerp binnen
   ];
   const overlap = findOverlappingArticle('Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?', 'Btw', existing);
   assert.equal(overlap, null);
+});
+
+// --- KVK-dienst-/productpagina's (dry-run 3 -> 4) ---
+// categoryKeywords alleen was niet genoeg: "jaarrekening" als sterk signaal
+// tilde ook KVK's eigen deponerings-/bestel-/perspagina's naar tier 'hoog'.
+// Deze tests gebruiken zowel de echte URL/path-context als de echte titels
+// uit dry-run 3, niet alleen losse titels.
+
+test('kvkFirstPathSegment haalt het eerste padsegment uit een KVK-URL', () => {
+  assert.equal(kvkFirstPathSegment('https://www.kvk.nl/deponeren/jaarrekening-deponeren/'), 'deponeren');
+  assert.equal(kvkFirstPathSegment('https://www.kvk.nl/pers/presskit-kvk-beeldbank/'), 'pers');
+  assert.equal(kvkFirstPathSegment('niet-een-url'), '');
+});
+
+test('isKvkServiceOrProductPath blokkeert /producten-bestellen/ en /pers/, maar niet /deponeren/ of een inhoudelijk pad', () => {
+  assert.ok(isKvkServiceOrProductPath('https://www.kvk.nl/producten-bestellen/kvk-dataservice-jaarrekeningen/'));
+  assert.ok(isKvkServiceOrProductPath('https://www.kvk.nl/pers/presskit-kvk-beeldbank/'));
+  assert.equal(isKvkServiceOrProductPath('https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/'), false);
+  assert.equal(isKvkServiceOrProductPath('https://www.kvk.nl/geldzaken/aangifte-omzetbelasting-voor-ondernemers/'), false);
+});
+
+test('isKvkServiceOrProductPage herkent /producten-bestellen/- en /pers/-URL\'s uit dry-run 3 op padniveau, ongeacht titel', () => {
+  assert.ok(isKvkServiceOrProductPage('https://www.kvk.nl/producten-bestellen/kvk-jaarrekeningen-open-data-set/', 'KVK Handelsregister Open Dataset Jaarrekeningen'));
+  assert.ok(isKvkServiceOrProductPage('https://www.kvk.nl/producten-bestellen/kvk-dataservice-jaarrekeningen/', 'KVK Dataservice Jaarrekeningen'));
+  assert.ok(isKvkServiceOrProductPage('https://www.kvk.nl/producten-bestellen/welke-gegevens-staan-er-in-een-jaarrekening/', 'Welke gegevens staan in een jaarrekening?'));
+  assert.ok(isKvkServiceOrProductPage('https://www.kvk.nl/producten-bestellen/hoe-werkt-het-bestellen-van-een-te-grote-jaarrekening/', 'Hoe werkt het bestellen van een te grote jaarrekening?'));
+  assert.ok(isKvkServiceOrProductPage('https://www.kvk.nl/pers/presskit-kvk-beeldbank/', 'Presskit KVK - Beeldbank'));
+});
+
+test('isKvkServiceOrProductPage herkent administratieve deponeer-procedurepagina\'s op titelniveau (echte titels uit dry-run 3)', () => {
+  const procedurePages = [
+    ['https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-groot/', 'Jaarrekening deponeren bedrijfsklasse groot'],
+    ['https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-middelgroot/', 'Jaarrekening deponeren bedrijfsklasse middelgroot'],
+    ['https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-micro-en-klein/', 'Jaarrekening deponeren bedrijfsklasse micro en klein'],
+    ['https://www.kvk.nl/deponeren/uiterste-termijn-deponeren-jaarrekening/', 'Uiterste datum deponeren jaarrekening'],
+    ['https://www.kvk.nl/deponeren/hoe-deponeer-je-jouw-jaarrekening/', 'In welke bedrijfsklasse valt je bedrijf?'],
+    ['https://www.kvk.nl/deponeren/jaarrekening-deponeren/', 'Jaarrekeningen deponeren'],
+    ['https://www.kvk.nl/deponeren/handleiding-zelf-deponeren-jaarrekening/', 'Handleiding Zelf Deponeren Jaarrekening'],
+  ];
+  for (const [url, title] of procedurePages) {
+    assert.ok(isKvkServiceOrProductPage(url, title), `verwacht service/product-signaal voor: ${title}`);
+  }
+});
+
+test('isKvkServiceOrProductPage blokkeert niet blind op het woord "jaarrekening" — inhoudelijke /deponeren/-artikelen blijven door', () => {
+  const contentPages = [
+    ['https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/', 'Jaarrekening wel of niet deponeren?'],
+    ['https://www.kvk.nl/deponeren/waaruit-bestaat-de-jaarrekening/', 'Waaruit bestaat de jaarrekening?'],
+    ['https://www.kvk.nl/deponeren/een-xbrl-jaarrekening-opstellen-en-deponeren/', 'Een XBRL-jaarrekening opstellen en deponeren'],
+    ['https://www.kvk.nl/deponeren/zelf-deponeren-jaarrekening/', 'Zelf deponeren van je jaarrekening'],
+  ];
+  for (const [url, title] of contentPages) {
+    assert.equal(isKvkServiceOrProductPage(url, title), false, `verwacht GEEN service/product-signaal voor: ${title}`);
+  }
+});
+
+test('classifyKvkRelevance + isKvkServiceOrProductPage samen: dry-run 3-ruis wordt nu afgewezen, sterke artikelen blijven hoog', () => {
+  // De volledige selectiepijplijn zoals processKvkSource/dry-run-kvk.mjs die
+  // toepast: eerst het service/product-signaal, dan pas classifyKvkRelevance.
+  function finalTier(url, title, description) {
+    const combined = `${title} ${description}`;
+    if (isKvkProcedurePage(combined)) return 'afgewezen';
+    if (isKvkServiceOrProductPage(url, combined)) return 'afgewezen';
+    return downgradeIfTitleHasNoSignal(title, classifyKvkRelevance(combined)).tier;
+  }
+
+  assert.equal(finalTier('https://www.kvk.nl/producten-bestellen/kvk-dataservice-jaarrekeningen/', 'KVK Dataservice Jaarrekeningen', 'Bestel hier de officiële dataservice met jaarrekeningen uit het Handelsregister.'), 'afgewezen');
+  assert.equal(finalTier('https://www.kvk.nl/pers/presskit-kvk-beeldbank/', 'Presskit KVK - Beeldbank', 'Download hier het persmateriaal en de beeldbank van KVK.'), 'afgewezen');
+  assert.equal(finalTier('https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-groot/', 'Jaarrekening deponeren bedrijfsklasse groot', 'Bedrijven in bedrijfsklasse groot moeten hun jaarrekening binnen de wettelijke termijn deponeren.'), 'afgewezen');
+
+  assert.equal(finalTier('https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/', 'Jaarrekening wel of niet deponeren?', 'Niet elke onderneming is verplicht een jaarrekening te deponeren. Lees hier wanneer dit wel en niet moet.'), 'hoog');
+  assert.equal(finalTier('https://www.kvk.nl/internationaal/wat-is-de-eu-kor/', 'Wat is de EU-KOR?', 'De EU-KOR is een btw-vrijstellingsregeling voor kleine ondernemers die internationaal zakendoen.'), 'hoog');
+  assert.equal(finalTier('https://www.kvk.nl/wetten-en-regels/wet-dba-voorkom-schijnzelfstandigheid/', 'Wet DBA: voorkom schijnzelfstandigheid', 'De Wet DBA regelt wanneer sprake is van schijnzelfstandigheid bij het inhuren van zzp\'ers.'), 'hoog');
+  assert.equal(finalTier('https://www.kvk.nl/geldzaken/de-dga-en-werknemersverzekeringen/', 'De dga en werknemersverzekeringen', 'Als dga van uw bv gelden andere regels voor werknemersverzekeringen dan voor gewoon personeel.'), 'hoog');
+});
+
+test('downgradeIfTitleHasNoSignal degradeert \'hoog\' naar \'twijfel\' als alleen de samenvatting een signaal geeft (Presskit-regressie)', () => {
+  // Simuleert de root cause van de Presskit/Beeldbank-misser: de
+  // samenvatting-fallback kan niet-gerelateerde paginatekst bevatten die
+  // toevallig een sterk trefwoord bevat, terwijl de titel zelf nergens op
+  // wijst.
+  const title = 'Nieuws: ons bedrijf viert 10-jarig jubileum';
+  const classification = { tier: 'hoog', reason: 'sterk fiscaal/accountancy-trefwoord gevonden' };
+  const result = downgradeIfTitleHasNoSignal(title, classification);
+  assert.equal(result.tier, 'twijfel');
+});
+
+test('downgradeIfTitleHasNoSignal laat \'hoog\' staan als de titel zelf ook een signaal geeft', () => {
+  const title = 'Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?';
+  const classification = { tier: 'hoog', reason: 'sterk fiscaal/accountancy-trefwoord gevonden' };
+  const result = downgradeIfTitleHasNoSignal(title, classification);
+  assert.equal(result.tier, 'hoog');
+});
+
+test('downgradeIfTitleHasNoSignal raakt \'twijfel\'/\'afgewezen\' niet aan', () => {
+  const twijfel = { tier: 'twijfel', reason: 'x' };
+  const afgewezen = { tier: 'afgewezen', reason: 'y' };
+  assert.deepEqual(downgradeIfTitleHasNoSignal('Iets random', twijfel), twijfel);
+  assert.deepEqual(downgradeIfTitleHasNoSignal('Iets random', afgewezen), afgewezen);
+});
+
+test('selectKvkCandidates sluit /producten-bestellen/- en /pers/-URL\'s uit op URL-niveau, ook met een categoryKeywords-treffer in de slug', () => {
+  const entries = [
+    { loc: 'https://www.kvk.nl/producten-bestellen/kvk-dataservice-jaarrekeningen/', lastmod: '2026-02-12T13:21:08+01:00' },
+    { loc: 'https://www.kvk.nl/pers/presskit-kvk-beeldbank/', lastmod: '2025-02-04T16:31:34+01:00' },
+    { loc: 'https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-groot/', lastmod: '2026-02-23T16:43:44+01:00' },
+    { loc: 'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/', lastmod: '2025-08-26T11:17:16+02:00' },
+  ];
+  const { afterRelevanceFilter } = selectKvkCandidates(entries, new Set());
+  assert.deepEqual(afterRelevanceFilter.map((e) => e.loc), [
+    'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
+  ]);
 });

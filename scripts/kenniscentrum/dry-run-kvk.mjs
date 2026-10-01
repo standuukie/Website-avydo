@@ -16,11 +16,18 @@ import {
   fetchKvkArticleMeta,
   pickCategory,
   isKvkProcedurePage,
+  isKvkServiceOrProductPage,
   classifyKvkRelevance,
+  downgradeIfTitleHasNoSignal,
   loadExistingArticlesMeta,
   findOverlappingArticle,
+  kvkFirstPathSegment,
   KVK_MAX_PAGE_FETCHES_PER_RUN,
 } from './fetch-articles.mjs';
+
+// Secties waarvan we expliciet willen zien hoeveel kandidaten erin
+// voorkomen en hoeveel daarvan alsnog geselecteerd worden (zie Resultaat).
+const KVK_WATCHED_PATH_SEGMENTS = ['deponeren', 'producten-bestellen', 'pers'];
 import { sources } from './sources.config.mjs';
 
 const kvkSource = sources.find((s) => s.id === 'kvk-kennisartikelen');
@@ -93,8 +100,18 @@ async function main() {
       });
       continue;
     }
+    if (isKvkServiceOrProductPage(candidate.loc, combinedText)) {
+      rejected.push({
+        url: candidate.loc,
+        title: meta.title,
+        bucket: 'kvk-dienst-productpagina',
+        reason: 'KVK-dienst-/productpagina (deponeren-procedure, productbestelling of persmateriaal), geen accountancy-inhoud',
+      });
+      continue;
+    }
 
-    const classification = classifyKvkRelevance(combinedText);
+    let classification = classifyKvkRelevance(combinedText);
+    classification = downgradeIfTitleHasNoSignal(meta.title, classification);
     if (classification.tier === 'afgewezen') {
       rejected.push({
         url: candidate.loc,
@@ -131,6 +148,19 @@ async function main() {
   const hoog = selected.filter((s) => s.tier === 'hoog');
   const twijfel = selected.filter((s) => s.tier === 'twijfel');
 
+  // Per-sectie telling: hoeveel van de opgehaalde kandidaten kwamen uit
+  // /deponeren/, /producten-bestellen/, /pers/, en hoeveel daarvan zijn
+  // uiteindelijk geselecteerd (verwacht: 0 voor producten-bestellen/pers,
+  // een beperkt aantal voor deponeren — alleen de inhoudelijke artikelen).
+  const selectedUrls = new Set(selected.map((s) => s.url));
+  const sectionCounts = Object.fromEntries(KVK_WATCHED_PATH_SEGMENTS.map((seg) => [seg, { fetched: 0, selected: 0 }]));
+  for (const candidate of toCheck) {
+    const segment = kvkFirstPathSegment(candidate.loc);
+    if (!(segment in sectionCounts)) continue;
+    sectionCounts[segment].fetched += 1;
+    if (selectedUrls.has(candidate.loc)) sectionCounts[segment].selected += 1;
+  }
+
   section('3. Resultaat');
   console.log(`Totaal sitemap-URL's: ${entries.length}`);
   console.log(`Unieke URL's: ${deduped.length}`);
@@ -145,7 +175,14 @@ async function main() {
   console.log(`  waarvan geen bruikbare velden: ${rejected.filter((r) => r.bucket === 'geen-velden').length}`);
   console.log(`  waarvan procedure-/servicepagina: ${rejected.filter((r) => r.bucket === 'procedure-servicepagina').length}`);
   console.log(`  waarvan redactioneel afgewezen (algemeen onderwerp/definitie/trendrapport/rechtsvorm-basic): ${rejected.filter((r) => r.bucket === 'redactioneel-afgewezen').length}`);
+  console.log(`  waarvan KVK-dienst-/productpagina (deponeren/producten-bestellen/pers): ${rejected.filter((r) => r.bucket === 'kvk-dienst-productpagina').length}`);
   console.log(`Overlapgevallen (inhoudelijk al gedekt door bestaand Avydo-artikel): ${overlaps.length}`);
+
+  section('3b. Per sectie: /deponeren/, /producten-bestellen/, /pers/');
+  for (const segment of KVK_WATCHED_PATH_SEGMENTS) {
+    const { fetched, selected: selectedCount } = sectionCounts[segment];
+    console.log(`/${segment}/: ${fetched} opgehaald, ${selectedCount} geselecteerd`);
+  }
 
   section(`4. Hoog relevante kandidaten (${hoog.length})`);
   if (hoog.length === 0) {
