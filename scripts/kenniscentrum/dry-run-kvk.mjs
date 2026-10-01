@@ -16,8 +16,10 @@ import {
   fetchKvkArticleMeta,
   scoreCategories,
   pickCategory,
+  isKvkProcedurePage,
+  KVK_MAX_PAGE_FETCHES_PER_RUN,
 } from './fetch-articles.mjs';
-import { sources, maxArticlesPerSourcePerRun } from './sources.config.mjs';
+import { sources } from './sources.config.mjs';
 
 const kvkSource = sources.find((s) => s.id === 'kvk-kennisartikelen');
 
@@ -50,11 +52,10 @@ async function main() {
   console.log(`Na relevantie-vóórfilter (URL-slug tegen categoryKeywords): ${afterRelevanceFilter.length}`);
 
   section('2. Artikelpagina\'s ophalen en beoordelen (titel/samenvatting + eindfilter)');
-  // Ruim boven het per-bron budget, zodat de dry-run een realistisch beeld
-  // geeft van hoeveel bruikbare artikelen er daadwerkelijk te vinden zijn —
+  // Zelfde veiligheidsgrens als de productie-run (KVK_MAX_PAGE_FETCHES_PER_RUN
+  // in fetch-articles.mjs), zodat de dry-run een realistisch beeld geeft
   // zonder bij elke run de hele sitemap (~1.800 URL's) op te vragen.
-  const PAGE_FETCH_CAP = Math.max(30, maxArticlesPerSourcePerRun * 3);
-  const toCheck = afterRelevanceFilter.slice(0, PAGE_FETCH_CAP);
+  const toCheck = afterRelevanceFilter.slice(0, KVK_MAX_PAGE_FETCHES_PER_RUN);
   console.log(`Kandidaten na vóórfilters: ${afterRelevanceFilter.length}`);
   console.log(`Pagina's die voor deze dry-run daadwerkelijk worden opgehaald: ${toCheck.length} (meest recente lastmod eerst)`);
 
@@ -68,16 +69,29 @@ async function main() {
     if (!meta) {
       rejected.push({
         url: candidate.loc,
+        category: 'geen-velden',
         reason: 'geen betrouwbare titel/samenvatting op de pagina (geen bruikbare <h1> of geen samenvattingstekst)',
       });
       continue;
     }
     const combinedText = `${meta.title} ${meta.description}`;
+
+    if (isKvkProcedurePage(combinedText)) {
+      rejected.push({
+        url: candidate.loc,
+        title: meta.title,
+        category: 'procedure-servicepagina',
+        reason: 'formulier-/product-/procedure-/servicepagina, geen kennisartikel (eindfilter)',
+      });
+      continue;
+    }
+
     const scores = scoreCategories(combinedText);
     if (Object.keys(scores).length === 0) {
       rejected.push({
         url: candidate.loc,
         title: meta.title,
+        category: 'geen-trefwoord',
         reason: 'titel/samenvatting bevatten geen fiscaal/accountancy-trefwoord (eindfilter)',
       });
       continue;
@@ -93,11 +107,16 @@ async function main() {
 
   section('3. Resultaat');
   console.log(`Totaal sitemap-URL's: ${entries.length}`);
+  console.log(`Unieke URL's (na dedupliceren): ${deduped.length}`);
   console.log(`Kandidaten na URL-filter: ${afterUrlFilter.length}`);
-  console.log(`Kandidaten na relevantiefilter (URL-slug): ${afterRelevanceFilter.length}`);
+  console.log(`Kandidaten na relevantie-vóórfilter (URL-slug, incl. procedure-uitsluiting): ${afterRelevanceFilter.length}`);
   console.log(`Daadwerkelijk opgehaalde pagina's: ${pagesFetched}`);
   console.log(`Bruikbare artikelen (titel + samenvatting + eindfilter OK): ${selected.length}`);
   console.log(`Afgewezen: ${rejected.length}`);
+  console.log(`  waarvan geen bruikbare velden (<h1>/samenvatting): ${rejected.filter((r) => r.category === 'geen-velden').length}`);
+  console.log(`  waarvan formulier-/product-/procedure-/servicepagina: ${rejected.filter((r) => r.category === 'procedure-servicepagina').length}`);
+  console.log(`  waarvan geen fiscaal/accountancy-trefwoord: ${rejected.filter((r) => r.category === 'geen-trefwoord').length}`);
+  console.log(`Procedure-/servicepagina's onder de GESELECTEERDE kandidaten: 0 (uitgesloten door het eindfilter, zie hierboven)`);
 
   section(`4. Afwijzingen (${rejected.length}, met reden)`);
   if (rejected.length === 0) {
@@ -123,11 +142,11 @@ async function main() {
     });
   }
 
-  if (selected.length < 10) {
+  if (selected.length < 15) {
     console.log(
-      `\nLet op: slechts ${selected.length} kandid${selected.length === 1 ? 'aat' : 'aten'} gevonden binnen de ${toCheck.length} opgehaalde pagina's (gevraagd: minimaal 10 ter beoordeling). ` +
+      `\nLet op: slechts ${selected.length} kandid${selected.length === 1 ? 'aat' : 'aten'} gevonden binnen de ${toCheck.length} opgehaalde pagina's (gevraagd: minimaal 15 ter beoordeling). ` +
       'Dit kan betekenen dat de filters streng genoeg zijn om weinig door te laten, of dat er op dit moment simpelweg niet meer duidelijk fiscaal/accountancy-relevante KVK-artikelen in de sitemap staan. ' +
-      'Verhoog zo nodig PAGE_FETCH_CAP in dit script om meer kandidaten te beoordelen.',
+      'Verhoog zo nodig KVK_MAX_PAGE_FETCHES_PER_RUN in fetch-articles.mjs om meer kandidaten te beoordelen (let op: dit wijzigt ook de productie-veiligheidsgrens).',
     );
   }
 

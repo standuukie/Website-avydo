@@ -587,14 +587,46 @@ export async function fetchKvkDocumentUrls(sitemapIndexUrl) {
   return entries;
 }
 
+// Procedure-/formulier-/product-/servicesignalen. De eerste KVK-dry-run liet
+// o.a. "Formulier 1: Eenmanszaak inschrijven", "Jaarrekeningen opvragen",
+// "Convenant Douane" en "Autorisaties voor Handelsregister" door: deze
+// pagina's bevatten toevallig dezelfde categoryKeywords als echte
+// kennisartikelen (bijv. "eenmanszaak", "jaarrekening"), maar zijn
+// formulieren/procedures/diensten, geen inhoudelijke artikelen. Dezelfde
+// `.includes()`-aanpak als scoreCategories, maar als negatieve lijst: een
+// treffer hier sluit de kandidaat uit, ongeacht een categoryKeywords-match.
+// Stam-vormen (bijv. "inschrij" i.p.v. alleen "inschrijven") dekken zowel
+// werkwoords- als zelfstandignaamwoordvormen ("inschrijven", "inschrijving",
+// "inschrijfformulier").
+export const kvkProcedureKeywords = [
+  'formulier',
+  'inschrij', // inschrijven, inschrijving, inschrijfformulier, ...
+  'uitschrij', // uitschrijven, uitschrijving, uitschrijfformulier, ...
+  'afspraak maken',
+  'convenant',
+  'rekentool',
+  'rekenmodule',
+  'autorisatie', // autorisatie, autorisaties
+  'opvragen',
+  'aanvragen',
+  'uittreksel',
+  'machtig', // machtiging, machtigen, gemachtigde
+];
+
+export function isKvkProcedurePage(text) {
+  const lower = text.toLowerCase();
+  return kvkProcedureKeywords.some((kw) => lower.includes(kw));
+}
+
 // Zuiver filter-/selectiepad, gedeeld door de productie-run (processKvkSource)
 // en het aparte dry-run-script (dry-run-kvk.mjs): dedupliceert op URL,
 // sorteert op lastmod (meest recent eerst), past het URL-vormfilter toe
 // (bevestigde artikel-URL's volgen het patroon kvk.nl/<categorie>/<slug>/,
 // precies twee padsegmenten — sluit overduidelijke niet-artikel-URL's uit
-// zonder te gokken op een deny-list) en daarna de relevantie-vóórfilter op
-// de URL-slug. Hergebruikt bewust dezelfde categoryKeywords/scoreCategories
-// als de andere bronnen — geen tweede, parallel filtersysteem.
+// zonder te gokken op een deny-list), daarna de procedure-/formuliersignaal-
+// uitsluiting en ten slotte de relevantie-vóórfilter op de URL-slug.
+// Hergebruikt bewust dezelfde categoryKeywords/scoreCategories als de andere
+// bronnen — geen tweede, parallel filtersysteem.
 export function selectKvkCandidates(entries, existingUrls) {
   const uniqueByUrl = new Map();
   for (const e of entries) {
@@ -618,9 +650,10 @@ export function selectKvkCandidates(entries, existingUrls) {
     }
   });
 
-  const afterRelevanceFilter = afterUrlFilter.filter(
-    (e) => Object.keys(scoreCategories(kvkSlugToText(e.loc))).length > 0,
-  );
+  const afterRelevanceFilter = afterUrlFilter.filter((e) => {
+    const text = kvkSlugToText(e.loc);
+    return Object.keys(scoreCategories(text)).length > 0 && !isKvkProcedurePage(text);
+  });
 
   const afterDedupAgainstExisting = afterRelevanceFilter.filter((e) => !existingUrls.has(e.loc));
 
@@ -667,8 +700,10 @@ export async function fetchKvkArticleMeta(url) {
 // per run: de sitemap bevat ~1.800 URL's, en zonder grens zou een eerste
 // run (vóór dedup tegen bestaande content opbouwt) in theorie honderden
 // pagina's kunnen opvragen. Ruim boven maxArticlesPerSourcePerRun, zodat dit
-// in de praktijk alleen bij die eerste/lege run ooit relevant wordt.
-const KVK_MAX_PAGE_FETCHES_PER_RUN = 50;
+// in de praktijk alleen bij die eerste/lege run ooit relevant wordt. Ook
+// hergebruikt door dry-run-kvk.mjs, zodat de dry-run dezelfde grens
+// aanhoudt als de productie-run.
+export const KVK_MAX_PAGE_FETCHES_PER_RUN = 50;
 
 async function processKvkSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
@@ -711,8 +746,14 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
     // datum, wel gebruikt als publishedAt (zelfde aanpak als de bestaande
     // Rijksoverheid-sitemapbron bij ontbrekende news:publication_date).
     const item = { title: meta.title, description: meta.description, link: candidate.loc, pubDate: candidate.lastmod };
+    const combinedText = `${item.title} ${item.description}`;
 
-    const scores = scoreCategories(`${item.title} ${item.description}`);
+    if (isKvkProcedurePage(combinedText)) {
+      log(`  - overgeslagen (formulier-/product-/procedure-/servicepagina, geen kennisartikel): ${candidate.loc}`);
+      continue;
+    }
+
+    const scores = scoreCategories(combinedText);
     if (Object.keys(scores).length === 0) {
       log(`  - overgeslagen (titel/samenvatting bevatten geen fiscaal/accountancy-trefwoord): ${candidate.loc}`);
       continue;

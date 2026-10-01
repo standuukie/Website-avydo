@@ -23,6 +23,7 @@ import {
   kvkSlugToText,
   selectKvkCandidates,
   extractKvkArticleFields,
+  isKvkProcedurePage,
 } from './fetch-articles.mjs';
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
@@ -274,4 +275,102 @@ test('extractKvkArticleFields geeft null als er geen <h1> staat (geen gegokte ti
 test('extractKvkArticleFields geeft null als er geen bruikbare samenvatting te vinden is', () => {
   const html = '<html><body><h1>BTW-aangifte doen</h1><p>Kort.</p></body></html>';
   assert.equal(extractKvkArticleFields(html), null);
+});
+
+// Regressie voor de eerste KVK-dry-run (2026-10-01): categoryKeywords alleen
+// liet formulier-/procedure-/servicepagina's door omdat die toevallig
+// dezelfde fiscale/rechtsvorm-trefwoorden bevatten als echte artikelen (bijv.
+// "eenmanszaak" in zowel "Formulier 1: Eenmanszaak inschrijven" als een
+// inhoudelijk artikel over de eenmanszaak).
+test('isKvkProcedurePage herkent formulier-, inschrijf-, uitschrijf- en convenantpagina\'s (echte titels uit dry-run 1)', () => {
+  assert.ok(isKvkProcedurePage('Formulier 2: Vof, cv of rederij inschrijven'));
+  assert.ok(isKvkProcedurePage('Jaarrekeningen opvragen'));
+  assert.ok(isKvkProcedurePage('Inschrijven en afspraak maken eenmanszaak'));
+  assert.ok(isKvkProcedurePage('Convenant Openbaar Ministerie'));
+  assert.ok(isKvkProcedurePage('Convenant Douane'));
+  assert.ok(isKvkProcedurePage('Rekentool inkomstenbelasting 2027'));
+  assert.ok(isKvkProcedurePage('Autorisaties voor Handelsregister'));
+  assert.ok(isKvkProcedurePage('Eenmanszaak: zo vul je het online inschrijfformulier in'));
+  assert.ok(isKvkProcedurePage('Formulier 1: Eenmanszaak inschrijven'));
+  assert.ok(isKvkProcedurePage('Formulier 2a: Maatschap inschrijven'));
+  assert.ok(isKvkProcedurePage('Eenmanszaak uitschrijven'));
+});
+
+test('isKvkProcedurePage laat inhoudelijke kennisartikelen met dezelfde rechtsvorm-/fiscale trefwoorden gewoon door (echte titels uit dry-run 1)', () => {
+  assert.equal(isKvkProcedurePage('Wat is de EU-KOR?'), false);
+  assert.equal(isKvkProcedurePage('Ontdek hoe je de EU-KOR voor je webshop gebruikt'), false);
+  assert.equal(isKvkProcedurePage('Btw-regels voor e-commerce in de EU'), false);
+  assert.equal(isKvkProcedurePage('Inzicht in de belastingtarieven en cijfers van 2026'), false);
+  assert.equal(isKvkProcedurePage('Eenmanszaak of bv: zo kies je je rechtsvorm'), false);
+  assert.equal(isKvkProcedurePage('Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?'), false);
+  assert.equal(isKvkProcedurePage('Je bv en Prinsjesdag: dit zijn de belastingplannen'), false);
+  assert.equal(isKvkProcedurePage('Belastingplannen 2027 voor eenmanszaak, vof, maatschap of cv'), false);
+  assert.equal(isKvkProcedurePage('Administratie en boekhouden voor ondernemers'), false);
+  assert.equal(isKvkProcedurePage('Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?'), false);
+});
+
+test('selectKvkCandidates sluit procedure-/formulierpagina\'s uit via de URL-slug, ook met een categoryKeywords-treffer', () => {
+  const entries = [
+    // bevat 'eenmanszaak' (categoryKeywords-treffer) maar is een formulier
+    { loc: 'https://www.kvk.nl/vormen/formulier-1-eenmanszaak-inschrijven/', lastmod: '2026-09-20T10:00:00.000Z' },
+    // inhoudelijk artikel, moet wel doorkomen
+    { loc: 'https://www.kvk.nl/vormen/eenmanszaak-of-bv-zo-kies-je-je-rechtsvorm/', lastmod: '2026-09-21T10:00:00.000Z' },
+  ];
+  const { afterRelevanceFilter } = selectKvkCandidates(entries, new Set());
+  assert.deepEqual(afterRelevanceFilter.map((e) => e.loc), [
+    'https://www.kvk.nl/vormen/eenmanszaak-of-bv-zo-kies-je-je-rechtsvorm/',
+  ]);
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: formulierpagina met h1 en meta description wordt alsnog als procedure herkend', () => {
+  const html = '<html><head><meta name="description" content="Vul het inschrijfformulier in om uw eenmanszaak in te schrijven bij het Handelsregister."/></head><body><h1>Formulier 1: Eenmanszaak inschrijven</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.ok(isKvkProcedurePage(`${fields.title} ${fields.description}`));
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: KVK-productpagina wordt herkend als procedure/servicepagina', () => {
+  const html = '<html><head><meta name="description" content="Bestel een officieel uittreksel van uw inschrijving bij het Handelsregister."/></head><body><h1>Uittreksel Handelsregister aanvragen</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.ok(isKvkProcedurePage(`${fields.title} ${fields.description}`));
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: rekenmodule/tool wordt afgewezen', () => {
+  const html = '<html><head><meta name="description" content="Bereken met deze rekentool snel hoeveel inkomstenbelasting u verschuldigd bent in 2027."/></head><body><h1>Rekentool inkomstenbelasting 2027</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.ok(isKvkProcedurePage(`${fields.title} ${fields.description}`));
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: inhoudelijk btw-artikel wordt geaccepteerd', () => {
+  const html = '<html><head><meta name="description" content="Als ondernemer moet u periodiek btw-aangifte doen bij de Belastingdienst. Lees hier hoe de omzetbelasting werkt."/></head><body><h1>Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(isKvkProcedurePage(`${fields.title} ${fields.description}`), false);
+  assert.ok(Object.keys(scoreCategories(`${fields.title} ${fields.description}`)).length > 0);
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: inhoudelijk KOR-artikel wordt geaccepteerd', () => {
+  const html = '<html><head><meta name="description" content="De kleineondernemersregeling (KOR) kan interessant zijn als uw omzet laag is. Lees hier wat de KOR voor uw bedrijf kan betekenen."/></head><body><h1>Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(isKvkProcedurePage(`${fields.title} ${fields.description}`), false);
+  assert.ok(Object.keys(scoreCategories(`${fields.title} ${fields.description}`)).length > 0);
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: inhoudelijk rechtsvormartikel wordt geaccepteerd', () => {
+  const html = '<html><head><meta name="description" content="Twijfelt u tussen een eenmanszaak en een bv? De keuze voor een rechtsvorm heeft fiscale gevolgen voor uw onderneming."/></head><body><h1>Eenmanszaak of bv: zo kies je je rechtsvorm</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(isKvkProcedurePage(`${fields.title} ${fields.description}`), false);
+  assert.ok(Object.keys(scoreCategories(`${fields.title} ${fields.description}`)).length > 0);
+});
+
+test('extractKvkArticleFields + isKvkProcedurePage samen: inhoudelijk administratie-artikel wordt geaccepteerd', () => {
+  const html = '<html><head><meta name="description" content="Een goede administratie en boekhouden is de basis van uw jaarrekening. Lees hier waar u als ondernemer op moet letten."/></head><body><h1>Administratie en boekhouden voor ondernemers</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(isKvkProcedurePage(`${fields.title} ${fields.description}`), false);
+  assert.ok(Object.keys(scoreCategories(`${fields.title} ${fields.description}`)).length > 0);
 });

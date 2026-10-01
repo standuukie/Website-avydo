@@ -154,6 +154,16 @@ export const sources = [
     // gebeurt in twee stappen — eerst op de URL-slug, daarna op de
     // daadwerkelijke titel + samenvatting — met dezelfde categoryKeywords als
     // de andere bronnen (zie processKvkSource/selectKvkCandidates).
+    //
+    // Aangescherpt 2026-10-01 (na de eerste dry-run): categoryKeywords alleen
+    // was niet genoeg — formulieren/procedurepagina's als "Formulier 1:
+    // Eenmanszaak inschrijven" of "Jaarrekeningen opvragen" bevatten
+    // toevallig dezelfde trefwoorden als echte artikelen. Toegevoegd:
+    // kvkProcedureKeywords/isKvkProcedurePage, een negatieve trefwoordlijst
+    // (formulier, inschrijf/uitschrijf, convenant, rekentool, autorisatie,
+    // opvragen, aanvragen, uittreksel, machtig) die zowel in de URL-
+    // vóórfilter als in het eindfilter op titel+samenvatting wordt
+    // toegepast.
     requireKeywordMatch: true,
   },
 ];
