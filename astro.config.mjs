@@ -1,18 +1,20 @@
 import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import sitemap from '@astrojs/sitemap';
-import vercel from '@astrojs/vercel/serverless';
+import vercel from '@astrojs/vercel';
 
 export default defineConfig({
   site: 'https://www.avydo.nl',
+  // "static" (Astro 5-default) gedraagt zich hier identiek aan het oude
   // "hybrid": alle pagina's blijven statisch geprerenderd (zoals voorheen),
   // behalve de expliciete server-route(s) die "export const prerender = false"
   // gebruiken — dat is uitsluitend de AI-assistent-API
   // (src/pages/api/kenniscentrum-chat.ts), nodig omdat die route de
   // ANTHROPIC_API_KEY server-side moet gebruiken en dus niet vooraf
   // gebouwd kan worden. De rest van de site verandert hierdoor niet van
-  // renderwijze.
-  output: 'hybrid',
+  // renderwijze. ("hybrid" is in Astro 5 verwijderd; "static" is nu de
+  // vervanger met exact hetzelfde gedrag.)
+  output: 'static',
   adapter: vercel(),
   integrations: [
     tailwind({ applyBaseStyles: false }),
