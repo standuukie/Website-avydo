@@ -8,29 +8,54 @@
 // Bron-types:
 //  - "rss": een RSS/Atom-feed, opgehaald en geparsed als XML-items met
 //    title/link/description/pubDate.
-//  - "sitemap": een Google News-sitemap (xmlns:news), die alleen recent
-//    gepubliceerde nieuwsartikelen bevat (title, publicatiedatum, canonieke
-//    URL) maar geen samenvattingstekst. Voor dit type wordt per nieuw
-//    artikel de paginabron zelf opgehaald om de meta-description (of
-//    og:description) te lezen als brontekst voor de samenvatting — nooit
-//    verzonnen, altijd de eigen tekst van de bron. Optioneel kan een
-//    "ministryBypass" ingesteld worden: als de artikelpagina een
-//    breadcrumb-link naar die ministerie-pagina bevat, telt het artikel
-//    als relevant ook zonder trefwoordtreffer (zie fetch-articles.mjs,
-//    extractMinistryTag).
+//  - "sitemap": een sitemap-gebaseerde bron zonder samenvattingstekst in de
+//    sitemap zelf — per nieuw artikel wordt de paginabron zelf opgehaald om
+//    de meta-description (of og:description) te lezen als brontekst voor de
+//    samenvatting, en (als de sitemap zelf geen titel levert) ook de
+//    paginatitel — nooit verzonnen, altijd de eigen tekst van de bron.
+//    Optioneel kan een "ministryBypass" ingesteld worden: als de
+//    artikelpagina een breadcrumb-link naar die ministerie-pagina bevat,
+//    telt het artikel als relevant ook zonder trefwoordtreffer (zie
+//    fetch-articles.mjs, extractMinistryTag). Twee discovery-varianten:
+//    - "sitemapUrl": één Google News-sitemap (xmlns:news) met title +
+//      publicatiedatum per item, rechtstreeks geparsed.
+//    - "sitemapIndexUrl" + "articleUrlPattern": een sitemap-index die naar
+//      meerdere sub-sitemaps verwijst (zie rijksoverheid-nieuws hieronder);
+//      sub-sitemaps bevatten alleen loc+lastmod, dus de titel komt van de
+//      artikelpagina zelf, net als de samenvatting.
 //
-// Geschiedenis / waarom rijksoverheid-nieuws een sitemap gebruikt in plaats
-// van RSS: rijksoverheid.nl is begin/medio 2026 overgestapt op een nieuw
-// technisch platform. Daarbij is de oude RSS-infrastructuur op
-// feeds.rijksoverheid.nl buiten gebruik geraakt (het domein resolvet niet
-// meer; bevestigd in productielogs). Rijksoverheid.nl publiceert zelf een
-// officiële, live-geverifieerde Google News-sitemap op
-// https://www.rijksoverheid.nl/news/sitemap.xml die als directe, stabiele
-// bron dient — geen zoekmachine of scraping nodig. Om specifiek publicaties
-// van het Ministerie van Financiën te kunnen tonen (naast de bestaande
-// brede trefwoordfilter) wordt op de artikelpagina zelf gecontroleerd op de
-// breadcrumb-link naar /ministeries/ministerie-van-financien; is die
-// aanwezig, dan telt het artikel als relevant ongeacht trefwoordtreffer.
+// Geschiedenis rijksoverheid-nieuws: rijksoverheid.nl is begin/medio 2026
+// overgestapt op een nieuw technisch platform. Daarbij is de oude
+// RSS-infrastructuur op feeds.rijksoverheid.nl buiten gebruik geraakt (het
+// domein resolvet niet meer; herbevestigd 2026-10-01 met een live fetch
+// vanuit een omgeving mét internettoegang tot rijksoverheid.nl — zie
+// hieronder). De officiële rijksoverheid.nl/service/rss-toelichtingspagina
+// (eveneens live gecontroleerd) documenteert ook geen statische sitewide
+// RSS-URL: RSS is daar uitsluitend per pagina/onderwerp beschikbaar via een
+// "Abonneren"-knop die de link pas client-side in een pop-up genereert —
+// geen bruikbaar alternatief voor een onbeheerde dagelijkse job.
+//
+// Aangepast 2026-10-01 (observability → discovery-uitbreiding): de
+// voorheen gebruikte Google News-sitemap (news/sitemap.xml) bleek bij live
+// onderzoek slechts ~7 items per run op te leveren, uitsluitend van de
+// afgelopen ~24 uur — een eigenschap van het Google News-sitemapformaat
+// zelf (dat formaat is uitdrukkelijk bedoeld voor zeer recent nieuws), geen
+// bug in dit script en geen beperking van rijksoverheid.nl's content.
+// Live onderzoek (tijdelijke, alleen-lezen GitHub Actions dry-run, zie
+// git-historie) stelde vast dat https://www.rijksoverheid.nl/sitemap.xml
+// zelf een sitemap-index is die, naast news/sitemap.xml en
+// videos/sitemap.xml, verwijst naar een reeks genummerde, algemene
+// sub-sitemaps (/sitemap/1.xml, /sitemap/2.xml, ...) zónder die 2-dagen-
+// grens: bevestigd met content tot enkele jaren terug én de actuele dag
+// (bijv. een artikel van dezelfde dag over de Zelfstandigenwet, relevant
+// voor zzp'ers). Dit is dezelfde discovery-aanpak als de KVK-bron
+// (sitemap_index.xml -> documents-*.xml) hieronder: een bredere, officiële,
+// machineleesbare bron i.p.v. een kleinere. articleUrlPattern filtert deze
+// (grotendeels niet-nieuws) algemene sub-sitemaps terug tot alleen
+// /actueel/nieuws/-artikelen. De bestaande relevantiefilter
+// (requireKeywordMatch/categoryKeywords/ministryBypass) is volledig
+// ongewijzigd: er stromen alleen meer kandidaten dezelfde, bestaande
+// filter in.
 //
 // KVK-source (toegevoegd 2026-10-01, Fase 1 — integratie + dry-run):
 // kvk.nl/overzicht/ zelf heeft geen RSS en haalt zijn content client-side op
@@ -104,11 +129,14 @@ export const sources = [
     id: 'rijksoverheid-nieuws',
     name: 'Rijksoverheid',
     type: 'sitemap',
-    sitemapUrl: 'https://www.rijksoverheid.nl/news/sitemap.xml',
+    // Sitemap-index i.p.v. één Google News-sitemap (zie toelichting
+    // hierboven) — bredere discovery, zelfde discovery-aanpak als KVK.
+    sitemapIndexUrl: 'https://www.rijksoverheid.nl/sitemap.xml',
+    articleUrlPattern: '/actueel/nieuws/',
     defaultCategory: 'Fiscale actualiteit',
     enabled: true,
     urlConfidence: 'confirmed',
-    // Sitewide nieuws-sitemap van de hele Rijksoverheid (alle ministeries):
+    // Sitewide nieuws-discovery van de hele Rijksoverheid (alle ministeries):
     // strikt filteren is hier essentieel. Sinds de redactionele aanscherping
     // (2026-10-01, zie categoryKeywords hieronder) is deze filtering
     // bewust smal gehouden tot échte accountancy-/fiscale termen, nadat

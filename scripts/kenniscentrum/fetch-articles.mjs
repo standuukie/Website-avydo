@@ -201,14 +201,26 @@ export function extractMinistryTag(html) {
   return MINISTRY_NAMES[slug] ?? null;
 }
 
+// Nodig voor bronnen waarvan de sitemap zelf geen titel levert (alleen
+// loc+lastmod, zie fetchRijksoverheidGeneralSitemapUrls) — de <title> van
+// de artikelpagina zelf, met de vaste site-naam-suffix verwijderd (nooit
+// onderdeel van de artikeltitel zelf). Geeft null als er geen <title> is
+// (nooit een gegokte titel).
+export function extractPageTitle(html) {
+  const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+  if (!match) return null;
+  const title = stripHtml(match[1]).replace(/\s*\|\s*Rijksoverheid\.nl\s*$/i, '').trim();
+  return title || null;
+}
+
 async function fetchArticlePageMeta(url) {
   try {
     const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!res.ok) return { description: null, ministry: null };
+    if (!res.ok) return { title: null, description: null, ministry: null };
     const html = await res.text();
-    return { description: extractMetaDescription(html), ministry: extractMinistryTag(html) };
+    return { title: extractPageTitle(html), description: extractMetaDescription(html), ministry: extractMinistryTag(html) };
   } catch {
-    return { description: null, ministry: null };
+    return { title: null, description: null, ministry: null };
   }
 }
 
@@ -518,6 +530,69 @@ export async function processRssSource(source, existingUrls, remainingBudget) {
   return { added, seen: items.length, ok: true, stages };
 }
 
+// --- Rijksoverheid: sitemap.xml (index) -> genummerde algemene
+// sub-sitemaps (/sitemap/N.xml) ---
+//
+// Live onderzoek (2026-10-01, tijdelijke alleen-lezen GitHub Actions
+// dry-run, zie git-historie) stelde vast dat rijksoverheid.nl/sitemap.xml
+// zelf een sitemap-index is die, naast news/sitemap.xml (het eerder
+// gebruikte, qua formaat tot ~2 dagen beperkte Google News-sitemap) en
+// videos/sitemap.xml, verwijst naar een reeks genummerde, algemene
+// sub-sitemaps zonder die beperking. Elk <url>-blok daarin bevat alleen
+// loc+lastmod (geen titel) — zie fetchArticlePageMeta/extractPageTitle
+// voor de titel-extractie van de artikelpagina zelf. Zelfde aanpak als
+// fetchKvkDocumentUrls hieronder: niet-bereikbare sub-sitemaps blokkeren
+// de andere niet, resultaat gededupliceerd en op lastmod (meest recent
+// eerst) gesorteerd, zodat het run-budget bij voorkeur actueel nieuws
+// bereikt vóór oudere content.
+export async function fetchRijksoverheidGeneralSitemapUrls(sitemapIndexUrl, articleUrlPattern) {
+  const indexRes = await fetchWithTimeout(sitemapIndexUrl, FETCH_TIMEOUT_MS);
+  if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status} bij ${sitemapIndexUrl}`);
+  const indexXml = await indexRes.text();
+  const subSitemaps = [...indexXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const generalSitemaps = subSitemaps.filter((u) => /\/sitemap\/\d+\.xml$/i.test(u));
+  if (generalSitemaps.length === 0) {
+    throw new Error('geen genummerde algemene sub-sitemaps gevonden in sitemap.xml');
+  }
+
+  const entries = [];
+  for (const sitemapUrl of generalSitemaps) {
+    let res;
+    try {
+      res = await fetchWithTimeout(sitemapUrl, FETCH_TIMEOUT_MS);
+    } catch {
+      continue; // één falende sub-sitemap mag de andere niet blokkeren
+    }
+    if (!res.ok) continue;
+    const xml = await res.text();
+    const blocks = [...xml.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
+    for (const block of blocks) {
+      const loc = block.match(/<loc>([^<]+)<\/loc>/)?.[1];
+      const lastmod = block.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? null;
+      if (loc && loc.includes(articleUrlPattern)) entries.push({ loc, lastmod });
+    }
+  }
+
+  const uniqueByUrl = new Map();
+  for (const e of entries) {
+    if (!uniqueByUrl.has(e.loc)) uniqueByUrl.set(e.loc, e);
+  }
+  const deduped = [...uniqueByUrl.values()];
+  deduped.sort((a, b) => {
+    const da = a.lastmod ? Date.parse(a.lastmod) : 0;
+    const db = b.lastmod ? Date.parse(b.lastmod) : 0;
+    return db - da;
+  });
+  return deduped;
+}
+
+// Veiligheidsgrens op het aantal daadwerkelijk opgehaalde artikelpagina's
+// per run, zelfde motivatie als KVK_MAX_PAGE_FETCHES_PER_RUN hieronder: de
+// genummerde sub-sitemaps bevatten samen een paar honderd nieuwsartikel-
+// URL's, en zonder grens zou een run met veel irrelevante kandidaten
+// onnodig veel pagina's kunnen opvragen vóór het budget/limiet stopt.
+const RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN = 50;
+
 export async function processSitemapSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
   // Zelfde principe als processRssSource: dekt exact de bestaande
@@ -525,41 +600,62 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   stages.reasons = { missingFields: 0, duplicate: 0, metadataRejected: 0, irrelevant: 0, notEvaluated: 0 };
   const samples = {};
 
-  let res;
-  try {
-    res = await fetchWithTimeout(source.sitemapUrl, FETCH_TIMEOUT_MS);
-  } catch (err) {
-    log(`  FOUT: kon sitemap niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
-    return { added: 0, seen: 0, ok: false, stages };
-  }
-  if (!res.ok) {
-    log(`  FOUT: HTTP ${res.status} bij ophalen sitemap. Bron overgeslagen.`);
-    return { added: 0, seen: 0, ok: false, stages };
-  }
-
-  const xmlText = await res.text();
   let items;
-  try {
-    items = parseSitemapNewsItems(xmlText);
-  } catch (err) {
-    log(`  FOUT: kon sitemap niet parsen (${err.message}). Bron overgeslagen.`);
-    return { added: 0, seen: 0, ok: false, stages };
-  }
-  if (!items) {
-    log('  FOUT: onherkenbare sitemap (geen news:news-items gevonden). Bron overgeslagen.');
-    return { added: 0, seen: 0, ok: false, stages };
+  if (source.sitemapIndexUrl) {
+    let entries;
+    try {
+      entries = await fetchRijksoverheidGeneralSitemapUrls(source.sitemapIndexUrl, source.articleUrlPattern ?? '/actueel/nieuws/');
+    } catch (err) {
+      log(`  FOUT: kon sitemap-index niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    // title: null -> wordt per kandidaat van de artikelpagina zelf gehaald
+    // (zie fetchArticlePageMeta hieronder), de sub-sitemaps zelf leveren
+    // alleen loc+lastmod.
+    items = entries.map((e) => ({ title: null, link: e.loc, pubDate: e.lastmod, description: '' }));
+    log(`  ${items.length} nieuwsartikel-URL('s) gevonden in de algemene sub-sitemaps (gededupliceerd, meest recent eerst)`);
+  } else {
+    let res;
+    try {
+      res = await fetchWithTimeout(source.sitemapUrl, FETCH_TIMEOUT_MS);
+    } catch (err) {
+      log(`  FOUT: kon sitemap niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    if (!res.ok) {
+      log(`  FOUT: HTTP ${res.status} bij ophalen sitemap. Bron overgeslagen.`);
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    const xmlText = await res.text();
+    try {
+      items = parseSitemapNewsItems(xmlText);
+    } catch (err) {
+      log(`  FOUT: kon sitemap niet parsen (${err.message}). Bron overgeslagen.`);
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    if (!items) {
+      log('  FOUT: onherkenbare sitemap (geen news:news-items gevonden). Bron overgeslagen.');
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    log(`  ${items.length} item(s) in sitemap`);
   }
 
   stages.fetched = items.length;
-  log(`  ${items.length} item(s) in sitemap`);
   let added = 0;
   let sourceCount = 0;
   let itemsEvaluated = 0;
+  let pageFetches = 0;
 
   for (const item of items) {
     if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
+    if (pageFetches >= RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN) {
+      log(`  grens van ${RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN} opgehaalde pagina's per run bereikt, stoppen (overige kandidaten volgen in een volgende run).`);
+      break;
+    }
     itemsEvaluated += 1;
-    if (!item.title || !item.link) {
+    // Title is bij de sitemap-index-variant pas na de paginafetch bekend
+    // (zie hierboven) — alleen link is op dit punt een harde eis.
+    if (!item.link) {
       stages.reasons.missingFields += 1;
       continue;
     }
@@ -568,19 +664,22 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       continue;
     }
 
-    // Sitemap-items hebben geen samenvattingstekst: de artikelpagina zelf
-    // wordt opgehaald voor de meta-description (en, indien geconfigureerd,
-    // de ministerie-toewijzing). Een probleem bij één artikel (pagina niet
-    // bereikbaar, geen description) slaat alleen dat artikel over, niet de
-    // hele bron.
-    const { description, ministry } = await fetchArticlePageMeta(item.link);
-    if (!description || description.length < 20) {
-      log(`  - overgeslagen (geen samenvattingstekst op bron-pagina): ${item.link}`);
+    // Sitemap-items hebben geen samenvattingstekst (en bij de
+    // sitemap-index-variant ook geen titel): de artikelpagina zelf wordt
+    // opgehaald voor de meta-description, titel (indien nog onbekend) en,
+    // indien geconfigureerd, de ministerie-toewijzing. Een probleem bij één
+    // artikel (pagina niet bereikbaar, geen description) slaat alleen dat
+    // artikel over, niet de hele bron.
+    pageFetches += 1;
+    const { title: fetchedTitle, description, ministry } = await fetchArticlePageMeta(item.link);
+    const title = item.title || fetchedTitle;
+    if (!title || !description || description.length < 20) {
+      log(`  - overgeslagen (geen betrouwbare titel/samenvattingstekst op bron-pagina): ${item.link}`);
       stages.reasons.metadataRejected += 1;
-      addRejectionSample(samples, 'metadataRejected', item.title);
+      addRejectionSample(samples, 'metadataRejected', title ?? item.link);
       continue;
     }
-    const enrichedItem = { ...item, description };
+    const enrichedItem = { ...item, title, description };
     stages.parsed += 1;
 
     if (source.requireKeywordMatch) {
@@ -588,7 +687,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       const ministryMatch = source.ministryBypass && ministry === source.ministryBypass;
       if (Object.keys(scores).length === 0 && !ministryMatch) {
         stages.reasons.irrelevant += 1;
-        addRejectionSample(samples, 'irrelevant', item.title);
+        addRejectionSample(samples, 'irrelevant', title);
         continue;
       }
     }

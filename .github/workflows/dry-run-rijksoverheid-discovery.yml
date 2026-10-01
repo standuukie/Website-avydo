@@ -1,16 +1,17 @@
 name: Dry-run Rijksoverheid discovery (tijdelijk, alleen-lezen)
 
-# Tijdelijk onderzoeksscript, NIET onderdeel van de productie-pipeline en
-# commit niets. Doel: vanuit een omgeving die rijksoverheid.nl daadwerkelijk
-# kan bereiken (bevestigd: de bestaande kenniscentrum-update.yml haalt
-# dagelijks succesvol https://www.rijksoverheid.nl/news/sitemap.xml op)
-# objectief vaststellen hoeveel kandidaten de huidige sitemap-bron oplevert
-# t.o.v. de officiële RSS-route, zonder enige aanname of gok over URL's: de
-# RSS-feed-URL wordt dynamisch ontdekt via de officiële rijksoverheid.nl/
-# service/rss-toelichtingspagina, niet hardcoded geraden.
+# Tijdelijk verificatiescript, NIET onderdeel van de productie-pipeline en
+# commit niets. Laatste stap van het onderzoek (zie git-historie van dit
+# bestand voor de eerdere onderzoeksrondes): roept de NIEUWE
+# fetchRijksoverheidGeneralSitemapUrls-functie uit fetch-articles.mjs
+# rechtstreeks aan, live tegen rijksoverheid.nl, om te bevestigen dat de
+# daadwerkelijke implementatie (niet alleen losse URL-probes) werkt zoals
+# verwacht. KENNISCENTRUM_CONTENT_DIR wijst naar een tijdelijke map, dus er
+# wordt nooit in de echte content geschreven (en er wordt hier ook geen
+# publishItem aangeroepen — alleen de discovery-stap).
 #
-# Wordt na het onderzoek weer verwijderd (zelfde patroon als de eerdere
-# KVK-dry-run-tooling, zie git-historie).
+# Wordt na dit onderzoek weer verwijderd (zelfde patroon als de eerdere
+# KVK-dry-run-tooling).
 
 on:
   workflow_dispatch: {}
@@ -19,276 +20,49 @@ permissions:
   contents: read
 
 jobs:
-  discover:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Onderzoek uitvoeren
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Nieuwe discovery-functie live uitvoeren (geen schrijfactie)
         run: |
-          node << 'NODESCRIPT' > /tmp/report.json
-          const UA = { headers: { 'User-Agent': 'AvydoKenniscentrumBot/1.0 (+https://www.avydo.nl) dry-run-onderzoek' } };
-
-          async function tryFetch(label, url) {
-            try {
-              const res = await fetch(url, UA);
-              const text = res.ok ? await res.text() : '';
-              return { label, url, status: res.status, ok: res.ok, length: text.length, text };
-            } catch (err) {
-              return { label, url, status: null, ok: false, error: String(err.message || err), text: '' };
-            }
-          }
-
-          function countSitemapUrls(xml) {
-            return (xml.match(/<url>/g) || []).length;
-          }
-          function sitemapDateRange(xml) {
-            const dates = [...xml.matchAll(/<(?:lastmod|news:publication_date)>([^<]+)<\/(?:lastmod|news:publication_date)>/g)].map((m) => m[1]);
-            if (dates.length === 0) return null;
-            const sorted = [...dates].sort();
-            return { oldest: sorted[0], newest: sorted[sorted.length - 1], count: dates.length };
-          }
-          function countRssItems(xml) {
-            return (xml.match(/<item>/g) || []).length;
-          }
-          function rssDateRange(xml) {
-            const dates = [...xml.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)].map((m) => m[1]);
-            if (dates.length === 0) return null;
-            return { newest: dates[0], oldest: dates[dates.length - 1], count: dates.length };
-          }
-          function discoverRssLinksFromHtml(html) {
-            const hrefs = [...html.matchAll(/href=["']([^"']+\.rss[^"']*)["']/gi)].map((m) => m[1]);
-            const linkTags = [...html.matchAll(/<link[^>]+type=["']application\/rss\+xml["'][^>]+href=["']([^"']+)["']/gi)].map((m) => m[1]);
-            const all = [...new Set([...hrefs, ...linkTags])];
-            return all.map((h) => (h.startsWith('http') ? h : new URL(h, 'https://www.rijksoverheid.nl').toString()));
-          }
-
-          async function main() {
-            const report = {};
-
-            // 1. Huidige bron: news/sitemap.xml
-            const sitemap = await tryFetch('huidige-sitemap', 'https://www.rijksoverheid.nl/news/sitemap.xml');
-            report.sitemap = {
-              url: sitemap.url, status: sitemap.status, ok: sitemap.ok,
-              urlCount: sitemap.ok ? countSitemapUrls(sitemap.text) : null,
-              dateRange: sitemap.ok ? sitemapDateRange(sitemap.text) : null,
-              byteLength: sitemap.length,
-            };
-
-            // 2. Officiële RSS-toelichtingspagina: ontdek de echte feed-URL(s),
-            //    niet gokken. Als de gerichte regex niets vindt, ook een
-            //    brede, contextuele "rss"-grep bewaren zodat we kunnen zien
-            //    of de link er wél staat maar in een vorm die de regex mist
-            //    (bijv. client-side gerenderd via een "Abonneren"-knop).
-            const rssServicePage = await tryFetch('rss-service-pagina', 'https://www.rijksoverheid.nl/service/rss');
-            const discoveredRssLinks = rssServicePage.ok ? discoverRssLinksFromHtml(rssServicePage.text) : [];
-            function contextSnippets(text, needle, radius = 120) {
-              const out = [];
-              const lower = text.toLowerCase();
-              let i = 0;
-              while (out.length < 10) {
-                const idx = lower.indexOf(needle, i);
-                if (idx === -1) break;
-                out.push(text.slice(Math.max(0, idx - radius), idx + radius).replace(/\s+/g, ' '));
-                i = idx + needle.length;
-              }
-              return out;
-            }
-            report.rssServicePage = {
-              status: rssServicePage.status, ok: rssServicePage.ok, discoveredLinks: discoveredRssLinks,
-              byteLength: rssServicePage.length,
-              hasNextData: rssServicePage.ok && rssServicePage.text.includes('__NEXT_DATA__'),
-              rssContextSnippets: rssServicePage.ok ? contextSnippets(rssServicePage.text, 'rss') : [],
-              abonnerenContextSnippets: rssServicePage.ok ? contextSnippets(rssServicePage.text, 'abonneren') : [],
-            };
-
-            // 3. Nieuwsoverzichtspagina zelf: client-side gerenderd of server-side?
-            const newsPage = await tryFetch('nieuws-overzichtspagina', 'https://www.rijksoverheid.nl/actueel/nieuws');
-            const newsPageArticleLinks = newsPage.ok
-              ? [...new Set([...newsPage.text.matchAll(/href=["'](\/actueel\/nieuws\/\d{4}\/\d{2}\/\d{2}\/[^"']+)["']/g)].map((m) => m[1]))]
-              : [];
-            report.newsOverviewPage = {
-              status: newsPage.status, ok: newsPage.ok, serverRenderedArticleLinksFound: newsPageArticleLinks.length,
-              byteLength: newsPage.length,
-              hasNextData: newsPage.ok && newsPage.text.includes('__NEXT_DATA__'),
-              htmlSample: newsPage.ok ? newsPage.text.slice(0, 1500) : null,
-            };
-
-            // 4. Elke ontdekte RSS-link daadwerkelijk ophalen en tellen.
-            report.rssFeeds = [];
-            for (const link of discoveredRssLinks) {
-              const r = await tryFetch('ontdekte-rss-link', link);
-              report.rssFeeds.push({
-                url: link, status: r.status, ok: r.ok,
-                itemCount: r.ok ? countRssItems(r.text) : null,
-                dateRange: r.ok ? rssDateRange(r.text) : null,
-                error: r.error ?? null,
-                sample: r.ok ? r.text.slice(0, 500) : null,
-              });
-            }
-
-            // 5. Bekende/eerder-genoemde kandidaat-URL's expliciet proberen, ook
-            //    als ze niet uit de service-pagina kwamen (zodat we zeker weten
-            //    of feeds.rijksoverheid.nl nu wel of niet bereikbaar is).
-            const explicitCandidates = [
-              'https://feeds.rijksoverheid.nl/nieuws.rss',
-              'https://www.rijksoverheid.nl/actueel/nieuws/rss',
-              'https://www.rijksoverheid.nl/rss/nieuws.xml',
-            ].filter((u) => !discoveredRssLinks.includes(u));
-            report.explicitCandidates = [];
-            for (const url of explicitCandidates) {
-              const r = await tryFetch('expliciete-kandidaat', url);
-              report.explicitCandidates.push({
-                url, status: r.status, ok: r.ok,
-                itemCount: r.ok ? countRssItems(r.text) : null,
-                dateRange: r.ok ? rssDateRange(r.text) : null,
-                error: r.error ?? null,
-              });
-            }
-
-            // 6. Bredere, niet-Google-News-specifieke sitemaps: misschien is
-            //    news/sitemap.xml niet de enige sitemap, en bestaat er een
-            //    sitemap_index.xml (zoals bij KVK) die naar méér/bredere
-            //    sub-sitemaps verwijst, zonder de ~2-dagen-grens die het
-            //    Google News-sitemapformaat oplegt.
-            report.alternativeSitemaps = [];
-            for (const url of [
-              'https://www.rijksoverheid.nl/sitemap.xml',
-              'https://www.rijksoverheid.nl/sitemap_index.xml',
-              'https://www.rijksoverheid.nl/actueel/sitemap.xml',
-            ]) {
-              const r = await tryFetch('alternatieve-sitemap', url);
-              report.alternativeSitemaps.push({
-                url, status: r.status, ok: r.ok,
-                urlCount: r.ok ? countSitemapUrls(r.text) : null,
-                looksLikeIndex: r.ok && r.text.includes('<sitemapindex'),
-                sitemapRefs: r.ok ? [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).slice(0, 15) : [],
-                dateRange: r.ok ? sitemapDateRange(r.text) : null,
-                error: r.error ?? null,
-              });
-            }
-
-            // 7. BELANGRIJKE VONDST in stap 6: sitemap.xml is zelf een index
-            //    die verwijst naar news/sitemap.xml (al gebruikt) + een reeks
-            //    genummerde, kennelijk algemene sub-sitemaps (/sitemap/1.xml
-            //    t/m minstens /sitemap/13.xml) — net als het KVK
-            //    sitemap_index.xml -> documents-*.xml-patroon. Controleer nu
-            //    daadwerkelijk: bevatten die /actueel/nieuws/-URL's, hoeveel,
-            //    en welke lastmod-range (zit de ~2-dagen-grens van het
-            //    Google News-formaat hier ook, of is dit breder/historischer)?
-            report.generalSitemapSample = [];
-            for (const url of [
-              'https://www.rijksoverheid.nl/sitemap/1.xml',
-              'https://www.rijksoverheid.nl/sitemap/13.xml',
-            ]) {
-              const r = await tryFetch('algemene-sub-sitemap', url);
-              const allUrls = r.ok ? [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]) : [];
-              const newsUrls = allUrls.filter((u) => u.includes('/actueel/nieuws/'));
-              report.generalSitemapSample.push({
-                url, status: r.status, ok: r.ok,
-                totalUrlCount: r.ok ? countSitemapUrls(r.text) : null,
-                totalLocCount: allUrls.length,
-                newsArticleUrlCount: newsUrls.length,
-                newsArticleUrlSample: newsUrls.slice(0, 8),
-                dateRange: r.ok ? sitemapDateRange(r.text) : null,
-                error: r.error ?? null,
-              });
-            }
-
-            // 8. Exacte <url>-blokstructuur van een /actueel/nieuws/-entry in
-            //    de algemene sub-sitemap: bevat dit al een titel (zoals het
-            //    Google News-formaat news:title), of alleen loc+lastmod
-            //    (dan is bij het ophalen van de artikelpagina zelf ook een
-            //    titel-extractie nodig, niet alleen de samenvatting zoals nu).
-            const sample1 = await tryFetch('sitemap-1-raw', 'https://www.rijksoverheid.nl/sitemap/1.xml');
-            report.rawUrlBlockSample = null;
-            if (sample1.ok) {
-              const blocks = [...sample1.text.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
-              const newsBlock = blocks.find((b) => b.includes('/actueel/nieuws/'));
-              report.rawUrlBlockSample = newsBlock ?? null;
-            }
-
-            console.log(JSON.stringify(report, null, 2));
-          }
-
-          main();
-          NODESCRIPT
-          cat /tmp/report.json
+          mkdir -p /tmp/kc-dry-run-content
+          node --input-type=module -e "
+            process.env.KENNISCENTRUM_CONTENT_DIR = '/tmp/kc-dry-run-content';
+            const { fetchRijksoverheidGeneralSitemapUrls } = await import('./scripts/kenniscentrum/fetch-articles.mjs');
+            const { sources } = await import('./scripts/kenniscentrum/sources.config.mjs');
+            const source = sources.find((s) => s.id === 'rijksoverheid-nieuws');
+            console.log('Bron-config:', JSON.stringify({ sitemapIndexUrl: source.sitemapIndexUrl, articleUrlPattern: source.articleUrlPattern }));
+            const entries = await fetchRijksoverheidGeneralSitemapUrls(source.sitemapIndexUrl, source.articleUrlPattern);
+            console.log('Aantal gevonden kandidaten:', entries.length);
+            console.log('Nieuwste 10:', JSON.stringify(entries.slice(0, 10).map((e) => ({ loc: e.loc, lastmod: e.lastmod })), null, 2));
+            console.log('Oudste 5:', JSON.stringify(entries.slice(-5).map((e) => ({ loc: e.loc, lastmod: e.lastmod })), null, 2));
+            const uniqueDates = new Set(entries.map((e) => (e.lastmod || '').slice(0, 10)));
+            console.log('Aantal unieke datums (ruwe spreiding):', uniqueDates.size);
+          " | tee /tmp/verify-output.txt
 
       - name: Samenvatting schrijven
         if: always()
         run: |
-          echo '## Rijksoverheid discovery — dry-run resultaten' >> "$GITHUB_STEP_SUMMARY"
-          if [ -f /tmp/report.json ]; then
-            node -e "
-              const r = require('/tmp/report.json');
-              console.log('### 1. Huidige sitemap-bron');
-              console.log('- URL: ' + r.sitemap.url);
-              console.log('- HTTP status: ' + r.sitemap.status + ' (ok=' + r.sitemap.ok + ')');
-              console.log('- Aantal <url>-entries: ' + r.sitemap.urlCount);
-              if (r.sitemap.dateRange) console.log('- Datumrange: ' + r.sitemap.dateRange.oldest + ' t/m ' + r.sitemap.dateRange.newest + ' (' + r.sitemap.dateRange.count + ' datums)');
-              console.log('');
-              console.log('### 2. Officiële RSS-toelichtingspagina (rijksoverheid.nl/service/rss)');
-              console.log('- HTTP status: ' + r.rssServicePage.status + ' (ok=' + r.rssServicePage.ok + '), ' + r.rssServicePage.byteLength + ' bytes');
-              console.log('- Bevat __NEXT_DATA__ (client-side rendering signaal): ' + r.rssServicePage.hasNextData);
-              console.log('- Ontdekte RSS-links op deze pagina (regex): ' + JSON.stringify(r.rssServicePage.discoveredLinks));
-              console.log('- Context rond \"rss\" in de ruwe HTML:');
-              for (const s of r.rssServicePage.rssContextSnippets) console.log('  - \`' + s + '\`');
-              console.log('- Context rond \"abonneren\" in de ruwe HTML:');
-              for (const s of r.rssServicePage.abonnerenContextSnippets) console.log('  - \`' + s + '\`');
-              console.log('');
-              console.log('### 3. Nieuwsoverzichtspagina (/actueel/nieuws)');
-              console.log('- HTTP status: ' + r.newsOverviewPage.status + ' (ok=' + r.newsOverviewPage.ok + '), ' + r.newsOverviewPage.byteLength + ' bytes');
-              console.log('- Bevat __NEXT_DATA__ (client-side rendering signaal): ' + r.newsOverviewPage.hasNextData);
-              console.log('- Server-side gerenderde artikel-links gevonden: ' + r.newsOverviewPage.serverRenderedArticleLinksFound);
-              console.log('- HTML-sample (eerste 1500 tekens):');
-              console.log('\`\`\`html');
-              console.log(r.newsOverviewPage.htmlSample);
-              console.log('\`\`\`');
-              console.log('');
-              console.log('### 4. Ontdekte RSS-feeds (daadwerkelijk opgehaald)');
-              console.log('| URL | status | items | datumrange |');
-              console.log('|---|---|---|---|');
-              for (const f of r.rssFeeds) {
-                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
-                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.itemCount + ' | ' + range + ' |');
-              }
-              console.log('');
-              console.log('### 5. Expliciete kandidaat-URL\'s (eerder genoemd/vermoed)');
-              console.log('| URL | status | items | datumrange | fout |');
-              console.log('|---|---|---|---|---|');
-              for (const f of r.explicitCandidates) {
-                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
-                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.itemCount + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
-              }
-              console.log('');
-              console.log('### 6. Alternatieve/bredere sitemaps (niet-Google-News-specifiek)');
-              console.log('| URL | status | url-count | is index? | datumrange | fout |');
-              console.log('|---|---|---|---|---|---|');
-              for (const f of r.alternativeSitemaps) {
-                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
-                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.urlCount + ' | ' + f.looksLikeIndex + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
-                if (f.sitemapRefs && f.sitemapRefs.length) console.log('  - voorbeeld-refs: ' + JSON.stringify(f.sitemapRefs));
-              }
-              console.log('');
-              console.log('### 7. Inhoud van de genummerde algemene sub-sitemaps (steekproef)');
-              for (const f of r.generalSitemapSample) {
-                console.log('- ' + f.url + ': status ' + f.status + ', totaal ' + f.totalUrlCount + ' URLs, waarvan ' + f.newsArticleUrlCount + ' /actueel/nieuws/-artikelen');
-                if (f.dateRange) console.log('  - datumrange: ' + f.dateRange.oldest + ' .. ' + f.dateRange.newest);
-                if (f.newsArticleUrlSample.length) console.log('  - voorbeelden: ' + JSON.stringify(f.newsArticleUrlSample));
-              }
-              console.log('');
-              console.log('### 8. Ruwe <url>-blokstructuur van een nieuwsartikel-entry');
-              console.log('\`\`\`xml');
-              console.log(r.rawUrlBlockSample ?? '(geen gevonden)');
-              console.log('\`\`\`');
-            " >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'Geen report.json gevonden (scriptfout, zie vorige stap).' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Volledig rapport als artifact bewaren
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rijksoverheid-discovery-report
-          path: /tmp/report.json
-          retention-days: 7
+          echo '## Live verificatie: nieuwe Rijksoverheid-discovery' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/verify-output.txt >> "$GITHUB_STEP_SUMMARY" || echo '(geen output, zie vorige stap)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Inhoud van de (tijdelijke, lege) content-map na deze run — moet leeg zijn, geen enkel bestand geschreven:' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -la /tmp/kc-dry-run-content >> "$GITHUB_STEP_SUMMARY" 2>&1 || echo '(map bestaat niet, nog beter: zeker niets geschreven)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

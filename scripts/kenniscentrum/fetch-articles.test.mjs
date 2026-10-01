@@ -37,6 +37,8 @@ import {
   kvkFirstPathSegment,
   processRssSource,
   processSitemapSource,
+  extractPageTitle,
+  fetchRijksoverheidGeneralSitemapUrls,
 } from './fetch-articles.mjs';
 
 // --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
@@ -1039,4 +1041,132 @@ test('processKvkSource telt overlapRejected bij een bestaand, inhoudelijk vergel
   assert.equal(result.stages.reasons.overlapRejected, 1);
   assert.equal(result.stages.relevant, 0);
   assert.equal(result.stages.published, 0);
+});
+
+// --- Rijksoverheid: sitemap.xml (index) -> genummerde algemene sub-sitemaps ---
+//
+// Regressie/uitbreiding (2026-10-01): de eerder gebruikte Google News-
+// sitemap (news/sitemap.xml) bleek qua formaat beperkt tot ~2 dagen content
+// (~7 items/dag) — een live, in een omgeving mét internettoegang gemeten
+// bevinding (tijdelijke GitHub Actions dry-run, zie git-historie), geen
+// aanname. rijksoverheid.nl/sitemap.xml bleek zelf een sitemap-index die
+// naar een reeks genummerde, algemene sub-sitemaps verwijst zonder die
+// grens. Deze tests dekken de nieuwe discovery-functie en de bijbehorende
+// titel-extractie, en bevestigen dat de bestaande relevantiefilter
+// (requireKeywordMatch/categoryKeywords/ministryBypass) ongewijzigd blijft
+// werken op de bredere kandidatenlijst.
+
+test('extractPageTitle leest de <title> en verwijdert de vaste "| Rijksoverheid.nl"-suffix', () => {
+  const html = '<html><head><title>Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven | Rijksoverheid.nl</title></head></html>';
+  assert.equal(extractPageTitle(html), 'Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven');
+});
+
+test('extractPageTitle laat een titel zonder de suffix ongemoeid', () => {
+  const html = '<html><head><title>Een titel zonder sitenaam-suffix</title></head></html>';
+  assert.equal(extractPageTitle(html), 'Een titel zonder sitenaam-suffix');
+});
+
+test('extractPageTitle geeft null zonder <title>-tag (nooit een gegokte titel)', () => {
+  assert.equal(extractPageTitle('<html><head></head><body>geen titel</body></html>'), null);
+});
+
+const RO_SITEMAP_INDEX_FIXTURE = `<?xml version="1.0"?>
+<sitemapindex>
+  <sitemap><loc>https://www.rijksoverheid.nl/news/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://www.rijksoverheid.nl/videos/sitemap.xml</loc></sitemap>
+  <sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap>
+  <sitemap><loc>https://www.rijksoverheid.nl/sitemap/2.xml</loc></sitemap>
+</sitemapindex>`;
+
+function roSitemapPage(entries) {
+  const urls = entries.map(({ loc, lastmod }) => `<url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`).join('');
+  return `<?xml version="1.0"?><urlset>${urls}</urlset>`;
+}
+
+test('fetchRijksoverheidGeneralSitemapUrls volgt alleen de genummerde /sitemap/N.xml-sub-sitemaps (niet news/videos), filtert op articleUrlPattern, dedupliceert en sorteert op lastmod', async () => {
+  const sitemap1 = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/20/ouder-artikel', lastmod: '2026-09-20T10:00:00.000Z' },
+    { loc: 'https://www.rijksoverheid.nl/documenten/rapporten/iets-niet-nieuws', lastmod: '2026-09-25T10:00:00.000Z' }, // geen /actueel/nieuws/
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel', lastmod: '2026-10-01T10:00:00.000Z' },
+  ]);
+  const sitemap2 = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel', lastmod: '2026-10-01T10:00:00.000Z' }, // duplicaat van sitemap1
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2025/01/15/oud-artikel', lastmod: '2025-01-15T10:00:00.000Z' },
+  ]);
+
+  const result = await withMockedFetch((url) => {
+    if (url === 'https://www.rijksoverheid.nl/sitemap.xml') return xmlResponse(RO_SITEMAP_INDEX_FIXTURE);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(sitemap1);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/2.xml') return xmlResponse(sitemap2);
+    // news/sitemap.xml en videos/sitemap.xml mogen niet aangeroepen worden —
+    // zie assertie hieronder.
+    return htmlResponse('', 404);
+  }, () => fetchRijksoverheidGeneralSitemapUrls('https://www.rijksoverheid.nl/sitemap.xml', '/actueel/nieuws/'));
+
+  assert.deepEqual(result.map((e) => e.loc), [
+    'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel',
+    'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/20/ouder-artikel',
+    'https://www.rijksoverheid.nl/actueel/nieuws/2025/01/15/oud-artikel',
+  ]);
+});
+
+test('fetchRijksoverheidGeneralSitemapUrls gooit een fout als de index niet opgehaald kan worden', async () => {
+  await assert.rejects(
+    () => withMockedFetch(() => htmlResponse('', 500), () => fetchRijksoverheidGeneralSitemapUrls('https://www.rijksoverheid.nl/sitemap.xml', '/actueel/nieuws/')),
+  );
+});
+
+const fakeRijksoverheidIndexSource = {
+  id: 'test-rijksoverheid',
+  name: 'Test-Rijksoverheid-bron',
+  sitemapIndexUrl: 'https://www.rijksoverheid.nl/sitemap.xml',
+  articleUrlPattern: '/actueel/nieuws/',
+  defaultCategory: 'Fiscale actualiteit',
+  requireKeywordMatch: true,
+  ministryBypass: 'Ministerie van Financiën',
+};
+
+test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de algemene sub-sitemaps, haalt titel+samenvatting van de artikelpagina en past de bestaande relevantiefilter ongewijzigd toe', async () => {
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/al-bekend', lastmod: '2026-10-01T09:00:00.000Z' },
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/geen-beschrijving', lastmod: '2026-10-01T08:00:00.000Z' },
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/algemeen-nieuws', lastmod: '2026-10-01T07:00:00.000Z' },
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/kor-nieuws', lastmod: 'niet-een-geldige-datum' },
+  ]);
+
+  const existingUrls = new Set(['https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/al-bekend']);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/geen-beschrijving') {
+      return htmlResponse('<html><head><title>Titel zonder samenvatting | Rijksoverheid.nl</title></head></html>');
+    }
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/algemeen-nieuws') {
+      return htmlResponse('<html><head><title>Algemeen bericht zonder thema | Rijksoverheid.nl</title><meta name="description" content="Dit is een algemeen bericht zonder enige fiscale kern en moet als irrelevant tellen."/></head></html>');
+    }
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/kor-nieuws') {
+      return htmlResponse('<html><head><title>Kleineondernemersregeling uitgelegd | Rijksoverheid.nl</title><meta name="description" content="Deze kleineondernemersregeling is relevant voor zzp\'ers met een lage omzet."/></head></html>');
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, existingUrls, { count: 50 }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stages.fetched, 4);
+  assert.equal(result.stages.reasons.duplicate, 1);
+  assert.equal(result.stages.reasons.metadataRejected, 1); // geen-beschrijving: titel wel, samenvatting niet
+  assert.equal(result.stages.reasons.irrelevant, 1); // algemeen-nieuws
+  assert.equal(result.stages.relevant, 1); // kor-nieuws
+  // Titel kwam niet uit de sitemap (die had alleen loc+lastmod) maar van de
+  // artikelpagina zelf — geverifieerd via de gepubliceerde samenvatting-
+  // bronvermelding is lastig zonder te schrijven; i.p.v. daarvan: ongeldige
+  // datum op het relevante item voorkomt een echte schrijfactie, net als
+  // bij de andere process*Source-tests in dit bestand.
+  assert.equal(result.stages.published, 0);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): rapporteert een foutresultaat als de sitemap-index niet bereikbaar is, zonder de run te laten crashen', async () => {
+  const result = await withMockedFetch(() => htmlResponse('', 503), () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  assert.equal(result.ok, false);
+  assert.equal(result.added, 0);
 });
