@@ -143,11 +143,13 @@ export const sources = [
     type: 'kvk-sitemap',
     sitemapIndexUrl: 'https://www.kvk.nl/sitemap_index.xml',
     defaultCategory: 'Ondernemen & rechtsvormen',
-    // Nog bewust UIT: zie de toelichting hierboven en de Fase 1-dry-run
-    // (dry-run-kvk.mjs / het "KVK dry-run (Kenniscentrum)"-workflow). Pas op
-    // true zetten nadat de daadwerkelijk geselecteerde kandidaten zijn
-    // beoordeeld.
-    enabled: false,
+    // Geactiveerd op 2026-10-01 na 5 dry-run-rondes via de "KVK dry-run
+    // (Kenniscentrum)"-workflow (zie de toelichting hierboven en
+    // dry-run-kvk.mjs). Ronde 5 bevestigde: sterke fiscale/accountancy-
+    // artikelen (KOR, btw, IB, Vpb, DGA, DBA, Prinsjesdag) en inhoudelijke
+    // jaarrekeningartikelen blijven behouden, /producten-bestellen/ en
+    // /pers/ volledig uitgesloten, overlapcontrole werkt correct.
+    enabled: true,
     urlConfidence: 'confirmed',
     // Documents-*.xml bevat alle KVK-content door elkaar (ook
     // handelsregister-/productpagina's, evenementen, persberichten). Filteren
