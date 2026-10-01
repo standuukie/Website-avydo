@@ -74,17 +74,43 @@ jobs:
             };
 
             // 2. Officiële RSS-toelichtingspagina: ontdek de echte feed-URL(s),
-            //    niet gokken.
+            //    niet gokken. Als de gerichte regex niets vindt, ook een
+            //    brede, contextuele "rss"-grep bewaren zodat we kunnen zien
+            //    of de link er wél staat maar in een vorm die de regex mist
+            //    (bijv. client-side gerenderd via een "Abonneren"-knop).
             const rssServicePage = await tryFetch('rss-service-pagina', 'https://www.rijksoverheid.nl/service/rss');
             const discoveredRssLinks = rssServicePage.ok ? discoverRssLinksFromHtml(rssServicePage.text) : [];
-            report.rssServicePage = { status: rssServicePage.status, ok: rssServicePage.ok, discoveredLinks: discoveredRssLinks };
+            function contextSnippets(text, needle, radius = 120) {
+              const out = [];
+              const lower = text.toLowerCase();
+              let i = 0;
+              while (out.length < 10) {
+                const idx = lower.indexOf(needle, i);
+                if (idx === -1) break;
+                out.push(text.slice(Math.max(0, idx - radius), idx + radius).replace(/\s+/g, ' '));
+                i = idx + needle.length;
+              }
+              return out;
+            }
+            report.rssServicePage = {
+              status: rssServicePage.status, ok: rssServicePage.ok, discoveredLinks: discoveredRssLinks,
+              byteLength: rssServicePage.length,
+              hasNextData: rssServicePage.ok && rssServicePage.text.includes('__NEXT_DATA__'),
+              rssContextSnippets: rssServicePage.ok ? contextSnippets(rssServicePage.text, 'rss') : [],
+              abonnerenContextSnippets: rssServicePage.ok ? contextSnippets(rssServicePage.text, 'abonneren') : [],
+            };
 
             // 3. Nieuwsoverzichtspagina zelf: client-side gerenderd of server-side?
             const newsPage = await tryFetch('nieuws-overzichtspagina', 'https://www.rijksoverheid.nl/actueel/nieuws');
             const newsPageArticleLinks = newsPage.ok
               ? [...new Set([...newsPage.text.matchAll(/href=["'](\/actueel\/nieuws\/\d{4}\/\d{2}\/\d{2}\/[^"']+)["']/g)].map((m) => m[1]))]
               : [];
-            report.newsOverviewPage = { status: newsPage.status, ok: newsPage.ok, serverRenderedArticleLinksFound: newsPageArticleLinks.length };
+            report.newsOverviewPage = {
+              status: newsPage.status, ok: newsPage.ok, serverRenderedArticleLinksFound: newsPageArticleLinks.length,
+              byteLength: newsPage.length,
+              hasNextData: newsPage.ok && newsPage.text.includes('__NEXT_DATA__'),
+              htmlSample: newsPage.ok ? newsPage.text.slice(0, 1500) : null,
+            };
 
             // 4. Elke ontdekte RSS-link daadwerkelijk ophalen en tellen.
             report.rssFeeds = [];
@@ -139,12 +165,22 @@ jobs:
               if (r.sitemap.dateRange) console.log('- Datumrange: ' + r.sitemap.dateRange.oldest + ' t/m ' + r.sitemap.dateRange.newest + ' (' + r.sitemap.dateRange.count + ' datums)');
               console.log('');
               console.log('### 2. Officiële RSS-toelichtingspagina (rijksoverheid.nl/service/rss)');
-              console.log('- HTTP status: ' + r.rssServicePage.status + ' (ok=' + r.rssServicePage.ok + ')');
-              console.log('- Ontdekte RSS-links op deze pagina: ' + JSON.stringify(r.rssServicePage.discoveredLinks));
+              console.log('- HTTP status: ' + r.rssServicePage.status + ' (ok=' + r.rssServicePage.ok + '), ' + r.rssServicePage.byteLength + ' bytes');
+              console.log('- Bevat __NEXT_DATA__ (client-side rendering signaal): ' + r.rssServicePage.hasNextData);
+              console.log('- Ontdekte RSS-links op deze pagina (regex): ' + JSON.stringify(r.rssServicePage.discoveredLinks));
+              console.log('- Context rond \"rss\" in de ruwe HTML:');
+              for (const s of r.rssServicePage.rssContextSnippets) console.log('  - \`' + s + '\`');
+              console.log('- Context rond \"abonneren\" in de ruwe HTML:');
+              for (const s of r.rssServicePage.abonnerenContextSnippets) console.log('  - \`' + s + '\`');
               console.log('');
               console.log('### 3. Nieuwsoverzichtspagina (/actueel/nieuws)');
-              console.log('- HTTP status: ' + r.newsOverviewPage.status + ' (ok=' + r.newsOverviewPage.ok + ')');
+              console.log('- HTTP status: ' + r.newsOverviewPage.status + ' (ok=' + r.newsOverviewPage.ok + '), ' + r.newsOverviewPage.byteLength + ' bytes');
+              console.log('- Bevat __NEXT_DATA__ (client-side rendering signaal): ' + r.newsOverviewPage.hasNextData);
               console.log('- Server-side gerenderde artikel-links gevonden: ' + r.newsOverviewPage.serverRenderedArticleLinksFound);
+              console.log('- HTML-sample (eerste 1500 tekens):');
+              console.log('\`\`\`html');
+              console.log(r.newsOverviewPage.htmlSample);
+              console.log('\`\`\`');
               console.log('');
               console.log('### 4. Ontdekte RSS-feeds (daadwerkelijk opgehaald)');
               console.log('| URL | status | items | datumrange |');
