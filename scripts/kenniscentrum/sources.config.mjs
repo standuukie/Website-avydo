@@ -189,6 +189,15 @@ export const sources = [
     // Smalle, expliciete aanvulling op categoryKeywords — zie
     // rijksoverheidAudienceSignals hierboven voor de volledige toelichting.
     audienceSignals: rijksoverheidAudienceSignals,
+    // 'prinsjesdag' is op zichzelf te breed voor sitewide Rijksoverheid-
+    // nieuws (zie processSitemapSource in fetch-articles.mjs voor de
+    // volledige toelichting en de audit die dit aantoonde, 2026-10-01):
+    // elk ministerie publiceert rond Prinsjesdag nieuws, los van fiscale
+    // relevantie. Trefwoorden in deze lijst tellen daarom alleen mee als
+    // er ook een ander category- of audiencesignaal aanwezig is;
+    // 'belastingplan' staat hier bewust niet in en blijft zelfstandig
+    // voldoende.
+    corroborationRequiredKeywords: ['prinsjesdag'],
   },
   {
     id: 'mkb-nederland-nieuws',

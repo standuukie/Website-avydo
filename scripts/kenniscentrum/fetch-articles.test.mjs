@@ -1129,6 +1129,9 @@ const fakeRijksoverheidIndexSource = {
   // bron in sources.config.mjs — zie de tests verderop die specifiek dit
   // pad dekken.
   audienceSignals: rijksoverheidAudienceSignals,
+  // Zelfde corroboratie-eis als de echte bron — zie de prinsjesdag-tests
+  // verderop.
+  corroborationRequiredKeywords: ['prinsjesdag'],
 };
 
 test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de algemene sub-sitemaps, haalt titel+samenvatting van de artikelpagina en past de bestaande relevantiefilter ongewijzigd toe', async () => {
@@ -1264,4 +1267,198 @@ test('processSitemapSource (sitemapIndexUrl-variant): een generiek overheidsarti
 
   assert.equal(result.stages.relevant, 0);
   assert.equal(result.stages.reasons.irrelevant, 1);
+});
+
+// --- Regressie (read-only audit, 2026-10-01): nieuwe substring-botsingen
+// ('kor'/'maatschap'/'fusie') + 'prinsjesdag' te breed voor Rijksoverheid ---
+//
+// Een read-only audit van 20 nieuw gepubliceerde artikelen (10 Rijksoverheid
+// + 10 KVK, productierun 2026-10-01) toonde twee problemen: dezelfde
+// substring-botsing als bij 'nba' trad opnieuw op bij 'kor' (binnen
+// "tekort"), 'maatschap' (binnen "maatschappij") en 'fusie' (binnen
+// "kernfusie"); en 'prinsjesdag' bleek op zichzelf voldoende om 6 van de 10
+// nieuwe Rijksoverheid-artikelen relevant te maken, zonder enig ander
+// fiscaal signaal (Bonaire-kosten-levensonderhoud, Oekraïne/ontwikkelings-
+// samenwerking, infrastructuur).
+
+test("scoreCategories: 'kor' matcht niet meer als kale substring binnen 'tekort'", () => {
+  assert.equal(Object.keys(scoreCategories('lerarentekort')).length, 0);
+  assert.equal(Object.keys(scoreCategories('woningtekort')).length, 0);
+  assert.equal(Object.keys(scoreCategories('Dat leggen we hieronder in het kort uit.')).length, 0);
+});
+
+test("scoreCategories: 'KOR' blijft matchen als losstaand woord en 'kleineondernemersregeling' blijft via het eigen trefwoord werken", () => {
+  assert.ok('Btw' in scoreCategories('KOR'));
+  assert.ok('Btw' in scoreCategories('Gebruikt u de KOR voor uw onderneming?'));
+  assert.ok('Btw' in scoreCategories('kleineondernemersregeling'));
+});
+
+test("scoreCategories: 'maatschap' matcht niet meer als kale substring binnen 'maatschappij'", () => {
+  assert.equal(Object.keys(scoreCategories('maatschappij')).length, 0);
+  assert.equal(Object.keys(scoreCategories('Dit raakt de hele maatschappij.')).length, 0);
+});
+
+test("scoreCategories: 'maatschap' blijft matchen als losstaand woord", () => {
+  assert.ok('Ondernemen & rechtsvormen' in scoreCategories('maatschap'));
+  assert.ok('Ondernemen & rechtsvormen' in scoreCategories('Een maatschap is een samenwerkingsvorm voor zelfstandigen.'));
+});
+
+test("scoreCategories: 'fusie' matcht niet meer als kale substring binnen 'kernfusie'", () => {
+  assert.equal(Object.keys(scoreCategories('kernfusie')).length, 0);
+  assert.equal(Object.keys(scoreCategories('Onderzoekers boeken vooruitgang met kernfusie.')).length, 0);
+});
+
+test("scoreCategories: 'fusie' blijft matchen als losstaand woord", () => {
+  assert.ok('Ondernemen & rechtsvormen' in scoreCategories('fusie'));
+  assert.ok('Ondernemen & rechtsvormen' in scoreCategories('De twee bedrijven kondigden een fusie aan.'));
+});
+
+test("scoreCategories: 'prinsjesdag' telt gewoon mee in de categorietelling zelf (de corroboratie-eis zit in processSitemapSource, niet in scoreCategories)", () => {
+  assert.ok('Fiscale actualiteit' in scoreCategories('Alles over Prinsjesdag'));
+});
+
+test("scoreCategories: met excludeKeywords kan 'prinsjesdag' buiten de telling gehouden worden, zonder categoryKeywords zelf te wijzigen", () => {
+  const onlyPrinsjesdag = 'Lees hier alles over Prinsjesdag dit jaar.';
+  assert.ok('Fiscale actualiteit' in scoreCategories(onlyPrinsjesdag));
+  assert.equal(Object.keys(scoreCategories(onlyPrinsjesdag, new Set(['prinsjesdag']))).length, 0);
+
+  const prinsjesdagEnBelastingplan = 'Prinsjesdag: het Belastingplan 2027 is bekendgemaakt.';
+  assert.ok('Fiscale actualiteit' in scoreCategories(prinsjesdagEnBelastingplan, new Set(['prinsjesdag'])));
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): een Rijksoverheid-artikel met uitsluitend "prinsjesdag" wordt niet meer automatisch relevant', async () => {
+  const title = 'Prinsjesdag 2026: wat gebeurt er op het Binnenhof';
+  const description = 'Op Prinsjesdag leest de koning de troonrede voor en biedt het kabinet de rijksbegroting aan bij de Tweede Kamer.';
+  // Zekerstellen dat dit artikel alleen via 'prinsjesdag' scoort, en geen
+  // ministryMatch/audienceMatch heeft — anders test deze test niet wat hij
+  // beweert te testen.
+  const scores = scoreCategories(`${title} ${description}`);
+  assert.deepEqual(Object.keys(scores), ['Fiscale actualiteit']);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => description.toLowerCase().includes(kw)), false);
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-2026', lastmod: '2026-10-01T09:00:00.000Z' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-2026') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.reasons.irrelevant, 1);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): een algemeen Prinsjesdag-ministeriepersbericht zonder relevant Avydo-signaal komt niet meer door de poort', async () => {
+  const title = 'Prinsjesdag 2026: kabinet trekt extra geld uit voor Caribisch Nederland';
+  const description = 'Rond Prinsjesdag maakt het kabinet bekend dat er extra budget komt voor de kosten van levensonderhoud op Bonaire, Sint-Eustatius en Saba.';
+  assert.deepEqual(Object.keys(scoreCategories(`${title} ${description}`)), ['Fiscale actualiteit']);
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/caribisch-nederland', lastmod: '2026-10-01T09:00:00.000Z' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/caribisch-nederland') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.reasons.irrelevant, 1);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + "belastingplan" samen blijven relevant', async () => {
+  const title = 'Prinsjesdag 2026: Belastingplan 2027 ingediend bij de Tweede Kamer';
+  const description = 'Op Prinsjesdag heeft het kabinet het Belastingplan 2027 ingediend met voorstellen voor belastingtarieven volgend jaar.';
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  // Ongeldige lastmod -> publishItem geeft null terug vóór writeArticle,
+  // dus stages.relevant kan hier veilig getest worden zonder te schrijven.
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/belastingplan-2027', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/belastingplan-2027') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een ander bestaand category-signaal ("btw") samen blijven relevant', async () => {
+  const title = 'Prinsjesdag 2026: wijzigingen in de btw-tarieven aangekondigd';
+  const description = 'Tijdens Prinsjesdag maakte het kabinet bekend dat de btw-tarieven per volgend jaar wijzigen voor een aantal productgroepen.';
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-tarieven-wijziging', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-tarieven-wijziging') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een bestaand audienceSignal (zzp) samen blijven relevant, en audienceSignals blijven los daarvan gewoon werken', async () => {
+  // Deel 1: 'prinsjesdag' + audienceMatch (zzp) -> relevant via corroboratie.
+  const titleMet = 'Prinsjesdag 2026: wat verandert er voor zzp\'ers';
+  const descriptionMet = 'Tijdens Prinsjesdag kondigde het kabinet aan dat er voor zzp\'ers enkele regelingen wijzigen per volgend jaar.';
+  assert.ok(rijksoverheidAudienceSignals.some((kw) => descriptionMet.toLowerCase().includes(kw)));
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemapMet = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-zzp', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const resultMet = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemapMet);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-zzp') {
+      return htmlResponse(`<html><head><title>${titleMet} | Rijksoverheid.nl</title><meta name="description" content="${descriptionMet}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  assert.equal(resultMet.stages.relevant, 1);
+
+  // Deel 2: audienceSignal (zzp) zonder 'prinsjesdag' en zonder categoryKeywords
+  // -> blijft relevant via het bestaande, ongewijzigde audienceSignals-pad
+  // (zelfde als de al bestaande zzp-regressietest hierboven, nu met een
+  // bron die ook corroborationRequiredKeywords heeft, om te bevestigen dat
+  // dat pad niet geraakt is).
+  const titleZonder = 'Nieuwe regeling voor zzp\'ers aangekondigd';
+  const descriptionZonder = 'Het kabinet kondigt een nieuwe regeling aan die gevolgen heeft voor zelfstandigen zonder personeel.';
+  assert.equal(Object.keys(scoreCategories(`${titleZonder} ${descriptionZonder}`)).length, 0);
+  assert.ok(rijksoverheidAudienceSignals.some((kw) => `${titleZonder} ${descriptionZonder}`.toLowerCase().includes(kw)));
+
+  const subSitemapZonder = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zzp-regeling', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const resultZonder = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemapZonder);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zzp-regeling') {
+      return htmlResponse(`<html><head><title>${titleZonder} | Rijksoverheid.nl</title><meta name="description" content="${descriptionZonder}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  assert.equal(resultZonder.stages.relevant, 1);
 });

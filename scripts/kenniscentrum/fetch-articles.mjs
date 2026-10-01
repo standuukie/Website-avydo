@@ -237,7 +237,12 @@ async function fetchArticlePageMeta(url) {
 // ook boekhouding/boekhouden/boekhouder) en zouden door een generieke
 // woordgrens-eis stukgaan — zie fetch-articles.test.mjs voor de
 // regressietests die dat bevestigen.
-const WORD_BOUNDARY_KEYWORDS = new Set(['nba']);
+// Dezelfde botsing dook opnieuw op bij een read-only audit van de
+// productierun van 2026-10-01 (20 nieuw gepubliceerde artikelen): 'kor'
+// matchte binnen "lerarentekort"/"woningtekort"/"in het kort", 'maatschap'
+// binnen "maatschappij" en 'fusie' binnen "kernfusie". Zelfde oplossing,
+// zelfde patroon.
+const WORD_BOUNDARY_KEYWORDS = new Set(['nba', 'kor', 'maatschap', 'fusie']);
 
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -250,12 +255,22 @@ function keywordMatches(lowerText, keyword) {
   return lowerText.includes(keyword);
 }
 
-export function scoreCategories(text) {
+const NO_EXCLUDED_KEYWORDS = new Set();
+
+// `excludeKeywords` laat een aanroeper één of meer trefwoorden buiten de
+// telling houden zonder categoryKeywords zelf aan te passen — gebruikt door
+// processSitemapSource (zie corroborationRequiredKeywords in
+// sources.config.mjs) om te bepalen of een treffer ook zonder een specifiek
+// trefwoord (bijv. 'prinsjesdag') overeind blijft. Standaard leeg: bestaand
+// gedrag van alle andere aanroepers (pickCategory, de RSS-bronnen, KVK's
+// classifyKvkRelevance) blijft ongewijzigd.
+export function scoreCategories(text, excludeKeywords = NO_EXCLUDED_KEYWORDS) {
   const lower = text.toLowerCase();
   const scores = {};
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
     let score = 0;
     for (const kw of keywords) {
+      if (excludeKeywords.has(kw)) continue;
       if (keywordMatches(lower, kw)) score += 1;
     }
     if (score > 0) scores[category] = score;
@@ -719,7 +734,29 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       // als ministryBypass hierboven; de categorie zelf blijft uitsluitend
       // via categoryKeywords/pickCategory in publishItem bepaald.
       const audienceMatch = source.audienceSignals?.some((kw) => combinedText.toLowerCase().includes(kw));
-      if (Object.keys(scores).length === 0 && !ministryMatch && !audienceMatch) {
+      let relevant = Object.keys(scores).length > 0 || ministryMatch || audienceMatch;
+      // Sommige trefwoorden (zie corroborationRequiredKeywords in
+      // sources.config.mjs — momenteel 'prinsjesdag' voor Rijksoverheid)
+      // zijn op zichzelf te breed om als enig relevantiesignaal te gelden:
+      // een read-only audit van de productierun van 2026-10-01 liet zien
+      // dat 6 van de 10 nieuwe Rijksoverheid-artikelen uitsluitend via dit
+      // ene trefwoord doorkwamen, zonder enig ander fiscaal signaal (o.a.
+      // Bonaire-kosten-levensonderhoud, Oekraïne/ontwikkelingssamenwerking,
+      // infrastructuur). Zo'n trefwoord telt daarom alleen mee als er ook
+      // een ander signaal is: een categorie-treffer die niet uitsluitend
+      // van dit trefwoord afhangt, een ministryMatch of een audienceMatch.
+      // 'belastingplan' en alle overige trefwoorden staan niet in deze set
+      // en blijven dus zelfstandig voldoende.
+      if (relevant && source.corroborationRequiredKeywords?.length) {
+        const scoresWithoutCorroborationKeywords = scoreCategories(
+          combinedText,
+          new Set(source.corroborationRequiredKeywords),
+        );
+        const hasOtherSignal =
+          Object.keys(scoresWithoutCorroborationKeywords).length > 0 || ministryMatch || audienceMatch;
+        if (!hasOtherSignal) relevant = false;
+      }
+      if (!relevant) {
         stages.reasons.irrelevant += 1;
         addRejectionSample(samples, 'irrelevant', title);
         continue;
