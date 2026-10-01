@@ -530,6 +530,210 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
   return { added, seen: items.length, ok: true, stages };
 }
 
+// --- KVK: sitemap_index.xml -> documents-*.xml ---
+//
+// KVK publiceert geen RSS/nieuws-sitemap (zie sources.config.mjs voor de
+// onderzoeksgeschiedenis). Wel bevat de publieke sitemap_index.xml een
+// reeks documents-*.xml-sub-sitemaps met alle content-URL's + <lastmod>
+// (bevestigd via een tijdelijke, geïsoleerde GitHub Actions-proef: 10
+// sub-sitemaps, 1.837 URL's, allemaal met geldige <lastmod>). Dit bevat
+// alle KVK-content door elkaar (ook handelsregister-/productpagina's,
+// evenementen, persberichten) — filtering gebeurt daarom in twee stappen,
+// zie selectKvkCandidates hieronder.
+
+// Zet een KVK-URL-pad om naar leesbare tekst, voor de relevantie-vóórfilter
+// (vóór de artikelpagina zelf wordt opgehaald is alleen de URL bekend).
+export function kvkSlugToText(url) {
+  try {
+    const { pathname } = new URL(url);
+    return pathname.replace(/[/-]+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+// Haalt sitemap_index.xml op en volgt elke documents-*.xml-sub-sitemap die
+// daarin genoemd wordt (aantal/naamgeving ligt niet vast, dus niet
+// hardcoded). Verzamelt alle <url><loc>+<lastmod>-paren. lastmod is een
+// "laatst gewijzigd"-signaal, geen bewezen publicatiedatum — zie
+// publishedAt-opmerking bij processKvkSource.
+export async function fetchKvkDocumentUrls(sitemapIndexUrl) {
+  const indexRes = await fetchWithTimeout(sitemapIndexUrl, FETCH_TIMEOUT_MS);
+  if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status} bij sitemap_index.xml`);
+  const indexXml = await indexRes.text();
+  const subSitemaps = [...indexXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const documentSitemaps = subSitemaps.filter((u) => /\/documents-\d+\.xml$/i.test(u));
+  if (documentSitemaps.length === 0) {
+    throw new Error('geen documents-*.xml-sitemaps gevonden in sitemap_index.xml');
+  }
+
+  const entries = [];
+  for (const sitemapUrl of documentSitemaps) {
+    let res;
+    try {
+      res = await fetchWithTimeout(sitemapUrl, FETCH_TIMEOUT_MS);
+    } catch {
+      continue; // één falende sub-sitemap mag de andere niet blokkeren
+    }
+    if (!res.ok) continue;
+    const xml = await res.text();
+    const blocks = [...xml.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
+    for (const block of blocks) {
+      const loc = block.match(/<loc>([^<]+)<\/loc>/)?.[1];
+      const lastmod = block.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? null;
+      if (loc) entries.push({ loc, lastmod });
+    }
+  }
+  return entries;
+}
+
+// Zuiver filter-/selectiepad, gedeeld door de productie-run (processKvkSource)
+// en het aparte dry-run-script (dry-run-kvk.mjs): dedupliceert op URL,
+// sorteert op lastmod (meest recent eerst), past het URL-vormfilter toe
+// (bevestigde artikel-URL's volgen het patroon kvk.nl/<categorie>/<slug>/,
+// precies twee padsegmenten — sluit overduidelijke niet-artikel-URL's uit
+// zonder te gokken op een deny-list) en daarna de relevantie-vóórfilter op
+// de URL-slug. Hergebruikt bewust dezelfde categoryKeywords/scoreCategories
+// als de andere bronnen — geen tweede, parallel filtersysteem.
+export function selectKvkCandidates(entries, existingUrls) {
+  const uniqueByUrl = new Map();
+  for (const e of entries) {
+    if (!uniqueByUrl.has(e.loc)) uniqueByUrl.set(e.loc, e);
+  }
+  const deduped = [...uniqueByUrl.values()];
+
+  deduped.sort((a, b) => {
+    const da = a.lastmod ? Date.parse(a.lastmod) : 0;
+    const db = b.lastmod ? Date.parse(b.lastmod) : 0;
+    return db - da;
+  });
+
+  const afterUrlFilter = deduped.filter((e) => {
+    try {
+      const { pathname } = new URL(e.loc);
+      const segments = pathname.split('/').filter(Boolean);
+      return segments.length === 2;
+    } catch {
+      return false;
+    }
+  });
+
+  const afterRelevanceFilter = afterUrlFilter.filter(
+    (e) => Object.keys(scoreCategories(kvkSlugToText(e.loc))).length > 0,
+  );
+
+  const afterDedupAgainstExisting = afterRelevanceFilter.filter((e) => !existingUrls.has(e.loc));
+
+  return { deduped, afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting };
+}
+
+// Zuiver (geen netwerk): onderzoekt de HTML van een KVK-artikelpagina op een
+// betrouwbare titel en samenvatting. De <title> van KVK-pagina's wordt niet
+// betrouwbaar per pagina gerenderd (bevestigd tijdens onderzoek) en wordt
+// daarom NOOIT gebruikt. De zichtbare <h1> is wel de daadwerkelijke
+// artikelkop. Als titel of samenvatting niet betrouwbaar te vinden zijn,
+// wordt null teruggegeven (geen gegokte titel/summary) en slaat de caller
+// dat artikel over.
+export function extractKvkArticleFields(html) {
+  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const title = h1Match ? stripHtml(h1Match[1]) : null;
+  if (!title || title.length < 5) return null;
+
+  let description = extractMetaDescription(html);
+  if (!description || description.length < 20) {
+    const paragraphs = [...html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map((m) => stripHtml(m[1]))
+      .filter((t) => t.length > 60);
+    description = paragraphs[0] ?? null;
+  }
+  if (!description || description.length < 20) return null;
+
+  return { title, description };
+}
+
+export async function fetchKvkArticleMeta(url) {
+  let res;
+  try {
+    res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+  const html = await res.text();
+  return extractKvkArticleFields(html);
+}
+
+// Veiligheidsgrens op het aantal daadwerkelijk opgehaalde artikelpagina's
+// per run: de sitemap bevat ~1.800 URL's, en zonder grens zou een eerste
+// run (vóór dedup tegen bestaande content opbouwt) in theorie honderden
+// pagina's kunnen opvragen. Ruim boven maxArticlesPerSourcePerRun, zodat dit
+// in de praktijk alleen bij die eerste/lege run ooit relevant wordt.
+const KVK_MAX_PAGE_FETCHES_PER_RUN = 50;
+
+async function processKvkSource(source, existingUrls, remainingBudget) {
+  const stages = newStageCounters();
+
+  let entries;
+  try {
+    entries = await fetchKvkDocumentUrls(source.sitemapIndexUrl);
+  } catch (err) {
+    log(`  FOUT: kon KVK-sitemaps niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
+    return { added: 0, seen: 0, ok: false, stages };
+  }
+
+  stages.fetched = entries.length;
+  log(`  ${entries.length} URL-entries in documents-*.xml-sitemaps`);
+
+  const { afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting } = selectKvkCandidates(entries, existingUrls);
+  log(`  ${afterUrlFilter.length} na URL-vormfilter, ${afterRelevanceFilter.length} na relevantie-vóórfilter, ${afterDedupAgainstExisting.length} nog niet eerder opgenomen`);
+
+  let added = 0;
+  let sourceCount = 0;
+  let pagesFetched = 0;
+
+  for (const candidate of afterDedupAgainstExisting) {
+    if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
+    if (pagesFetched >= KVK_MAX_PAGE_FETCHES_PER_RUN) {
+      log(`  grens van ${KVK_MAX_PAGE_FETCHES_PER_RUN} opgehaalde pagina's per run bereikt, stoppen (overige kandidaten volgen in een volgende run).`);
+      break;
+    }
+    pagesFetched += 1;
+
+    const meta = await fetchKvkArticleMeta(candidate.loc);
+    if (!meta) {
+      log(`  - overgeslagen (geen betrouwbare titel/samenvatting op pagina): ${candidate.loc}`);
+      continue;
+    }
+    stages.parsed += 1;
+
+    // lastmod is "laatst gewijzigd", geen bewezen publicatiedatum (zie
+    // sources.config.mjs) — wordt hier, bij gebrek aan een betere bron-
+    // datum, wel gebruikt als publishedAt (zelfde aanpak als de bestaande
+    // Rijksoverheid-sitemapbron bij ontbrekende news:publication_date).
+    const item = { title: meta.title, description: meta.description, link: candidate.loc, pubDate: candidate.lastmod };
+
+    const scores = scoreCategories(`${item.title} ${item.description}`);
+    if (Object.keys(scores).length === 0) {
+      log(`  - overgeslagen (titel/samenvatting bevatten geen fiscaal/accountancy-trefwoord): ${candidate.loc}`);
+      continue;
+    }
+    stages.relevant += 1;
+
+    const filename = await publishItem(item, source);
+    if (!filename) continue;
+
+    existingUrls.add(candidate.loc);
+    added += 1;
+    sourceCount += 1;
+    remainingBudget.count -= 1;
+    stages.published += 1;
+    log(`  + ${filename}`);
+  }
+
+  log(`  ${added} nieuw artikel(en) toegevoegd`);
+  return { added, seen: entries.length, ok: true, stages };
+}
+
 async function processSource(source, existingUrls, remainingBudget) {
   log(`\n=== ${source.name} (${source.id}) ===`);
   if (!source.enabled) {
@@ -537,9 +741,14 @@ async function processSource(source, existingUrls, remainingBudget) {
     return { added: 0, seen: 0, ok: true, stages: newStageCounters() };
   }
 
-  const result = source.type === 'sitemap'
-    ? await processSitemapSource(source, existingUrls, remainingBudget)
-    : await processRssSource(source, existingUrls, remainingBudget);
+  let result;
+  if (source.type === 'kvk-sitemap') {
+    result = await processKvkSource(source, existingUrls, remainingBudget);
+  } else if (source.type === 'sitemap') {
+    result = await processSitemapSource(source, existingUrls, remainingBudget);
+  } else {
+    result = await processRssSource(source, existingUrls, remainingBudget);
+  }
 
   const s = result.stages;
   log(`  Bron → opgehaald: ${s.fetched} → succesvol geparsed: ${s.parsed} → relevant: ${s.relevant} → gepubliceerd: ${s.published}`);

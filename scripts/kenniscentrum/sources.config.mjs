@@ -32,17 +32,32 @@
 // breadcrumb-link naar /ministeries/ministerie-van-financien; is die
 // aanwezig, dan telt het artikel als relevant ongeacht trefwoordtreffer.
 //
-// Onderzochte maar NIET geïntegreerde bronnen (december 2026-uitbreiding),
-// telkens na daadwerkelijk live testen vanaf een omgeving met
-// internettoegang (niet via een zoekmachine of giswerk):
-//  - KVK (kvk.nl/overzicht/): geen RSS, geen sitemap die het overzicht
-//    dekt (sitemap_index.xml bevat alleen statische pagina's en WOO-
-//    documentcategorieën). De overzichtspagina is een Next.js-app die zijn
-//    content client-side ophaalt bij een intern, ongedocumenteerd
-//    Bloomreach-CMS-endpoint (production-site-nl.kvk.bloomreach.cloud) —
-//    dat is geen publieke, voor derden bedoelde API en wordt daarom niet
-//    gebruikt (zou neerkomen op reverse-engineering van hun interne SPA-
-//    backend, niet wezenlijk anders dan een niet-toegestane workaround).
+// KVK-source (toegevoegd 2026-10-01, Fase 1 — integratie + dry-run):
+// kvk.nl/overzicht/ zelf heeft geen RSS en haalt zijn content client-side op
+// bij een intern, ongedocumenteerd CMS-endpoint (niet gebruikt — zie
+// hieronder). Een tijdelijke, geïsoleerde GitHub Actions-proef (4 rondes)
+// heeft echter vastgesteld dat de publieke sitemap_index.xml verwijst naar
+// 10 documents-*.xml-sub-sitemaps met in totaal 1.837 URL's, allemaal met
+// een geldige <lastmod>, en dat bekende, actuele artikelen daarin
+// daadwerkelijk terug te vinden zijn. Dit is de discovery-bron (zie
+// fetchKvkDocumentUrls/selectKvkCandidates in fetch-articles.mjs). lastmod
+// is bevestigd een "laatst gewijzigd"-signaal, geen bewezen
+// publicatiedatum — individuele artikelpagina's leveren geen betrouwbare
+// publicatiedatum of JSON-LD op, en de <title> van KVK-pagina's wordt niet
+// betrouwbaar per pagina gerenderd (daarom wordt de zichtbare <h1>
+// gebruikt, nooit <title> — zie extractKvkArticleFields). De bron staat
+// bewust op enabled:false tot de Fase 1-dry-run (dry-run-kvk.mjs) is
+// beoordeeld.
+//
+// Onderzochte maar NIET geïntegreerde bronnen, telkens na daadwerkelijk
+// live testen vanaf een omgeving met internettoegang (niet via een
+// zoekmachine of giswerk):
+//  - KVK, de client-side Next.js-overzichtspagina zelf: content komt van
+//    een intern, ongedocumenteerd Bloomreach-CMS-endpoint
+//    (production-site-nl.kvk.bloomreach.cloud) — geen publieke, voor derden
+//    bedoelde API en daarom niet gebruikt (zou neerkomen op
+//    reverse-engineering van hun interne SPA-backend). De documents-*.xml-
+//    sitemaps hierboven zijn wél een publieke, legitieme bron.
 //  - NBA (nba.nl/nieuws/): geen RSS (/rss, /nieuws/rss beide 404), de
 //    sitemap.xml (555KB) bevat geen individuele nieuwsartikel-URL's, en de
 //    nieuws-indexpagina levert geen server-gerenderde artikel-links op om
@@ -120,6 +135,25 @@ export const sources = [
     // accountants- en belastingadvieskantoor. Voortaan telt een item van
     // deze bron alleen mee bij een treffer op een daadwerkelijk fiscaal/
     // accountancy-trefwoord (zie categoryKeywords hieronder).
+    requireKeywordMatch: true,
+  },
+  {
+    id: 'kvk-kennisartikelen',
+    name: 'KVK',
+    type: 'kvk-sitemap',
+    sitemapIndexUrl: 'https://www.kvk.nl/sitemap_index.xml',
+    defaultCategory: 'Ondernemen & rechtsvormen',
+    // Nog bewust UIT: zie de toelichting hierboven en de Fase 1-dry-run
+    // (dry-run-kvk.mjs / het "KVK dry-run (Kenniscentrum)"-workflow). Pas op
+    // true zetten nadat de daadwerkelijk geselecteerde kandidaten zijn
+    // beoordeeld.
+    enabled: false,
+    urlConfidence: 'confirmed',
+    // Documents-*.xml bevat alle KVK-content door elkaar (ook
+    // handelsregister-/productpagina's, evenementen, persberichten). Filteren
+    // gebeurt in twee stappen — eerst op de URL-slug, daarna op de
+    // daadwerkelijke titel + samenvatting — met dezelfde categoryKeywords als
+    // de andere bronnen (zie processKvkSource/selectKvkCandidates).
     requireKeywordMatch: true,
   },
 ];

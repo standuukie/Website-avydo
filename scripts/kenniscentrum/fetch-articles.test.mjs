@@ -20,6 +20,9 @@ import {
   scoreCategories,
   pickCategory,
   pickAudiences,
+  kvkSlugToText,
+  selectKvkCandidates,
+  extractKvkArticleFields,
 } from './fetch-articles.mjs';
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
@@ -205,4 +208,70 @@ test('pickAudiences kan meerdere doelgroepen tegelijk teruggeven', () => {
 test('pickAudiences geeft een lege lijst zonder enig doelgroep-trefwoord', () => {
   const audiences = pickAudiences('Koning bezoekt jubileumfeest op Sint Eustatius voor 250 jaar The First Salute.');
   assert.deepEqual(audiences, []);
+});
+
+// --- KVK-source (sitemap_index.xml -> documents-*.xml) ---
+
+test('kvkSlugToText zet een KVK-URL om naar leesbare tekst voor de relevantie-vóórfilter', () => {
+  assert.equal(
+    kvkSlugToText('https://www.kvk.nl/geldzaken/dga-salaris-en-gebruikelijk-loon/'),
+    'geldzaken dga salaris en gebruikelijk loon',
+  );
+});
+
+test('kvkSlugToText geeft een lege string bij een ongeldige URL', () => {
+  assert.equal(kvkSlugToText('niet-een-url'), '');
+});
+
+test('selectKvkCandidates dedupliceert, sorteert op lastmod en past het URL-vorm- en relevantie-vóórfilter toe', () => {
+  const entries = [
+    { loc: 'https://www.kvk.nl/belastingen/btw-aangifte-doen/', lastmod: '2026-09-20T10:00:00.000Z' },
+    { loc: 'https://www.kvk.nl/belastingen/btw-aangifte-doen/', lastmod: '2026-09-20T10:00:00.000Z' }, // duplicaat
+    { loc: 'https://www.kvk.nl/evenementen/ondernemersdag-2026/', lastmod: '2026-09-21T10:00:00.000Z' }, // niet fiscaal relevant
+    { loc: 'https://www.kvk.nl/producten/', lastmod: '2026-09-22T10:00:00.000Z' }, // 1 padsegment, geen artikel
+    { loc: 'https://www.kvk.nl/geldzaken/dga-salaris-en-gebruikelijk-loon/', lastmod: '2026-09-23T10:00:00.000Z' },
+  ];
+  const { deduped, afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting } = selectKvkCandidates(entries, new Set());
+
+  assert.equal(deduped.length, 4);
+  assert.equal(afterUrlFilter.length, 3);
+  assert.equal(afterRelevanceFilter.length, 2);
+  assert.deepEqual(afterRelevanceFilter.map((e) => e.loc), [
+    'https://www.kvk.nl/geldzaken/dga-salaris-en-gebruikelijk-loon/',
+    'https://www.kvk.nl/belastingen/btw-aangifte-doen/',
+  ]);
+  assert.equal(afterDedupAgainstExisting.length, 2);
+});
+
+test('selectKvkCandidates sluit URL\'s uit die al in de content-collectie staan', () => {
+  const entries = [{ loc: 'https://www.kvk.nl/belastingen/btw-aangifte-doen/', lastmod: '2026-09-20T10:00:00.000Z' }];
+  const existing = new Set(['https://www.kvk.nl/belastingen/btw-aangifte-doen/']);
+  const { afterDedupAgainstExisting } = selectKvkCandidates(entries, existing);
+  assert.equal(afterDedupAgainstExisting.length, 0);
+});
+
+test('extractKvkArticleFields gebruikt de zichtbare <h1>, nooit de <title> (die bij KVK onbetrouwbaar is)', () => {
+  const html = '<html><head><title>KVK</title><meta name="description" content="Een duidelijke samenvatting van minstens twintig tekens over btw-aangifte doen als ondernemer."/></head><body><h1>BTW-aangifte doen: zo werkt het</h1></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(fields.title, 'BTW-aangifte doen: zo werkt het');
+  assert.ok(fields.description.startsWith('Een duidelijke samenvatting'));
+});
+
+test('extractKvkArticleFields valt terug op de eerste substantiële alinea zonder meta description', () => {
+  const html = '<html><head><title>KVK</title></head><body><h1>Gebruikelijk loon voor de DGA</h1><p>Kort.</p><p>Als DGA van uw eigen BV moet u minimaal een gebruikelijk loon aan uzelf uitkeren volgens de Belastingdienst.</p></body></html>';
+  const fields = extractKvkArticleFields(html);
+  assert.ok(fields);
+  assert.equal(fields.title, 'Gebruikelijk loon voor de DGA');
+  assert.ok(fields.description.startsWith('Als DGA van uw eigen BV'));
+});
+
+test('extractKvkArticleFields geeft null als er geen <h1> staat (geen gegokte titel)', () => {
+  const html = '<html><head><title>BTW-aangifte doen - KVK</title></head><body><p>Als DGA van uw eigen BV moet u minimaal een gebruikelijk loon aan uzelf uitkeren.</p></body></html>';
+  assert.equal(extractKvkArticleFields(html), null);
+});
+
+test('extractKvkArticleFields geeft null als er geen bruikbare samenvatting te vinden is', () => {
+  const html = '<html><body><h1>BTW-aangifte doen</h1><p>Kort.</p></body></html>';
+  assert.equal(extractKvkArticleFields(html), null);
 });
