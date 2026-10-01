@@ -389,12 +389,51 @@ async function publishItem(item, source) {
 
 // Stadia zoals gevraagd: opgehaald -> succesvol geparsed -> relevant ->
 // gepubliceerd. Elke bron rapporteert deze vier tellingen, ongeacht type.
+// `reasons` is een los, bron-type-specifiek object met tellers die optellen
+// tot `fetched` (zie elke process*Source-functie voor de exacte velden) —
+// puur observability, bepaalt geen enkel gedrag.
 function newStageCounters() {
   return { fetched: 0, parsed: 0, relevant: 0, published: 0 };
 }
 
-async function processRssSource(source, existingUrls, remainingBudget) {
+// --- Observability-helpers (geen invloed op filtering/selectie) ---
+//
+// Compacte, begrensde titel-steekproef per afwijzingsreden: maximaal
+// REJECTION_SAMPLE_LIMIT titels per reden worden onthouden, zodat een run
+// met honderden afwijzingen van dezelfde reden niet tot een enorme log
+// leidt (expliciete eis). De tellingen zelf (stages.reasons) zijn altijd
+// volledig/exact; alleen de voorbeeldtitels in de log zijn begrensd.
+const REJECTION_SAMPLE_LIMIT = 5;
+
+function addRejectionSample(samples, reason, title) {
+  if (!title) return;
+  if (!samples[reason]) samples[reason] = [];
+  if (samples[reason].length < REJECTION_SAMPLE_LIMIT) samples[reason].push(title);
+}
+
+// Eén compacte regel met alle niet-nul tellers uit stages.reasons.
+function logReasonBreakdown(stages) {
+  const entries = Object.entries(stages.reasons ?? {}).filter(([, v]) => v > 0);
+  if (entries.length === 0) return;
+  log(`  Afwijzingen → ${entries.map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+}
+
+// Per reden met voorbeelden: maximaal REJECTION_SAMPLE_LIMIT titels, alleen
+// voor redenen die daadwerkelijk voorkwamen.
+function logRejectionSamples(samples) {
+  for (const [reason, titles] of Object.entries(samples)) {
+    if (!titles || titles.length === 0) continue;
+    log(`    voorbeelden (${reason}): ${titles.map((t) => `"${t}"`).join(', ')}`);
+  }
+}
+
+export async function processRssSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
+  // Dekt exact de bestaande skip-punten in de loop hieronder — geen enkel
+  // nieuw skip-criterium, alleen zichtbaar maken welk bestaand criterium
+  // een item blokkeert.
+  stages.reasons = { missingFields: 0, duplicate: 0, shortDescription: 0, irrelevant: 0, notEvaluated: 0 };
+  const samples = {};
 
   let res;
   try {
@@ -425,20 +464,34 @@ async function processRssSource(source, existingUrls, remainingBudget) {
   log(`  ${items.length} item(s) in feed`);
   let added = 0;
   let sourceCount = 0;
+  let itemsEvaluated = 0;
 
   for (const item of items) {
     if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
-    if (!item.title || !item.link) continue;
-    if (existingUrls.has(item.link)) continue;
+    itemsEvaluated += 1;
+    if (!item.title || !item.link) {
+      stages.reasons.missingFields += 1;
+      continue;
+    }
+    if (existingUrls.has(item.link)) {
+      stages.reasons.duplicate += 1;
+      continue;
+    }
     if (!item.description || item.description.length < 20) {
       // Onvoldoende broninformatie om een eigen samenvatting op te baseren.
+      stages.reasons.shortDescription += 1;
+      addRejectionSample(samples, 'shortDescription', item.title);
       continue;
     }
     stages.parsed += 1;
 
     if (source.requireKeywordMatch) {
       const scores = scoreCategories(`${item.title} ${item.description}`);
-      if (Object.keys(scores).length === 0) continue;
+      if (Object.keys(scores).length === 0) {
+        stages.reasons.irrelevant += 1;
+        addRejectionSample(samples, 'irrelevant', item.title);
+        continue;
+      }
     }
     stages.relevant += 1;
 
@@ -452,13 +505,25 @@ async function processRssSource(source, existingUrls, remainingBudget) {
     stages.published += 1;
     log(`  + ${filename}`);
   }
+  // Items die nooit zijn bekeken omdat het bron- of totaalbudget al vóór
+  // die iteratie op was (zie de break hierboven) — NIET hetzelfde als
+  // "afgewezen": over deze items is simpelweg geen relevantie-oordeel
+  // geveld. Geen gedragswijziging: dezelfde items werden ook vóór deze
+  // wijziging al nooit bekeken, dit maakt dat alleen zichtbaar.
+  stages.reasons.notEvaluated = items.length - itemsEvaluated;
 
   log(`  ${added} nieuw artikel(en) toegevoegd`);
+  logReasonBreakdown(stages);
+  logRejectionSamples(samples);
   return { added, seen: items.length, ok: true, stages };
 }
 
-async function processSitemapSource(source, existingUrls, remainingBudget) {
+export async function processSitemapSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
+  // Zelfde principe als processRssSource: dekt exact de bestaande
+  // skip-punten hieronder, geen nieuw skip-criterium.
+  stages.reasons = { missingFields: 0, duplicate: 0, metadataRejected: 0, irrelevant: 0, notEvaluated: 0 };
+  const samples = {};
 
   let res;
   try {
@@ -489,11 +554,19 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
   log(`  ${items.length} item(s) in sitemap`);
   let added = 0;
   let sourceCount = 0;
+  let itemsEvaluated = 0;
 
   for (const item of items) {
     if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
-    if (!item.title || !item.link) continue;
-    if (existingUrls.has(item.link)) continue;
+    itemsEvaluated += 1;
+    if (!item.title || !item.link) {
+      stages.reasons.missingFields += 1;
+      continue;
+    }
+    if (existingUrls.has(item.link)) {
+      stages.reasons.duplicate += 1;
+      continue;
+    }
 
     // Sitemap-items hebben geen samenvattingstekst: de artikelpagina zelf
     // wordt opgehaald voor de meta-description (en, indien geconfigureerd,
@@ -503,6 +576,8 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
     const { description, ministry } = await fetchArticlePageMeta(item.link);
     if (!description || description.length < 20) {
       log(`  - overgeslagen (geen samenvattingstekst op bron-pagina): ${item.link}`);
+      stages.reasons.metadataRejected += 1;
+      addRejectionSample(samples, 'metadataRejected', item.title);
       continue;
     }
     const enrichedItem = { ...item, description };
@@ -511,7 +586,11 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
     if (source.requireKeywordMatch) {
       const scores = scoreCategories(`${enrichedItem.title} ${enrichedItem.description}`);
       const ministryMatch = source.ministryBypass && ministry === source.ministryBypass;
-      if (Object.keys(scores).length === 0 && !ministryMatch) continue;
+      if (Object.keys(scores).length === 0 && !ministryMatch) {
+        stages.reasons.irrelevant += 1;
+        addRejectionSample(samples, 'irrelevant', item.title);
+        continue;
+      }
     }
     stages.relevant += 1;
 
@@ -525,8 +604,14 @@ async function processSitemapSource(source, existingUrls, remainingBudget) {
     stages.published += 1;
     log(`  + ${filename}`);
   }
+  // Zie de toelichting bij processRssSource: items die vóór hun beurt al
+  // niet meer bekeken werden doordat het budget op was. Geen
+  // gedragswijziging, alleen zichtbaar gemaakt.
+  stages.reasons.notEvaluated = items.length - itemsEvaluated;
 
   log(`  ${added} nieuw artikel(en) toegevoegd`);
+  logReasonBreakdown(stages);
+  logRejectionSamples(samples);
   return { added, seen: items.length, ok: true, stages };
 }
 
@@ -1017,7 +1102,7 @@ export function findOverlappingArticle(candidateTitle, candidateCategory, existi
 // aanhoudt als de productie-run.
 export const KVK_MAX_PAGE_FETCHES_PER_RUN = 50;
 
-async function processKvkSource(source, existingUrls, remainingBudget) {
+export async function processKvkSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
 
   let entries;
@@ -1033,6 +1118,24 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
 
   const { afterUrlFilter, afterRelevanceFilter, ranked } = selectKvkCandidates(entries, existingUrls);
   log(`  ${afterUrlFilter.length} na URL-/hub-vormfilter, ${afterRelevanceFilter.length} na redactionele relevantiefilter, ${ranked.length} gerangschikt en klaar om op te halen`);
+
+  // Observability-tellers voor de bestaande KVK-filterpipeline (zie boven):
+  // de filterlogica zelf (selectKvkCandidates, isKvkProcedurePage,
+  // isKvkServiceOrProductPage, classifyKvkRelevance,
+  // downgradeIfTitleHasNoSignal, findOverlappingArticle) blijft ongewijzigd —
+  // hier wordt alleen geteld/gelogd wat die functies al beslissen.
+  stages.reasons = {
+    afterUrlHubFilter: afterUrlFilter.length,
+    editorialCandidates: ranked.length,
+    pageFetches: 0,
+    parseFailures: 0,
+    procedureServiceRejected: 0,
+    relevanceRejected: 0,
+    titleSignalDowngraded: 0,
+    overlapRejected: 0,
+    notFetchedDueToLimit: 0,
+  };
+  const samples = {};
 
   const existingArticlesMeta = loadExistingArticlesMeta();
 
@@ -1051,6 +1154,8 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
     const meta = await fetchKvkArticleMeta(candidate.loc);
     if (!meta) {
       log(`  - overgeslagen (geen betrouwbare titel/samenvatting op pagina): ${candidate.loc}`);
+      stages.reasons.parseFailures += 1;
+      addRejectionSample(samples, 'parseFailures', candidate.loc);
       continue;
     }
     stages.parsed += 1;
@@ -1064,19 +1169,31 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
 
     if (isKvkProcedurePage(combinedText)) {
       log(`  - overgeslagen (formulier-/product-/procedure-/servicepagina, geen kennisartikel): ${candidate.loc}`);
+      stages.reasons.procedureServiceRejected += 1;
+      addRejectionSample(samples, 'procedureServiceRejected', meta.title);
       continue;
     }
     // Alleen de titel (nooit de samenvatting) — zie toelichting bij
     // isKvkServiceOrProductPage hierboven.
     if (isKvkServiceOrProductPage(candidate.loc, meta.title)) {
       log(`  - overgeslagen (KVK-dienst-/productpagina, geen accountancy-inhoud): ${candidate.loc}`);
+      stages.reasons.procedureServiceRejected += 1;
+      addRejectionSample(samples, 'procedureServiceRejected', meta.title);
       continue;
     }
 
     let classification = classifyKvkRelevance(combinedText);
+    const tierBeforeDowngrade = classification.tier;
     classification = downgradeIfTitleHasNoSignal(meta.title, classification);
+    if (classification.tier !== tierBeforeDowngrade) {
+      // Informationeel: telt niet exclusief, het item kan nog steeds
+      // "relevant" worden (lager tier) of hieronder alsnog afgewezen worden.
+      stages.reasons.titleSignalDowngraded += 1;
+    }
     if (classification.tier === 'afgewezen') {
       log(`  - overgeslagen (${classification.reason}): ${candidate.loc}`);
+      stages.reasons.relevanceRejected += 1;
+      addRejectionSample(samples, 'relevanceRejected', meta.title);
       continue;
     }
 
@@ -1084,6 +1201,8 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
     const overlap = findOverlappingArticle(meta.title, category, existingArticlesMeta);
     if (overlap) {
       log(`  - overgeslagen (overlap met bestaand artikel "${overlap.title}", ${overlap.file}): ${candidate.loc}`);
+      stages.reasons.overlapRejected += 1;
+      addRejectionSample(samples, 'overlapRejected', meta.title);
       continue;
     }
     stages.relevant += 1;
@@ -1099,7 +1218,12 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
     log(`  + ${filename}`);
   }
 
+  stages.reasons.pageFetches = pagesFetched;
+  stages.reasons.notFetchedDueToLimit = ranked.length - pagesFetched;
+
   log(`  ${added} nieuw artikel(en) toegevoegd`);
+  logReasonBreakdown(stages);
+  logRejectionSamples(samples);
   return { added, seen: entries.length, ok: true, stages };
 }
 

@@ -10,6 +10,9 @@
 // "e-facturatie/rapportage"-nieuws eerder ten onrechte wegfilterde.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   stripHtml,
   slugify,
@@ -32,7 +35,38 @@ import {
   isKvkServiceOrProductPage,
   downgradeIfTitleHasNoSignal,
   kvkFirstPathSegment,
+  processRssSource,
+  processSitemapSource,
 } from './fetch-articles.mjs';
+
+// --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
+//
+// Deze tests draaien process*Source rechtstreeks aan met een gemockte
+// globalThis.fetch (geen echt netwerkverkeer). Om nooit per ongeluk in de
+// echte src/content/kenniscentrum/ te schrijven, krijgt elk item dat tot
+// "relevant" zou komen een onparsebare datum mee: publishItem() geeft dan
+// altijd null terug vóórdat writeArticle() wordt aangeroepen (zie
+// fetch-articles.mjs), dus stages.relevant kan veilig getest worden zonder
+// dat stages.published ooit een echt bestand wegschrijft. Dit is dezelfde,
+// reeds bestaande "nooit fabricage"-vangrail in publishItem, niet een nieuw
+// mechanisme voor deze tests.
+async function withMockedFetch(handler, fn) {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => handler(String(url));
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+function xmlResponse(body, status = 200) {
+  return new Response(body, { status, headers: { 'content-type': 'application/xml' } });
+}
+
+function htmlResponse(body, status = 200) {
+  return new Response(body, { status, headers: { 'content-type': 'text/html' } });
+}
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
   assert.equal(stripHtml('<p>BTW &amp; loon</p>'), 'BTW & loon');
@@ -677,4 +711,332 @@ test('selectKvkCandidates sluit /producten-bestellen/- en /pers/-URL\'s uit op U
   assert.deepEqual(afterRelevanceFilter.map((e) => e.loc), [
     'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
   ]);
+});
+
+// --- processRssSource: stages.reasons (Belastingdienst/MKB-bronnen) ---
+
+const fakeRssSource = {
+  id: 'test-rss',
+  name: 'Test-RSS-bron',
+  feedUrl: 'https://example.test/rss.xml',
+  defaultCategory: 'Fiscale actualiteit',
+  requireKeywordMatch: true,
+};
+
+const RSS_REASONS_FIXTURE = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>Item zonder link</title>
+    <description>Dit item heeft geen link en moet als missingFields tellen in de tellers.</description>
+    <pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Al bekend artikel</title>
+    <link>https://example.test/al-bekend</link>
+    <description>Dit artikel staat al in de bestaande content en moet als duplicate tellen.</description>
+    <pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Te korte beschrijving</title>
+    <link>https://example.test/kort</link>
+    <description>Kort.</description>
+    <pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Algemeen bericht zonder thema</title>
+    <link>https://example.test/algemeen</link>
+    <description>Dit is een algemeen bericht zonder enige fiscale kern en moet als irrelevant tellen.</description>
+    <pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Kleineondernemersregeling uitgelegd</title>
+    <link>https://example.test/kor</link>
+    <description>Deze kleineondernemersregeling is relevant voor zzp'ers met een lage omzet.</description>
+    <pubDate>niet-een-geldige-datum</pubDate>
+  </item>
+</channel></rss>`;
+
+test('processRssSource telt elke afwijzingsreden apart en sluitend op fetched (duplicate/shortDescription/irrelevant/relevant)', async () => {
+  const existingUrls = new Set(['https://example.test/al-bekend']);
+  const result = await withMockedFetch(
+    (url) => (url === fakeRssSource.feedUrl ? xmlResponse(RSS_REASONS_FIXTURE) : htmlResponse('', 404)),
+    () => processRssSource(fakeRssSource, existingUrls, { count: 50 }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stages.fetched, 5);
+  assert.equal(result.stages.parsed, 2); // alleen items die de shortDescription-check overleven
+  assert.equal(result.stages.reasons.missingFields, 1);
+  assert.equal(result.stages.reasons.duplicate, 1);
+  assert.equal(result.stages.reasons.shortDescription, 1);
+  assert.equal(result.stages.reasons.irrelevant, 1);
+  assert.equal(result.stages.relevant, 1);
+  // Ongeldige pubDate -> publishItem geeft null, nooit written (zie withMockedFetch-toelichting).
+  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.reasons.notEvaluated, 0);
+  // Sluitendheid: elk fetched item valt in precies één van deze emmers.
+  const { reasons } = result.stages;
+  assert.equal(
+    reasons.missingFields + reasons.duplicate + reasons.shortDescription + reasons.irrelevant + result.stages.relevant + reasons.notEvaluated,
+    result.stages.fetched,
+  );
+});
+
+test('processRssSource: items die nooit bekeken zijn doordat het budget al op was, tellen als notEvaluated (niet als afgewezen)', async () => {
+  const smallFeed = `<?xml version="1.0"?>
+  <rss version="2.0"><channel>
+    <item><title>Een</title><link>https://example.test/een</link><description>Een geldige, lange genoeg beschrijving van dit artikel.</description><pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate></item>
+    <item><title>Twee</title><link>https://example.test/twee</link><description>Een geldige, lange genoeg beschrijving van dit artikel.</description><pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate></item>
+    <item><title>Drie</title><link>https://example.test/drie</link><description>Een geldige, lange genoeg beschrijving van dit artikel.</description><pubDate>Thu, 30 Oct 2025 10:00:00 GMT</pubDate></item>
+  </channel></rss>`;
+  const result = await withMockedFetch(
+    (url) => (url === fakeRssSource.feedUrl ? xmlResponse(smallFeed) : htmlResponse('', 404)),
+    () => processRssSource(fakeRssSource, new Set(), { count: 0 }), // budget al op vóór deze bron
+  );
+
+  assert.equal(result.stages.fetched, 3);
+  assert.equal(result.stages.reasons.notEvaluated, 3);
+  assert.equal(result.stages.reasons.missingFields, 0);
+  assert.equal(result.stages.reasons.duplicate, 0);
+  assert.equal(result.stages.reasons.shortDescription, 0);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+// --- processSitemapSource: stages.reasons (Rijksoverheid) ---
+
+const fakeSitemapSource = {
+  id: 'test-sitemap',
+  name: 'Test-Sitemap-bron',
+  sitemapUrl: 'https://example.test/sitemap.xml',
+  defaultCategory: 'Fiscale actualiteit',
+  requireKeywordMatch: true,
+};
+
+function sitemapNewsUrlBlock(loc, title, pubDate) {
+  return `<url><loc>${loc}</loc><news:news><news:publication><news:language>nl</news:language><news:name>Test</news:name></news:publication><news:publication_date>${pubDate}</news:publication_date><news:title>${title}</news:title></news:news></url>`;
+}
+
+const SITEMAP_REASONS_FIXTURE = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">${[
+  sitemapNewsUrlBlock('https://example.test/al-bekend', 'Al bekend artikel', '2026-09-20T10:00:00.000Z'),
+  sitemapNewsUrlBlock('https://example.test/geen-metadata', 'Pagina zonder metadata', '2026-09-21T10:00:00.000Z'),
+  sitemapNewsUrlBlock('https://example.test/irrelevant', 'Algemeen bericht', '2026-09-22T10:00:00.000Z'),
+  sitemapNewsUrlBlock('https://example.test/relevant', 'Kleineondernemersregeling nieuws', 'niet-een-geldige-datum'),
+].join('')}</urlset>`;
+
+test('processSitemapSource telt elke afwijzingsreden apart en sluitend op fetched (duplicate/metadataRejected/irrelevant/relevant)', async () => {
+  const existingUrls = new Set(['https://example.test/al-bekend']);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeSitemapSource.sitemapUrl) return xmlResponse(SITEMAP_REASONS_FIXTURE);
+    if (url === 'https://example.test/geen-metadata') return htmlResponse('<html><body>Geen meta description hier.</body></html>');
+    if (url === 'https://example.test/irrelevant') {
+      return htmlResponse('<html><head><meta name="description" content="Een algemeen artikel zonder enig specifiek fiscaal thema, puur ter lengte."/></head></html>');
+    }
+    if (url === 'https://example.test/relevant') {
+      return htmlResponse('<html><head><meta name="description" content="Dit artikel gaat over de kleineondernemersregeling en btw-aangifte voor ondernemers."/></head></html>');
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeSitemapSource, existingUrls, { count: 50 }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stages.fetched, 4);
+  assert.equal(result.stages.parsed, 2); // alleen items die de metadata-check overleven
+  // missingFields is bij sitemap-bronnen structureel 0: parseSitemapNewsItems
+  // filtert items zonder titel/link al weg vóór processSitemapSource ze ziet
+  // (zie de implementatie) — dit maakt dat alleen zichtbaar, geen wijziging.
+  assert.equal(result.stages.reasons.missingFields, 0);
+  assert.equal(result.stages.reasons.duplicate, 1);
+  assert.equal(result.stages.reasons.metadataRejected, 1);
+  assert.equal(result.stages.reasons.irrelevant, 1);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.reasons.notEvaluated, 0);
+  const { reasons } = result.stages;
+  assert.equal(
+    reasons.missingFields + reasons.duplicate + reasons.metadataRejected + reasons.irrelevant + result.stages.relevant + reasons.notEvaluated,
+    result.stages.fetched,
+  );
+});
+
+test('processSitemapSource: items die nooit bekeken zijn doordat het budget al op was, tellen als notEvaluated', async () => {
+  const smallSitemap = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">${[
+    sitemapNewsUrlBlock('https://example.test/een', 'Een', '2026-09-20T10:00:00.000Z'),
+    sitemapNewsUrlBlock('https://example.test/twee', 'Twee', '2026-09-21T10:00:00.000Z'),
+  ].join('')}</urlset>`;
+  const result = await withMockedFetch(
+    (url) => (url === fakeSitemapSource.sitemapUrl ? xmlResponse(smallSitemap) : htmlResponse('', 404)),
+    () => processSitemapSource(fakeSitemapSource, new Set(), { count: 0 }),
+  );
+
+  assert.equal(result.stages.fetched, 2);
+  assert.equal(result.stages.reasons.notEvaluated, 2);
+  assert.equal(result.stages.reasons.duplicate, 0);
+  assert.equal(result.stages.reasons.metadataRejected, 0);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+  assert.equal(result.stages.relevant, 0);
+});
+
+// --- processKvkSource: stages.reasons (KVK — bestaande filtering ongewijzigd) ---
+//
+// Deze tests draaien met een eigen, geïsoleerde CONTENT_DIR (tijdelijke map)
+// i.p.v. de echte src/content/kenniscentrum/: processKvkSource roept zelf
+// loadExistingArticlesMeta() aan voor de overlapcontrole, en die leest echt
+// van schijf. Een tijdelijke map voorkomt zowel schrijven in als
+// afhankelijkheid van de huidige inhoud van de echte kennisbank (anders zou
+// een toevallige titel-overlap met een bestaand artikel deze tests
+// onvoorspelbaar kunnen laten slagen/falen). Elke test importeert daarom een
+// "verse" module-instantie met een eigen cache-busting query-string, zodat
+// de module-level CONTENT_DIR-constante (eenmalig gelezen bij import, zie
+// fetch-articles.mjs) naar de tijdelijke map wijst.
+let kvkTestImportCounter = 0;
+async function withIsolatedKvkModule(existingArticles, fn) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'kenniscentrum-kvk-test-'));
+  for (const [i, { title, category }] of existingArticles.entries()) {
+    writeFileSync(path.join(dir, `bestaand-${i}.md`), `---\ntitle: "${title}"\ncategory: "${category}"\n---\n`, 'utf8');
+  }
+  const previousEnv = process.env.KENNISCENTRUM_CONTENT_DIR;
+  process.env.KENNISCENTRUM_CONTENT_DIR = dir;
+  kvkTestImportCounter += 1;
+  try {
+    const mod = await import(`./fetch-articles.mjs?kvk-test-${kvkTestImportCounter}`);
+    return await fn(mod);
+  } finally {
+    if (previousEnv === undefined) delete process.env.KENNISCENTRUM_CONTENT_DIR;
+    else process.env.KENNISCENTRUM_CONTENT_DIR = previousEnv;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const fakeKvkSource = {
+  id: 'test-kvk',
+  name: 'Test-KVK-bron',
+  type: 'kvk-sitemap',
+  sitemapIndexUrl: 'https://example-kvk.test/sitemap_index.xml',
+  defaultCategory: 'Ondernemen & rechtsvormen',
+  requireKeywordMatch: true,
+};
+const KVK_DOCUMENTS_SITEMAP_URL = 'https://example-kvk.test/sitemaps/documents-1.xml';
+
+function kvkSitemapIndexXml() {
+  return `<?xml version="1.0"?><sitemapindex><sitemap><loc>${KVK_DOCUMENTS_SITEMAP_URL}</loc></sitemap></sitemapindex>`;
+}
+function kvkDocumentsXml(entries) {
+  const urls = entries.map(({ loc, lastmod }) => `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`).join('');
+  return `<?xml version="1.0"?><urlset>${urls}</urlset>`;
+}
+function withKvkSitemapRouting(candidateLoc, candidateLastmod, articlePageHandler) {
+  return (url) => {
+    if (url === fakeKvkSource.sitemapIndexUrl) return xmlResponse(kvkSitemapIndexXml());
+    if (url === KVK_DOCUMENTS_SITEMAP_URL) return xmlResponse(kvkDocumentsXml([{ loc: candidateLoc, lastmod: candidateLastmod }]));
+    if (url === candidateLoc) return articlePageHandler(url);
+    return htmlResponse('', 404);
+  };
+}
+
+test('processKvkSource telt parseFailures als de artikelpagina geen betrouwbare <h1> oplevert', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-doen/';
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse('<html><body><p>Geen h1 hier, dus extractKvkArticleFields faalt.</p></body></html>')),
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+  ));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stages.fetched, 1);
+  assert.equal(result.stages.reasons.afterUrlHubFilter, 1);
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.reasons.pageFetches, 1);
+  assert.equal(result.stages.reasons.notFetchedDueToLimit, 0);
+  assert.equal(result.stages.reasons.parseFailures, 1);
+  assert.equal(result.stages.parsed, 0);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+test('processKvkSource telt procedureServiceRejected op basis van de echte paginatitel, ook als de URL-slug dat niet liet zien', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-info/';
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse(
+      '<html><head><meta name="description" content="Praktische hulp bij het doen van je btw-aangifte als ondernemer, met uitleg."/></head><body><h1>Btw-aangifte doen: handleiding en formulier</h1></body></html>',
+    )),
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+  ));
+
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.parsed, 1);
+  assert.equal(result.stages.reasons.procedureServiceRejected, 1);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+test('processKvkSource telt relevanceRejected als de echte titel+samenvatting op geen enkele categorie scoort', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-update-herfst/';
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse(
+      '<html><head><meta name="description" content="Deze week delen we een update over onze diensten en openingstijden."/></head><body><h1>Belangrijk nieuws voor onze klanten</h1></body></html>',
+    )),
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+  ));
+
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.parsed, 1);
+  assert.equal(result.stages.reasons.relevanceRejected, 1);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+test('processKvkSource telt titleSignalDowngraded (informationeel) als alleen de samenvatting een signaal geeft, en telt het item alsnog als relevant', async () => {
+  const candidateLoc = 'https://www.kvk.nl/administratie/deponeren-van-de-jaarrekening-tips/';
+  // Ongeldige lastmod -> wordt publishedAt in publishItem -> publishItem
+  // geeft null terug vóór writeArticle, dus stages.relevant kan hier veilig
+  // getest worden zonder dat er een bestand wordt weggeschreven.
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, 'niet-een-geldige-datum', () => htmlResponse(
+      '<html><head><meta name="description" content="Lees meer over de laatste ontwikkelingen rond de jaarrekening en het deponeren daarvan bij KVK voor besloten vennootschappen."/></head><body><h1>Nieuws voor ondernemers deze week</h1></body></html>',
+    )),
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+  ));
+
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.parsed, 1);
+  assert.equal(result.stages.reasons.titleSignalDowngraded, 1);
+  assert.equal(result.stages.reasons.relevanceRejected, 0);
+  assert.equal(result.stages.reasons.overlapRejected, 0);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.published, 0); // ongeldige datum, geen schrijfactie
+});
+
+test('processKvkSource: kandidaten die door het pagina-ophaal-/run-budget nooit zijn opgehaald, tellen als notFetchedDueToLimit', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-doen/';
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse('', 404)), // wordt nooit aangeroepen
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 0 }), // budget al op vóór deze bron
+  ));
+
+  assert.equal(result.stages.fetched, 1);
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.reasons.pageFetches, 0);
+  assert.equal(result.stages.reasons.notFetchedDueToLimit, 1);
+  assert.equal(result.stages.parsed, 0);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+test('processKvkSource telt overlapRejected bij een bestaand, inhoudelijk vergelijkbaar Kenniscentrum-artikel (zelfde bestaande overlap-algoritme, alleen nu geteld)', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-voor-ondernemers/';
+  const result = await withIsolatedKvkModule(
+    [{ title: 'Btw-aangifte doen voor ondernemers', category: 'Btw' }],
+    (mod) => withMockedFetch(
+      withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse(
+        '<html><head><meta name="description" content="Praktische uitleg over het doen van btw-aangifte als ondernemer, met voorbeelden."/></head><body><h1>Btw-aangifte doen voor ondernemers: tips en uitleg</h1></body></html>',
+      )),
+      () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+    ),
+  );
+
+  assert.equal(result.stages.reasons.editorialCandidates, 1);
+  assert.equal(result.stages.parsed, 1);
+  assert.equal(result.stages.reasons.overlapRejected, 1);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
 });
