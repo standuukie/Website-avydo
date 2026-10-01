@@ -144,6 +144,28 @@ jobs:
               });
             }
 
+            // 6. Bredere, niet-Google-News-specifieke sitemaps: misschien is
+            //    news/sitemap.xml niet de enige sitemap, en bestaat er een
+            //    sitemap_index.xml (zoals bij KVK) die naar méér/bredere
+            //    sub-sitemaps verwijst, zonder de ~2-dagen-grens die het
+            //    Google News-sitemapformaat oplegt.
+            report.alternativeSitemaps = [];
+            for (const url of [
+              'https://www.rijksoverheid.nl/sitemap.xml',
+              'https://www.rijksoverheid.nl/sitemap_index.xml',
+              'https://www.rijksoverheid.nl/actueel/sitemap.xml',
+            ]) {
+              const r = await tryFetch('alternatieve-sitemap', url);
+              report.alternativeSitemaps.push({
+                url, status: r.status, ok: r.ok,
+                urlCount: r.ok ? countSitemapUrls(r.text) : null,
+                looksLikeIndex: r.ok && r.text.includes('<sitemapindex'),
+                sitemapRefs: r.ok ? [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).slice(0, 15) : [],
+                dateRange: r.ok ? sitemapDateRange(r.text) : null,
+                error: r.error ?? null,
+              });
+            }
+
             console.log(JSON.stringify(report, null, 2));
           }
 
@@ -196,6 +218,15 @@ jobs:
               for (const f of r.explicitCandidates) {
                 const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
                 console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.itemCount + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
+              }
+              console.log('');
+              console.log('### 6. Alternatieve/bredere sitemaps (niet-Google-News-specifiek)');
+              console.log('| URL | status | url-count | is index? | datumrange | fout |');
+              console.log('|---|---|---|---|---|---|');
+              for (const f of r.alternativeSitemaps) {
+                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
+                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.urlCount + ' | ' + f.looksLikeIndex + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
+                if (f.sitemapRefs && f.sitemapRefs.length) console.log('  - voorbeeld-refs: ' + JSON.stringify(f.sitemapRefs));
               }
             " >> "$GITHUB_STEP_SUMMARY"
           else
