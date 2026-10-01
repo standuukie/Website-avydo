@@ -563,16 +563,18 @@ test('isKvkServiceOrProductPage blokkeert niet blind op het woord "jaarrekening"
   }
 });
 
-test('classifyKvkRelevance + isKvkServiceOrProductPage samen: dry-run 3-ruis wordt nu afgewezen, sterke artikelen blijven hoog', () => {
-  // De volledige selectiepijplijn zoals processKvkSource/dry-run-kvk.mjs die
-  // toepast: eerst het service/product-signaal, dan pas classifyKvkRelevance.
-  function finalTier(url, title, description) {
-    const combined = `${title} ${description}`;
-    if (isKvkProcedurePage(combined)) return 'afgewezen';
-    if (isKvkServiceOrProductPage(url, combined)) return 'afgewezen';
-    return downgradeIfTitleHasNoSignal(title, classifyKvkRelevance(combined)).tier;
-  }
+// Helper die exact de volgorde van processKvkSource/dry-run-kvk.mjs volgt:
+// isKvkServiceOrProductPage krijgt bewust alleen de titel (nooit de
+// samenvatting) — zie ronde 5: een negatieve term die alleen in de
+// samenvatting staat mag een inhoudelijk artikel niet afwijzen.
+function finalTier(url, title, description) {
+  const combined = `${title} ${description}`;
+  if (isKvkProcedurePage(combined)) return 'afgewezen';
+  if (isKvkServiceOrProductPage(url, title)) return 'afgewezen';
+  return downgradeIfTitleHasNoSignal(title, classifyKvkRelevance(combined)).tier;
+}
 
+test('classifyKvkRelevance + isKvkServiceOrProductPage samen: dry-run 3-ruis wordt nog steeds afgewezen, sterke artikelen blijven hoog', () => {
   assert.equal(finalTier('https://www.kvk.nl/producten-bestellen/kvk-dataservice-jaarrekeningen/', 'KVK Dataservice Jaarrekeningen', 'Bestel hier de officiële dataservice met jaarrekeningen uit het Handelsregister.'), 'afgewezen');
   assert.equal(finalTier('https://www.kvk.nl/pers/presskit-kvk-beeldbank/', 'Presskit KVK - Beeldbank', 'Download hier het persmateriaal en de beeldbank van KVK.'), 'afgewezen');
   assert.equal(finalTier('https://www.kvk.nl/deponeren/jaarrekening-deponeren-bedrijfsklasse-groot/', 'Jaarrekening deponeren bedrijfsklasse groot', 'Bedrijven in bedrijfsklasse groot moeten hun jaarrekening binnen de wettelijke termijn deponeren.'), 'afgewezen');
@@ -581,6 +583,62 @@ test('classifyKvkRelevance + isKvkServiceOrProductPage samen: dry-run 3-ruis wor
   assert.equal(finalTier('https://www.kvk.nl/internationaal/wat-is-de-eu-kor/', 'Wat is de EU-KOR?', 'De EU-KOR is een btw-vrijstellingsregeling voor kleine ondernemers die internationaal zakendoen.'), 'hoog');
   assert.equal(finalTier('https://www.kvk.nl/wetten-en-regels/wet-dba-voorkom-schijnzelfstandigheid/', 'Wet DBA: voorkom schijnzelfstandigheid', 'De Wet DBA regelt wanneer sprake is van schijnzelfstandigheid bij het inhuren van zzp\'ers.'), 'hoog');
   assert.equal(finalTier('https://www.kvk.nl/geldzaken/de-dga-en-werknemersverzekeringen/', 'De dga en werknemersverzekeringen', 'Als dga van uw bv gelden andere regels voor werknemersverzekeringen dan voor gewoon personeel.'), 'hoog');
+});
+
+// --- Ronde 5: samenvatting mag geen zelfstandige negatieve trigger zijn ---
+// Regressie voor dry-run 4: "Waaruit bestaat de jaarrekening?", "Een
+// XBRL-jaarrekening opstellen en deponeren" en "Zelf deponeren van je
+// jaarrekening" werden daar onterecht afgewezen omdat hun (gesimuleerde)
+// samenvatting toevallig "handleiding"/"jaarrekening deponeren"/"deponeren
+// bij KVK" bevatte. isKvkServiceOrProductPage mag daarom alleen op titel/URL
+// beoordelen; een negatieve term die uitsluitend in de samenvatting staat
+// mag niet tot afwijzing leiden zolang titel en URL op inhoudelijke kennis
+// wijzen.
+test('isKvkServiceOrProductPage negeert de samenvatting volledig — alleen titel/URL tellen mee', () => {
+  // Zelfde drie titels, maar nu met een samenvatting die opzettelijk
+  // "handleiding", "jaarrekening deponeren" en "deponeren bij KVK" bevat.
+  assert.equal(isKvkServiceOrProductPage('https://www.kvk.nl/deponeren/waaruit-bestaat-de-jaarrekening/', 'Waaruit bestaat de jaarrekening?'), false);
+  assert.equal(isKvkServiceOrProductPage('https://www.kvk.nl/deponeren/een-xbrl-jaarrekening-opstellen-en-deponeren/', 'Een XBRL-jaarrekening opstellen en deponeren'), false);
+  assert.equal(isKvkServiceOrProductPage('https://www.kvk.nl/deponeren/zelf-deponeren-jaarrekening/', 'Zelf deponeren van je jaarrekening'), false);
+});
+
+test('ronde 5-regressie: een samenvatting met "handleiding"/"jaarrekening deponeren"/"deponeren bij KVK" wijst een inhoudelijk artikel niet meer af', () => {
+  const cases = [
+    {
+      url: 'https://www.kvk.nl/deponeren/waaruit-bestaat-de-jaarrekening/',
+      title: 'Waaruit bestaat de jaarrekening?',
+      description: 'Lees de handleiding over wat je allemaal moet deponeren bij KVK: jaarrekening deponeren begint met de juiste onderdelen op orde hebben.',
+    },
+    {
+      url: 'https://www.kvk.nl/deponeren/een-xbrl-jaarrekening-opstellen-en-deponeren/',
+      title: 'Een XBRL-jaarrekening opstellen en deponeren',
+      description: 'Een handleiding voor het deponeren bij KVK met het XBRL-formaat voor je jaarrekening.',
+    },
+    {
+      url: 'https://www.kvk.nl/deponeren/zelf-deponeren-jaarrekening/',
+      title: 'Zelf deponeren van je jaarrekening',
+      description: 'Deze handleiding legt uit hoe je zelf je jaarrekening deponeren kunt regelen bij KVK.',
+    },
+    {
+      url: 'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
+      title: 'Jaarrekening wel of niet deponeren?',
+      description: 'Niet elke onderneming is verplicht een jaarrekening te deponeren bij KVK.',
+    },
+  ];
+  for (const { url, title, description } of cases) {
+    assert.equal(finalTier(url, title, description), 'hoog', `verwacht 'hoog' voor: ${title}`);
+  }
+});
+
+test('ronde 5-regressie: echte procedurepagina\'s met "bedrijfsklasse"/"uiterste datum"/"handleiding" in de TITEL blijven wél afgewezen', () => {
+  assert.equal(finalTier('https://www.kvk.nl/deponeren/uiterste-termijn-deponeren-jaarrekening/', 'Uiterste datum deponeren jaarrekening', 'De uiterste termijn voor het deponeren van je jaarrekening.'), 'afgewezen');
+  assert.equal(finalTier('https://www.kvk.nl/deponeren/hoe-deponeer-je-jouw-jaarrekening/', 'In welke bedrijfsklasse valt je bedrijf?', 'Bepaal eerst je bedrijfsklasse voordat je deponeert.'), 'afgewezen');
+  assert.equal(finalTier('https://www.kvk.nl/deponeren/handleiding-zelf-deponeren-jaarrekening/', 'Handleiding Zelf Deponeren Jaarrekening', 'Een stapsgewijze handleiding.'), 'afgewezen');
+});
+
+test('ronde 5-regressie: /producten-bestellen/ en /pers/ blijven hard geblokkeerd, ook met een onschuldige titel', () => {
+  assert.equal(finalTier('https://www.kvk.nl/producten-bestellen/kvk-jaarrekeningen-open-data-set/', 'KVK Handelsregister Open Dataset Jaarrekeningen', 'Open data.'), 'afgewezen');
+  assert.equal(finalTier('https://www.kvk.nl/pers/presskit-kvk-beeldbank/', 'Presskit KVK - Beeldbank', 'Persmateriaal.'), 'afgewezen');
 });
 
 test('downgradeIfTitleHasNoSignal degradeert \'hoog\' naar \'twijfel\' als alleen de samenvatting een signaal geeft (Presskit-regressie)', () => {

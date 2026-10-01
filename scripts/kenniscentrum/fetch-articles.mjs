@@ -666,6 +666,16 @@ export function isKvkHubPage(url) {
 //    ("bedrijfsklasse", "uiterste termijn/datum", "handleiding", de kale
 //    actie-titel "jaarrekening(en) deponeren" zonder toelichting) die
 //    wijzen op KVK's eigen proces i.p.v. uitleg over de jaarrekening zelf.
+//
+// Dry-run 4 (ronde 4 -> 5): deze titelcheck liep aanvankelijk over
+// titel + samenvatting samen, waardoor drie inhoudelijke /deponeren/-
+// artikelen ("Waaruit bestaat de jaarrekening?", "Een XBRL-jaarrekening
+// opstellen en deponeren", "Zelf deponeren van je jaarrekening") onterecht
+// werden afgewezen omdat hun meta description toevallig een van deze
+// termen bevatte (bijv. "handleiding" of "jaarrekening deponeren" in een
+// zin). isKvkServiceOrProductPage mag daarom NOOIT de samenvatting
+// ontvangen — alleen URL en titel/H1, die de auteur daadwerkelijk zelf
+// heeft gekozen en dus een betrouwbaarder signaal zijn.
 const KVK_SERVICE_PATH_SEGMENTS = new Set(['producten-bestellen', 'pers']);
 
 export function isKvkServiceOrProductPath(url) {
@@ -689,9 +699,12 @@ export const kvkServiceOrProductKeywords = [
   'mediamateriaal',
 ];
 
-export function isKvkServiceOrProductPage(url, text) {
+// `title` moet de paginatitel/H1 zijn (of, in de URL-vóórfilter, de
+// URL-slug-tekst) — NOOIT de samenvatting/meta description. Zie de
+// toelichting hierboven.
+export function isKvkServiceOrProductPage(url, title) {
   if (isKvkServiceOrProductPath(url)) return true;
-  const lower = normalizeKvkText(text);
+  const lower = normalizeKvkText(title);
   return kvkServiceOrProductKeywords.some((kw) => lower.includes(normalizeKvkText(kw)));
 }
 
@@ -1053,7 +1066,9 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
       log(`  - overgeslagen (formulier-/product-/procedure-/servicepagina, geen kennisartikel): ${candidate.loc}`);
       continue;
     }
-    if (isKvkServiceOrProductPage(candidate.loc, combinedText)) {
+    // Alleen de titel (nooit de samenvatting) — zie toelichting bij
+    // isKvkServiceOrProductPage hierboven.
+    if (isKvkServiceOrProductPage(candidate.loc, meta.title)) {
       log(`  - overgeslagen (KVK-dienst-/productpagina, geen accountancy-inhoud): ${candidate.loc}`);
       continue;
     }

@@ -100,7 +100,9 @@ async function main() {
       });
       continue;
     }
-    if (isKvkServiceOrProductPage(candidate.loc, combinedText)) {
+    // Alleen de titel (nooit de samenvatting) — zie toelichting bij
+    // isKvkServiceOrProductPage in fetch-articles.mjs.
+    if (isKvkServiceOrProductPage(candidate.loc, meta.title)) {
       rejected.push({
         url: candidate.loc,
         title: meta.title,
