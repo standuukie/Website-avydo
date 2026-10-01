@@ -193,6 +193,19 @@ jobs:
               });
             }
 
+            // 8. Exacte <url>-blokstructuur van een /actueel/nieuws/-entry in
+            //    de algemene sub-sitemap: bevat dit al een titel (zoals het
+            //    Google News-formaat news:title), of alleen loc+lastmod
+            //    (dan is bij het ophalen van de artikelpagina zelf ook een
+            //    titel-extractie nodig, niet alleen de samenvatting zoals nu).
+            const sample1 = await tryFetch('sitemap-1-raw', 'https://www.rijksoverheid.nl/sitemap/1.xml');
+            report.rawUrlBlockSample = null;
+            if (sample1.ok) {
+              const blocks = [...sample1.text.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
+              const newsBlock = blocks.find((b) => b.includes('/actueel/nieuws/'));
+              report.rawUrlBlockSample = newsBlock ?? null;
+            }
+
             console.log(JSON.stringify(report, null, 2));
           }
 
@@ -262,6 +275,11 @@ jobs:
                 if (f.dateRange) console.log('  - datumrange: ' + f.dateRange.oldest + ' .. ' + f.dateRange.newest);
                 if (f.newsArticleUrlSample.length) console.log('  - voorbeelden: ' + JSON.stringify(f.newsArticleUrlSample));
               }
+              console.log('');
+              console.log('### 8. Ruwe <url>-blokstructuur van een nieuwsartikel-entry');
+              console.log('\`\`\`xml');
+              console.log(r.rawUrlBlockSample ?? '(geen gevonden)');
+              console.log('\`\`\`');
             " >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Geen report.json gevonden (scriptfout, zie vorige stap).' >> "$GITHUB_STEP_SUMMARY"
