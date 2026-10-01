@@ -40,6 +40,7 @@ import {
   extractPageTitle,
   fetchRijksoverheidGeneralSitemapUrls,
 } from './fetch-articles.mjs';
+import { rijksoverheidAudienceSignals } from './sources.config.mjs';
 
 // --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
 //
@@ -1124,6 +1125,10 @@ const fakeRijksoverheidIndexSource = {
   defaultCategory: 'Fiscale actualiteit',
   requireKeywordMatch: true,
   ministryBypass: 'Ministerie van Financiën',
+  // Zelfde smalle, expliciete signaal als de echte rijksoverheid-nieuws-
+  // bron in sources.config.mjs — zie de tests verderop die specifiek dit
+  // pad dekken.
+  audienceSignals: rijksoverheidAudienceSignals,
 };
 
 test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de algemene sub-sitemaps, haalt titel+samenvatting van de artikelpagina en past de bestaande relevantiefilter ongewijzigd toe', async () => {
@@ -1169,4 +1174,94 @@ test('processSitemapSource (sitemapIndexUrl-variant): rapporteert een foutresult
   const result = await withMockedFetch(() => htmlResponse('', 503), () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
   assert.equal(result.ok, false);
   assert.equal(result.added, 0);
+});
+
+// --- Regressie (2026-10-01): 'nba'-substring-false-positives + smalle
+// audienceKeywords-aanvulling voor Rijksoverheid ---
+//
+// Een live productie-analyse van de echte Rijksoverheid-run liet zien dat
+// 3 van de 5 gepubliceerde artikelen uitsluitend relevant werden bevonden
+// omdat het trefwoord 'nba' (bedoeld voor de beroepsorganisatie NBA) als
+// kale substring matchte binnen "openbaar"/"openbare"/"openbaarheid". Deze
+// tests dekken zowel het nieuwe woordgrens-gedrag van 'nba' zelf als de
+// regressievrijheid van bestaande, opzettelijk prefix-matchende trefwoorden
+// (bijv. 'boekhoud'), en de nieuwe, smalle audienceSignals-aanvulling.
+
+test("scoreCategories: 'nba' matcht niet meer als kale substring binnen 'openbaar'/'openbare'/'openbaarheid'", () => {
+  assert.equal(Object.keys(scoreCategories('openbaar vervoer')).length, 0);
+  assert.equal(Object.keys(scoreCategories('openbare lichamen')).length, 0);
+  assert.equal(Object.keys(scoreCategories('openbaarheid van bestuur')).length, 0);
+});
+
+test("scoreCategories: 'NBA' (en 'nba') blijven wél matchen als losstaande term", () => {
+  assert.ok('Administratie & jaarrekening' in scoreCategories('NBA'));
+  assert.ok('Administratie & jaarrekening' in scoreCategories('nba'));
+  assert.ok('Administratie & jaarrekening' in scoreCategories('Lees het nieuwe standpunt van de NBA over dit onderwerp.'));
+});
+
+test("scoreCategories: 'Nederlandse Beroepsorganisatie van Accountants' matcht al via het bestaande 'accountant'-trefwoord (geen 'nba'-substring nodig)", () => {
+  const text = 'Nederlandse Beroepsorganisatie van Accountants';
+  assert.equal(text.toLowerCase().includes('nba'), false); // geen 'nba'-substring aanwezig in deze tekst
+  assert.ok('Administratie & jaarrekening' in scoreCategories(text));
+});
+
+test("scoreCategories: bestaande opzettelijke voorvoegsel-trefwoorden (bijv. 'boekhoud') blijven ongewijzigd werken (geen regressie door de woordgrens-eis)", () => {
+  assert.ok('Administratie & jaarrekening' in scoreCategories('Goed boekhouden is de basis van je onderneming.'));
+  assert.ok('Administratie & jaarrekening' in scoreCategories('Kies de juiste boekhoudsoftware voor je bedrijf.'));
+  assert.ok('Administratie & jaarrekening' in scoreCategories('Als boekhouder help ik ondernemers met hun administratie.'));
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): een zzp-wet wordt nu relevant via de smalle audienceSignals-aanvulling, ook zonder categoryKeywords-treffer', async () => {
+  const title = "Zelfstandigenwet biedt meer duidelijkheid en erkenning voor zzp'ers";
+  const description = "Het kabinet heeft een wetsvoorstel ingediend dat meer duidelijkheid moet geven over de positie van zelfstandigen zonder personeel op de arbeidsmarkt.";
+  // Zekerstellen dat dit artikel NIET via categoryKeywords of ministryBypass
+  // relevant zou worden — zodat de test daadwerkelijk het nieuwe
+  // audienceSignals-pad dekt, niet een al bestaand pad.
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  // Ongeldige lastmod -> wordt publishedAt in publishItem -> publishItem
+  // geeft null terug vóór writeArticle (zie fetch-articles.mjs), dus
+  // stages.relevant kan hier veilig getest worden zonder dat er een echt
+  // bestand wordt weggeschreven — zelfde patroon als elders in dit bestand.
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zelfstandigenwet', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zelfstandigenwet') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): een generiek overheidsartikel met alleen het brede audienceKeyword "werkgever" wordt NIET automatisch relevant', async () => {
+  const title = 'Werkgevers krijgen te maken met nieuwe regels';
+  const description = 'Werkgevers moeten vanaf volgend jaar rekening houden met enkele nieuwe regels voor personeel op de werkvloer.';
+  // 'werkgever'/'personeel' zijn bewust NIET in rijksoverheidAudienceSignals
+  // opgenomen (zie sources.config.mjs) en matchen ook geen categoryKeywords
+  // — dit artikel moet dus gewoon afgewezen blijven.
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => description.toLowerCase().includes(kw)), false);
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/werkgevers-nieuwe-regels', lastmod: '2026-10-01T09:00:00.000Z' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/werkgevers-nieuwe-regels') {
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.reasons.irrelevant, 1);
 });

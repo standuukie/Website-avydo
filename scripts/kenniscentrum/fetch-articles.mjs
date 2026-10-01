@@ -224,13 +224,39 @@ async function fetchArticlePageMeta(url) {
   }
 }
 
+// Enkele korte trefwoorden kunnen via de kale substring-check hieronder per
+// ongeluk binnen een heel ander woord matchen (bijv. 'nba' binnen
+// "openbaar"/"openbare"/"openbaarheid" — ontdekt via een live Rijksoverheid-
+// productierun, 2026-10-01: 3 van de 5 gepubliceerde artikelen kwamen
+// uitsluitend hierdoor door, zie git-historie). Voor die specifieke
+// trefwoorden wordt een woordgrens-bewuste match gebruikt i.p.v. kale
+// substring-matching, zodat "NBA" als losstaande term nog wel telt maar
+// "openbaar(e)(heid)" niet meer. Bewust een kleine, expliciete lijst i.p.v.
+// dit voor alle trefwoorden te doen: meerdere bestaande trefwoorden (bijv.
+// 'boekhoud') zijn juist OPZETTELIJK bedoeld als voorvoegsel-match (vangt
+// ook boekhouding/boekhouden/boekhouder) en zouden door een generieke
+// woordgrens-eis stukgaan — zie fetch-articles.test.mjs voor de
+// regressietests die dat bevestigen.
+const WORD_BOUNDARY_KEYWORDS = new Set(['nba']);
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function keywordMatches(lowerText, keyword) {
+  if (WORD_BOUNDARY_KEYWORDS.has(keyword)) {
+    return new RegExp(`\\b${escapeRegExp(keyword)}\\b`).test(lowerText);
+  }
+  return lowerText.includes(keyword);
+}
+
 export function scoreCategories(text) {
   const lower = text.toLowerCase();
   const scores = {};
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
     let score = 0;
     for (const kw of keywords) {
-      if (lower.includes(kw)) score += 1;
+      if (keywordMatches(lower, kw)) score += 1;
     }
     if (score > 0) scores[category] = score;
   }
@@ -683,9 +709,17 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     stages.parsed += 1;
 
     if (source.requireKeywordMatch) {
-      const scores = scoreCategories(`${enrichedItem.title} ${enrichedItem.description}`);
+      const combinedText = `${enrichedItem.title} ${enrichedItem.description}`;
+      const scores = scoreCategories(combinedText);
       const ministryMatch = source.ministryBypass && ministry === source.ministryBypass;
-      if (Object.keys(scores).length === 0 && !ministryMatch) {
+      // Smalle, expliciete aanvulling op categoryKeywords (zie
+      // rijksoverheidAudienceSignals in sources.config.mjs) — alleen voor
+      // bronnen die zelf `audienceSignals` instellen (momenteel uitsluitend
+      // rijksoverheid-nieuws). Bepaalt alleen OF een item relevant is, net
+      // als ministryBypass hierboven; de categorie zelf blijft uitsluitend
+      // via categoryKeywords/pickCategory in publishItem bepaald.
+      const audienceMatch = source.audienceSignals?.some((kw) => combinedText.toLowerCase().includes(kw));
+      if (Object.keys(scores).length === 0 && !ministryMatch && !audienceMatch) {
         stages.reasons.irrelevant += 1;
         addRejectionSample(samples, 'irrelevant', title);
         continue;

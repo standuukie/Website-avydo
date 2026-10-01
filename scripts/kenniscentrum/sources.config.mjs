@@ -112,6 +112,45 @@
 //    dit bij elke run vanzelf (ongeldige feeds worden overgeslagen, nooit
 //    verzonnen) en rapporteert per bron of het ophalen lukte.
 
+// Doelgroepen per artikel: net als categoryKeywords, maar dan om aan te
+// geven voor welk type ondernemer een artikel vooral relevant is. Een
+// artikel krijgt een doelgroep alleen toegekend bij een daadwerkelijke
+// trefwoordtreffer in titel + samenvatting — nooit geraden. Een artikel kan
+// meerdere doelgroepen hebben (bv. zowel "werkgever" als "mkb-ondernemer").
+// De sleutels hier moeten gelijk zijn aan `audiences` in
+// src/content/config.ts.
+//
+// Staat bewust vóór `sources` hieronder: de rijksoverheid-nieuws-bron
+// verwijst naar rijksoverheidAudienceSignals (zie verderop) in haar eigen
+// configuratie-object, en dat moet al geïnitialiseerd zijn op het moment
+// dat die array-literal wordt geëvalueerd.
+export const audienceKeywords = {
+  zzp: ['zzp', "zzp'er", 'zzper', 'zelfstandige zonder personeel', 'eenmanszaak', 'zelfstandig ondernemer'],
+  'bv-dga': ['dga', 'besloten vennootschap', 'vennootschapsbelasting', 'vpb', 'dividend', 'aandeelhouder', 'rechtspersoon'],
+  werkgever: [
+    'werkgever', 'personeel', 'loonheffing', 'payroll', 'cao', 'arbeidsovereenkomst',
+    'minimumloon', 'arbeidsrecht', 'werknemer', 'werknemers', 'ontslag', 're-integratie',
+  ],
+  starter: ['starter', 'startende ondernemer', 'starten met een bedrijf', 'nieuwe onderneming', 'kvk-inschrijving', 'oprichting van een bedrijf'],
+  'mkb-ondernemer': ['mkb', 'midden- en kleinbedrijf', 'ondernemer', 'ondernemers', 'ondernemen', 'bedrijfsleven'],
+};
+
+// Smalle, expliciete aanvulling op categoryKeywords, uitsluitend voor de
+// Rijksoverheid-relevantiepoort (zie fetch-articles.mjs,
+// processSitemapSource / source.audienceSignals hieronder). Een live
+// productie-analyse (2026-10-01) liet zien dat "Zelfstandigenwet biedt meer
+// duidelijkheid en erkenning voor zzp'ers" werd afgewezen, terwijl
+// audienceKeywords.zzp dit artikel al als zzp-relevant herkende — alleen
+// werd audienceKeywords nooit door de relevantiepoort geraadpleegd. Van
+// alle audienceKeywords-groepen is uitsluitend zzp specifiek genoeg aan
+// Avydo's doelgroep gekoppeld om als zelfstandig relevantiesignaal te
+// dienen. Bewust NIET toegevoegd: werkgever/starter/mkb-ondernemer — die
+// bevatten brede, generieke termen ("ondernemer", "werkgever", "personeel",
+// "mkb") die massaal algemeen overheidsnieuws zouden doorlaten. Dit raakt
+// alleen rijksoverheid-nieuws; andere bronnen filteren nog steeds
+// uitsluitend op categoryKeywords (+ ministryBypass waar van toepassing).
+export const rijksoverheidAudienceSignals = audienceKeywords.zzp;
+
 export const sources = [
   {
     id: 'belastingdienst-zakelijk',
@@ -147,6 +186,9 @@ export const sources = [
     // Publicaties van het Ministerie van Financiën tellen altijd als
     // relevant, ook zonder trefwoordtreffer (zie extractMinistryTag).
     ministryBypass: 'Ministerie van Financiën',
+    // Smalle, expliciete aanvulling op categoryKeywords — zie
+    // rijksoverheidAudienceSignals hierboven voor de volledige toelichting.
+    audienceSignals: rijksoverheidAudienceSignals,
   },
   {
     id: 'mkb-nederland-nieuws',
@@ -271,24 +313,6 @@ export const categoryKeywords = {
     // scoorde.
     'schijnzelfstandigheid', 'dba', 'zzp-wetgeving',
   ],
-};
-
-// Doelgroepen per artikel: net als categoryKeywords, maar dan om aan te
-// geven voor welk type ondernemer een artikel vooral relevant is. Een
-// artikel krijgt een doelgroep alleen toegekend bij een daadwerkelijke
-// trefwoordtreffer in titel + samenvatting — nooit geraden. Een artikel kan
-// meerdere doelgroepen hebben (bv. zowel "werkgever" als "mkb-ondernemer").
-// De sleutels hier moeten gelijk zijn aan `audiences` in
-// src/content/config.ts.
-export const audienceKeywords = {
-  zzp: ['zzp', "zzp'er", 'zzper', 'zelfstandige zonder personeel', 'eenmanszaak', 'zelfstandig ondernemer'],
-  'bv-dga': ['dga', 'besloten vennootschap', 'vennootschapsbelasting', 'vpb', 'dividend', 'aandeelhouder', 'rechtspersoon'],
-  werkgever: [
-    'werkgever', 'personeel', 'loonheffing', 'payroll', 'cao', 'arbeidsovereenkomst',
-    'minimumloon', 'arbeidsrecht', 'werknemer', 'werknemers', 'ontslag', 're-integratie',
-  ],
-  starter: ['starter', 'startende ondernemer', 'starten met een bedrijf', 'nieuwe onderneming', 'kvk-inschrijving', 'oprichting van een bedrijf'],
-  'mkb-ondernemer': ['mkb', 'midden- en kleinbedrijf', 'ondernemer', 'ondernemers', 'ondernemen', 'bedrijfsleven'],
 };
 
 // Weergavenamen voor de doelgroepen, gebruikt in de frontend
