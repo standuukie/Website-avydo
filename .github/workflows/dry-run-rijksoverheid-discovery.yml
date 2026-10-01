@@ -166,6 +166,33 @@ jobs:
               });
             }
 
+            // 7. BELANGRIJKE VONDST in stap 6: sitemap.xml is zelf een index
+            //    die verwijst naar news/sitemap.xml (al gebruikt) + een reeks
+            //    genummerde, kennelijk algemene sub-sitemaps (/sitemap/1.xml
+            //    t/m minstens /sitemap/13.xml) — net als het KVK
+            //    sitemap_index.xml -> documents-*.xml-patroon. Controleer nu
+            //    daadwerkelijk: bevatten die /actueel/nieuws/-URL's, hoeveel,
+            //    en welke lastmod-range (zit de ~2-dagen-grens van het
+            //    Google News-formaat hier ook, of is dit breder/historischer)?
+            report.generalSitemapSample = [];
+            for (const url of [
+              'https://www.rijksoverheid.nl/sitemap/1.xml',
+              'https://www.rijksoverheid.nl/sitemap/13.xml',
+            ]) {
+              const r = await tryFetch('algemene-sub-sitemap', url);
+              const allUrls = r.ok ? [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]) : [];
+              const newsUrls = allUrls.filter((u) => u.includes('/actueel/nieuws/'));
+              report.generalSitemapSample.push({
+                url, status: r.status, ok: r.ok,
+                totalUrlCount: r.ok ? countSitemapUrls(r.text) : null,
+                totalLocCount: allUrls.length,
+                newsArticleUrlCount: newsUrls.length,
+                newsArticleUrlSample: newsUrls.slice(0, 8),
+                dateRange: r.ok ? sitemapDateRange(r.text) : null,
+                error: r.error ?? null,
+              });
+            }
+
             console.log(JSON.stringify(report, null, 2));
           }
 
@@ -227,6 +254,13 @@ jobs:
                 const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
                 console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.urlCount + ' | ' + f.looksLikeIndex + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
                 if (f.sitemapRefs && f.sitemapRefs.length) console.log('  - voorbeeld-refs: ' + JSON.stringify(f.sitemapRefs));
+              }
+              console.log('');
+              console.log('### 7. Inhoud van de genummerde algemene sub-sitemaps (steekproef)');
+              for (const f of r.generalSitemapSample) {
+                console.log('- ' + f.url + ': status ' + f.status + ', totaal ' + f.totalUrlCount + ' URLs, waarvan ' + f.newsArticleUrlCount + ' /actueel/nieuws/-artikelen');
+                if (f.dateRange) console.log('  - datumrange: ' + f.dateRange.oldest + ' .. ' + f.dateRange.newest);
+                if (f.newsArticleUrlSample.length) console.log('  - voorbeelden: ' + JSON.stringify(f.newsArticleUrlSample));
               }
             " >> "$GITHUB_STEP_SUMMARY"
           else
