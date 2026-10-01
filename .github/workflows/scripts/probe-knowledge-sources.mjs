@@ -3,29 +3,21 @@
  * TIJDELIJK diagnose-script, hoort bij .github/workflows/test-knowledge-sources.yml.
  * Geen onderdeel van de productie-Kenniscentrum-pipeline (scripts/kenniscentrum/).
  *
- * Haalt twee kandidaat-bronpagina's op zoals een gewone browser dat zou doen
- * (geen login, geen paywall-omzeiling, geen scraping van niet-publieke data)
- * en rapporteert puur technische, objectieve bevindingen: statuscode,
- * content-type, of de response HTML is, aanwijzingen voor RSS/JSON/sitemap/
- * paginering/API-endpoints, en een heuristische telling van mogelijke
- * artikel-links. Schrijft niets weg, wijzigt niets, commit niets.
+ * Ronde 2: FD is komen te vervallen (geen commerciële licentie — zie het
+ * Kenniscentrum-auditrapport). Dit script onderzoekt nu uitsluitend de
+ * daadwerkelijke, ruwe structuur van de publieke KVK-overzichtspagina, zodat
+ * de productie-parsing (fetch-articles.mjs) op een geverifieerde, echte
+ * structuur gebaseerd kan worden in plaats van op aannames.
+ *
+ * Haalt alleen de publieke pagina op zoals een gewone browser dat zou doen.
+ * Schrijft niets weg, wijzigt niets, commit niets.
  */
 
 const BROWSER_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-const TARGETS = [
-  { label: 'KVK — overzicht', url: 'https://www.kvk.nl/overzicht/' },
-  { label: 'FD — net binnen', url: 'https://fd.nl/net-binnen' },
-];
-
-const AUX_PROBES = [
-  { label: 'KVK robots.txt', url: 'https://www.kvk.nl/robots.txt' },
-  { label: 'KVK sitemap.xml', url: 'https://www.kvk.nl/sitemap.xml' },
-  { label: 'KVK sitemap_index.xml', url: 'https://www.kvk.nl/sitemap_index.xml' },
-  { label: 'FD robots.txt', url: 'https://fd.nl/robots.txt' },
-  { label: 'FD sitemap.xml', url: 'https://fd.nl/sitemap.xml' },
-];
+const KVK_OVERZICHT_URL = 'https://www.kvk.nl/overzicht/';
+const KVK_SITEMAP_INDEX_URL = 'https://www.kvk.nl/sitemap_index.xml';
 
 function section(title) {
   console.log(`\n${'='.repeat(70)}\n${title}\n${'='.repeat(70)}`);
@@ -49,123 +41,145 @@ async function fetchWithTimeout(url, timeoutMs = 20000) {
   }
 }
 
-function findAll(regex, text, mapFn) {
-  return [...text.matchAll(regex)].map(mapFn);
+// Zoekt recursief naar het eerste array van objecten dat "artikelachtig" is:
+// elk object heeft minstens één titel-achtig en één url-achtig veld.
+// Geeft het pad (voor leesbaarheid) en het array zelf terug.
+function findArticleLikeArrays(node, path = '$', results = [], depth = 0) {
+  if (depth > 12 || results.length >= 5) return results;
+  if (Array.isArray(node)) {
+    if (node.length >= 2 && node.every((el) => el && typeof el === 'object' && !Array.isArray(el))) {
+      const sample = node[0];
+      const keys = Object.keys(sample).map((k) => k.toLowerCase());
+      const hasTitleLike = keys.some((k) => /title|titel|heading|name|naam/.test(k));
+      const hasUrlLike = keys.some((k) => /url|link|href|slug|path/.test(k));
+      if (hasTitleLike && hasUrlLike) {
+        results.push({ path, length: node.length, sampleKeys: Object.keys(sample) });
+      }
+    }
+    node.forEach((el, i) => findArticleLikeArrays(el, `${path}[${i}]`, results, depth + 1));
+  } else if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node)) {
+      findArticleLikeArrays(value, `${path}.${key}`, results, depth + 1);
+    }
+  }
+  return results;
 }
 
-async function probeMainPage({ label, url }) {
-  section(`${label} — ${url}`);
+function getByPath(root, path) {
+  // path als "$.a.b[0].c" — simpele evaluator, alleen voor deze diagnose.
+  const parts = path.replace(/^\$\.?/, '').match(/[^.[\]]+|\[\d+\]/g) || [];
+  let cur = root;
+  for (const part of parts) {
+    if (/^\[\d+\]$/.test(part)) {
+      cur = cur?.[Number(part.slice(1, -1))];
+    } else {
+      cur = cur?.[part];
+    }
+    if (cur === undefined) return undefined;
+  }
+  return cur;
+}
+
+async function probeKvkOverzicht() {
+  section(`KVK — overzicht — ${KVK_OVERZICHT_URL}`);
 
   let res;
   try {
-    res = await fetchWithTimeout(url);
+    res = await fetchWithTimeout(KVK_OVERZICHT_URL);
   } catch (err) {
     console.log(`BEREIKBAAR: nee — fout bij ophalen: ${err.message}`);
     return;
   }
-
-  console.log(`BEREIKBAAR: ja`);
   console.log(`HTTP status: ${res.status}`);
   console.log(`Content-Type: ${res.headers.get('content-type') ?? '(geen header)'}`);
-  console.log(`Finale URL na eventuele redirects: ${res.url}`);
-
   if (!res.ok) {
-    console.log(`Response niet OK (status ${res.status}) — geen verdere inhoudsanalyse.`);
+    console.log('Response niet OK — geen verdere analyse.');
     return;
   }
 
-  const text = await res.text();
-  console.log(`Response-grootte: ${text.length} tekens`);
+  const html = await res.text();
+  console.log(`Response-grootte: ${html.length} tekens`);
 
-  const isHtml = /<html[\s>]/i.test(text);
-  console.log(`Is HTML: ${isHtml}`);
-  if (!isHtml) {
-    console.log('Geen HTML-document ontvangen — geen verdere HTML-analyse.');
+  // --- __NEXT_DATA__ extractie ---
+  const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/);
+  if (!nextDataMatch) {
+    console.log('\nGeen <script id="__NEXT_DATA__"> gevonden met het standaardpatroon.');
+    // Val terug op een ruimere zoekopdracht naar elk application/json-blok.
+    const anyJsonBlocks = [...html.matchAll(/<script[^>]+type=["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+    console.log(`Generieke <script type="application/json">-blocks gevonden: ${anyJsonBlocks.length}`);
+    anyJsonBlocks.forEach((m, i) => {
+      console.log(`\n--- JSON-block ${i + 1} (eerste 500 tekens) ---`);
+      console.log(m[1].slice(0, 500));
+    });
     return;
   }
 
-  // --- RSS/Atom ---
-  const rssLinks = findAll(
-    /<link[^>]+type=["'](application\/rss\+xml|application\/atom\+xml)["'][^>]*>/gi,
-    text,
-    (m) => m[0],
-  );
-  console.log(`\nRSS/Atom <link>-tags gevonden: ${rssLinks.length}`);
-  rssLinks.slice(0, 5).forEach((l) => console.log(`  ${l}`));
+  console.log(`\n__NEXT_DATA__ gevonden, lengte: ${nextDataMatch[1].length} tekens`);
+  let data;
+  try {
+    data = JSON.parse(nextDataMatch[1]);
+  } catch (err) {
+    console.log(`Kon __NEXT_DATA__ niet als JSON parsen: ${err.message}`);
+    console.log('Eerste 1000 tekens van de ruwe inhoud:');
+    console.log(nextDataMatch[1].slice(0, 1000));
+    return;
+  }
 
-  // --- Embedded JSON (Next.js/Nuxt/generiek/JSON-LD) ---
-  const hasNextData = text.includes('__NEXT_DATA__');
-  const hasNuxtData = text.includes('__NUXT__') || text.includes('window.__NUXT__');
-  const jsonLdBlocks = findAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>/gi, text, (m) => m[0]);
-  const jsonScriptBlocks = findAll(
-    /<script[^>]+type=["']application\/json["'][^>]*(?:id=["']([^"']*)["'])?[^>]*>/gi,
-    text,
-    (m) => m[1] || '(zonder id)',
-  );
-  console.log(`\n__NEXT_DATA__ (Next.js embedded JSON) aanwezig: ${hasNextData}`);
-  console.log(`__NUXT__ (Nuxt embedded JSON) aanwezig: ${hasNuxtData}`);
-  console.log(`<script type="application/ld+json">-blocks: ${jsonLdBlocks.length}`);
-  console.log(`<script type="application/json">-blocks: ${jsonScriptBlocks.length}`);
-  jsonScriptBlocks.slice(0, 10).forEach((id) => console.log(`  id/kenmerk: ${id}`));
+  console.log('Top-level sleutels in __NEXT_DATA__:', Object.keys(data));
+  const pageProps = data.props?.pageProps;
+  if (pageProps) {
+    console.log('Sleutels in props.pageProps:', Object.keys(pageProps));
+  }
 
-  // --- API-endpoint hints (paden die in inline scripts/markup voorkomen) ---
-  const apiHints = [...new Set(findAll(/["'](\/api\/[a-zA-Z0-9\-_/]+)["']/g, text, (m) => m[1]))];
-  const graphqlHint = /graphql/i.test(text);
-  console.log(`\nMogelijke /api/-paden in de response: ${apiHints.length}`);
-  apiHints.slice(0, 15).forEach((p) => console.log(`  ${p}`));
-  console.log(`Verwijzing naar "graphql" aangetroffen: ${graphqlHint}`);
+  const candidates = findArticleLikeArrays(data);
+  console.log(`\nArray(s) die op een artikelenlijst lijken (titel+url-achtige velden): ${candidates.length}`);
+  candidates.forEach((c, i) => {
+    console.log(`\n[${i + 1}] pad: ${c.path}, lengte: ${c.length}, sample-sleutels: ${JSON.stringify(c.sampleKeys)}`);
+  });
 
-  // --- Paginering ---
-  const hasRelNext = /rel=["']next["']/i.test(text);
-  const hasPaginationWords = /(toon meer|laad meer|load more|volgende pagina|pagina\s*\d+|page=\d+)/i.test(text);
-  console.log(`\nPaginering — rel="next" aanwezig: ${hasRelNext}`);
-  console.log(`Paginering — tekst/query-aanwijzing ("toon meer" / page=N e.d.): ${hasPaginationWords}`);
-
-  // --- Sitemap-verwijzing in de pagina zelf ---
-  const sitemapRefs = [...new Set(findAll(/https?:\/\/[^"'\s]+sitemap[^"'\s]*\.xml/gi, text, (m) => m[0]))];
-  console.log(`\nSitemap-verwijzingen in de pagina: ${sitemapRefs.length}`);
-  sitemapRefs.slice(0, 5).forEach((s) => console.log(`  ${s}`));
-
-  // --- Heuristische telling van mogelijke artikel-links ---
-  // Anchors met een tekstlengte die past bij een artikeltitel (niet te kort
-  // zoals "Home"/"Contact", niet te lang zoals een hele paragraaf).
-  const anchors = findAll(/<a\s+[^>]*href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, text, (m) => ({
-    href: m[1],
-    text: m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-  }));
-  const candidates = anchors.filter((a) => a.text.length >= 25 && a.text.length <= 180);
-  console.log(`\nTotaal <a>-tags: ${anchors.length}`);
-  console.log(`Kandidaat-artikel-links (tekstlengte 25–180 tekens): ${candidates.length}`);
-  candidates.slice(0, 15).forEach((a, i) => console.log(`  [${i + 1}] "${a.text}" → ${a.href}`));
-  if (candidates.length > 15) console.log(`  ... en nog ${candidates.length - 15} meer`);
-
-  console.log(`\n--- Samenvattend oordeel voor ${label} ---`);
-  console.log(`RSS/API/JSON-aanwijzing gevonden: ${rssLinks.length > 0 || hasNextData || hasNuxtData || apiHints.length > 0 || jsonScriptBlocks.length > 0}`);
-  console.log(`Meerdere artikel-kandidaten gevonden: ${candidates.length > 1}`);
+  if (candidates.length > 0) {
+    const best = candidates[0];
+    const arr = getByPath(data, best.path);
+    console.log(`\n--- Volledige eerste 3 items van kandidaat [1] (${best.path}) ---`);
+    console.log(JSON.stringify(arr.slice(0, 3), null, 2).slice(0, 4000));
+  } else {
+    console.log('\nGeen duidelijke artikel-array gevonden. Dump van props.pageProps (eerste 3000 tekens) voor handmatige inspectie:');
+    console.log(JSON.stringify(pageProps, null, 2)?.slice(0, 3000) ?? '(pageProps leeg of niet aanwezig)');
+  }
 }
 
-async function probeAux({ label, url }) {
+async function probeKvkSitemapIndex() {
+  section(`KVK — sitemap_index.xml — ${KVK_SITEMAP_INDEX_URL}`);
+  let res;
   try {
-    const res = await fetchWithTimeout(url, 10000);
-    const contentType = res.headers.get('content-type') ?? '(geen header)';
-    console.log(`${label}: HTTP ${res.status}, content-type: ${contentType}`);
+    res = await fetchWithTimeout(KVK_SITEMAP_INDEX_URL, 15000);
   } catch (err) {
-    console.log(`${label}: fout bij ophalen (${err.message})`);
+    console.log(`Fout bij ophalen: ${err.message}`);
+    return;
+  }
+  console.log(`HTTP status: ${res.status}`);
+  console.log(`Content-Type: ${res.headers.get('content-type') ?? '(geen header)'}`);
+  if (!res.ok) return;
+  const xml = await res.text();
+  console.log(`Response-grootte: ${xml.length} tekens`);
+  const sitemapRefs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  console.log(`Aantal <loc>-verwijzingen in de index: ${sitemapRefs.length}`);
+  const overzichtRelevant = sitemapRefs.filter((u) => /overzicht|nieuws|artikel|blog|content/i.test(u));
+  console.log(`Daarvan mogelijk relevant voor artikelen/overzicht-content: ${overzichtRelevant.length}`);
+  overzichtRelevant.slice(0, 15).forEach((u) => console.log(`  ${u}`));
+  if (overzichtRelevant.length === 0) {
+    console.log('Eerste 15 verwijzingen (ter oriëntatie):');
+    sitemapRefs.slice(0, 15).forEach((u) => console.log(`  ${u}`));
   }
 }
 
 async function main() {
-  console.log(`Kenniscentrum-bronnenproef (tijdelijk) — ${new Date().toISOString()}`);
+  console.log(`Kenniscentrum-bronnenproef ronde 2 (tijdelijk, alleen KVK) — ${new Date().toISOString()}`);
   console.log('Dit script wijzigt niets, voegt geen content toe en commit niets.');
+  console.log('FD is komen te vervallen (geen commerciële licentie) en wordt hier niet meer getest.');
 
-  for (const target of TARGETS) {
-    await probeMainPage(target);
-  }
-
-  section('Aanvullende proeven: robots.txt / sitemap.xml');
-  for (const aux of AUX_PROBES) {
-    await probeAux(aux);
-  }
+  await probeKvkOverzicht();
+  await probeKvkSitemapIndex();
 
   section('Einde proef');
 }
