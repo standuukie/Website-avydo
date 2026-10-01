@@ -1,0 +1,41 @@
+name: "TIJDELIJK: test Kenniscentrum-bronnen (KVK/FD)"
+
+# TIJDELIJKE, GEÏSOLEERDE TESTWORKFLOW — géén onderdeel van de productie-
+# Kenniscentrum-pipeline. Wijzigt niets, voegt geen content toe, schrijft
+# niets weg en commit niets. Doel: vanuit de echte GitHub Actions-runner
+# (die, anders dan de Claude Code-sandbox waarin dit is voorbereid, normale
+# uitgaande internettoegang heeft) technisch vaststellen of
+# https://www.kvk.nl/overzicht/ en https://fd.nl/net-binnen bruikbaar zijn
+# als bron voor de Kenniscentrum-fetch-pipeline, vóórdat daar een
+# daadwerkelijke integratie voor wordt gebouwd.
+#
+# Respecteert betaalmuren/toegangsbeperkingen: haalt alleen de publieke
+# pagina op zoals een gewone browser dat zou doen (geen login, geen cookies,
+# geen paywall-omzeiling), en rapporteert alleen wat daadwerkelijk publiek
+# beschikbaar is.
+#
+# Kan na gebruik worden verwijderd — zie het Kenniscentrum-auditrapport van
+# 2026-10-01 voor de context.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Bronnen testen (alleen lezen, geen wijzigingen)
+        run: node .github/workflows/scripts/probe-knowledge-sources.mjs
