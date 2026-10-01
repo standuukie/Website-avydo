@@ -278,6 +278,26 @@ export function scoreCategories(text, excludeKeywords = NO_EXCLUDED_KEYWORDS) {
   return scores;
 }
 
+// ministryBypass (zie processSitemapSource) is een bewust vangnet voor
+// keyword-arme maar inhoudelijk relevante Financiën-artikelen: elk artikel
+// met de Financiën-breadcrumb wordt normaal gesproken relevant geacht, ook
+// zonder categoryKeyword-treffer. Een read-only audit van de productierun
+// van 2026-10-01 liet zien dat dit ook zuiver consumentengerichte Toeslagen-
+// berichten (bijv. zorgtoeslag voor huishoudens, zonder enig fiscaal/
+// ondernemerssignaal) automatisch doorliet. Deze smalle, expliciete lijst
+// schakelt uitsluitend de ministryBypass zelf uit voor zo'n artikel — de
+// gewone categoryKeywords-/audienceSignals-relevantie (scoreCategories
+// hierboven) is hier volledig los van en blijft ongewijzigd: een artikel
+// dat toevallig ook 'zorgtoeslag' noemt maar daarnaast een echt fiscaal
+// trefwoord bevat, blijft gewoon relevant via dat trefwoord.
+const MINISTRY_BYPASS_EXCLUDED_TERMS = [
+  'zorgtoeslag', 'huurtoeslag', 'kinderopvangtoeslag', 'kindgebonden budget',
+];
+
+function hasMinistryBypassExcludedTerm(lowerText) {
+  return MINISTRY_BYPASS_EXCLUDED_TERMS.some((term) => keywordMatches(lowerText, term));
+}
+
 export function pickCategory(text, defaultCategory) {
   const scores = scoreCategories(text);
   const entries = Object.entries(scores);
@@ -726,7 +746,17 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     if (source.requireKeywordMatch) {
       const combinedText = `${enrichedItem.title} ${enrichedItem.description}`;
       const scores = scoreCategories(combinedText);
-      const ministryMatch = source.ministryBypass && ministry === source.ministryBypass;
+      // ministryMatch geeft NIET automatisch relevantie aan puur
+      // consumentengerichte Toeslagen-berichten (zie
+      // MINISTRY_BYPASS_EXCLUDED_TERMS hierboven) — dit raakt uitsluitend
+      // de ministryBypass zelf, niet `scores`/`audienceMatch` hieronder:
+      // een artikel dat toevallig ook zo'n term noemt maar daarnaast een
+      // echt categoryKeyword/audienceSignal bevat, blijft gewoon relevant
+      // via dat andere signaal.
+      const ministryMatch =
+        source.ministryBypass &&
+        ministry === source.ministryBypass &&
+        !hasMinistryBypassExcludedTerm(combinedText.toLowerCase());
       // Smalle, expliciete aanvulling op categoryKeywords (zie
       // rijksoverheidAudienceSignals in sources.config.mjs) — alleen voor
       // bronnen die zelf `audienceSignals` instellen (momenteel uitsluitend

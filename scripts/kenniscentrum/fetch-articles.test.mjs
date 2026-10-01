@@ -1462,3 +1462,86 @@ test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een bestaa
   }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
   assert.equal(resultZonder.stages.relevant, 1);
 });
+
+// --- Regressie (read-only audit, 2026-10-01): ministryBypass liet
+// consumententoeslagen-berichten onterecht door ---
+//
+// Het artikel "Actie van Toeslagen voor 200.000 huishoudens die zorgtoeslag
+// laten liggen" (productierun 65f0cd7) had nul categoryKeyword-treffers en
+// kwam uitsluitend binnen via ministryBypass (Financiën-breadcrumb, Dienst
+// Toeslagen valt daaronder). Deze tests dekken de nieuwe, smalle
+// uitsluitingslijst die zulke artikelen alsnog blokkeert, zonder de
+// ministryBypass als vangnet voor keyword-arme maar wél fiscaal relevante
+// Financiën-artikelen aan te tasten.
+
+const FINANCIEN_MINISTRY_HTML_SUFFIX = '<a href="/ministeries/ministerie-van-financien">Ministerie van Financiën</a>';
+
+function financienPageHtml(title, description) {
+  return `<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head><body>${FINANCIEN_MINISTRY_HTML_SUFFIX}</body></html>`;
+}
+
+async function runFinancienMinistryBypassCase(slug, title, description) {
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  // Ongeldige lastmod -> publishItem geeft null terug vóór writeArticle
+  // (zie fetch-articles.mjs), dus stages.relevant kan hier veilig getest
+  // worden zonder dat er een echt bestand wordt weggeschreven — zelfde
+  // patroon als elders in dit bestand. Ook relevant voor de twee cases
+  // hieronder die daadwerkelijk relevant=1 verwachten.
+  const subSitemap = roSitemapPage([
+    { loc: `https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/${slug}`, lastmod: 'niet-een-geldige-datum' },
+  ]);
+  return withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === `https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/${slug}`) {
+      return htmlResponse(financienPageHtml(title, description));
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+}
+
+for (const [slug, term, title, description] of [
+  ['zorgtoeslag-actie', 'zorgtoeslag', 'Actie voor huishoudens die zorgtoeslag laten liggen', 'Duizenden huishoudens ontvangen een brief omdat ze mogelijk nog recht hebben op zorgtoeslag over vorig jaar.'],
+  ['huurtoeslag-actie', 'huurtoeslag', 'Actie voor huishoudens die huurtoeslag laten liggen', 'Duizenden huishoudens ontvangen een brief omdat ze mogelijk nog recht hebben op huurtoeslag over vorig jaar.'],
+  ['kinderopvangtoeslag-actie', 'kinderopvangtoeslag', 'Actie voor ouders die kinderopvangtoeslag laten liggen', 'Duizenden ouders ontvangen een brief omdat ze mogelijk nog recht hebben op kinderopvangtoeslag over vorig jaar.'],
+  ['kindgebonden-budget-actie', 'kindgebonden budget', 'Actie voor huishoudens die kindgebonden budget laten liggen', 'Duizenden huishoudens ontvangen een brief omdat ze mogelijk nog recht hebben op kindgebonden budget over vorig jaar.'],
+]) {
+  test(`processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel met uitsluitend '${term}' wordt niet meer relevant via ministryBypass`, async () => {
+    // Zekerstellen dat dit artikel geen categoryKeywords-/audienceSignals-
+    // treffer heeft — anders test deze test niet specifiek het
+    // ministryBypass-pad.
+    assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+    assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+
+    const result = await runFinancienMinistryBypassCase(slug, title, description);
+    assert.equal(result.stages.relevant, 0);
+    assert.equal(result.stages.reasons.irrelevant, 1);
+  });
+}
+
+test('processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel zonder categoryKeyword/audienceSignal én zonder consumententoeslagterm blijft relevant via ministryBypass', async () => {
+  const title = 'Kabinet werkt aan vereenvoudiging van de financiële regelgeving';
+  const description = 'Het kabinet onderzoekt hoe regels rond geldstromen tussen overheid en bedrijfsleven eenvoudiger kunnen worden ingericht voor de komende jaren.';
+  // Zekerstellen dat dit artikel ook geen categoryKeywords-/audienceSignals-
+  // treffer heeft — zodat deze test daadwerkelijk het (nog altijd werkende)
+  // ministryBypass-pad dekt, niet een ander pad.
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+
+  const result = await runFinancienMinistryBypassCase('financien-regelgeving', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test("processSitemapSource (sitemapIndexUrl-variant): 'zorgtoeslag' blokkeert de ministryBypass niet als het artikel daarnaast een echt categoryKeyword bevat (de uitsluiting raakt alleen ministryBypass, niet de algemene relevantiescoring)", async () => {
+  const title = 'Belastingplan 2027: ook wijzigingen voor toeslagen zoals zorgtoeslag';
+  const description = 'Naast het Belastingplan 2027 wijzigt ook de systematiek van de zorgtoeslag, als onderdeel van de bredere fiscale wetswijziging voor volgend jaar.';
+  // Zekerstellen dat dit artikel WEL een categoryKeywords-treffer heeft
+  // (via 'belastingplan') — zodat deze test aantoont dat de nieuwe
+  // uitsluiting de algemene scoreCategories-relevantie niet blokkeert.
+  assert.ok('Fiscale actualiteit' in scoreCategories(`${title} ${description}`));
+
+  const result = await runFinancienMinistryBypassCase('belastingplan-toeslagen', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
