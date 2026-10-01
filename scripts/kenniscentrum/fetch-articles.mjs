@@ -617,7 +617,7 @@ export async function fetchRijksoverheidGeneralSitemapUrls(sitemapIndexUrl, arti
 // genummerde sub-sitemaps bevatten samen een paar honderd nieuwsartikel-
 // URL's, en zonder grens zou een run met veel irrelevante kandidaten
 // onnodig veel pagina's kunnen opvragen vóór het budget/limiet stopt.
-const RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN = 50;
+const RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN = 100;
 
 export async function processSitemapSource(source, existingUrls, remainingBudget) {
   const stages = newStageCounters();
