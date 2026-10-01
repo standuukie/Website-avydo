@@ -1,0 +1,175 @@
+name: Dry-run Rijksoverheid discovery (tijdelijk, alleen-lezen)
+
+# Tijdelijk onderzoeksscript, NIET onderdeel van de productie-pipeline en
+# commit niets. Doel: vanuit een omgeving die rijksoverheid.nl daadwerkelijk
+# kan bereiken (bevestigd: de bestaande kenniscentrum-update.yml haalt
+# dagelijks succesvol https://www.rijksoverheid.nl/news/sitemap.xml op)
+# objectief vaststellen hoeveel kandidaten de huidige sitemap-bron oplevert
+# t.o.v. de officiële RSS-route, zonder enige aanname of gok over URL's: de
+# RSS-feed-URL wordt dynamisch ontdekt via de officiële rijksoverheid.nl/
+# service/rss-toelichtingspagina, niet hardcoded geraden.
+#
+# Wordt na het onderzoek weer verwijderd (zelfde patroon als de eerdere
+# KVK-dry-run-tooling, zie git-historie).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Onderzoek uitvoeren
+        run: |
+          node << 'NODESCRIPT' > /tmp/report.json
+          const UA = { headers: { 'User-Agent': 'AvydoKenniscentrumBot/1.0 (+https://www.avydo.nl) dry-run-onderzoek' } };
+
+          async function tryFetch(label, url) {
+            try {
+              const res = await fetch(url, UA);
+              const text = res.ok ? await res.text() : '';
+              return { label, url, status: res.status, ok: res.ok, length: text.length, text };
+            } catch (err) {
+              return { label, url, status: null, ok: false, error: String(err.message || err), text: '' };
+            }
+          }
+
+          function countSitemapUrls(xml) {
+            return (xml.match(/<url>/g) || []).length;
+          }
+          function sitemapDateRange(xml) {
+            const dates = [...xml.matchAll(/<(?:lastmod|news:publication_date)>([^<]+)<\/(?:lastmod|news:publication_date)>/g)].map((m) => m[1]);
+            if (dates.length === 0) return null;
+            const sorted = [...dates].sort();
+            return { oldest: sorted[0], newest: sorted[sorted.length - 1], count: dates.length };
+          }
+          function countRssItems(xml) {
+            return (xml.match(/<item>/g) || []).length;
+          }
+          function rssDateRange(xml) {
+            const dates = [...xml.matchAll(/<pubDate>([^<]+)<\/pubDate>/g)].map((m) => m[1]);
+            if (dates.length === 0) return null;
+            return { newest: dates[0], oldest: dates[dates.length - 1], count: dates.length };
+          }
+          function discoverRssLinksFromHtml(html) {
+            const hrefs = [...html.matchAll(/href=["']([^"']+\.rss[^"']*)["']/gi)].map((m) => m[1]);
+            const linkTags = [...html.matchAll(/<link[^>]+type=["']application\/rss\+xml["'][^>]+href=["']([^"']+)["']/gi)].map((m) => m[1]);
+            const all = [...new Set([...hrefs, ...linkTags])];
+            return all.map((h) => (h.startsWith('http') ? h : new URL(h, 'https://www.rijksoverheid.nl').toString()));
+          }
+
+          async function main() {
+            const report = {};
+
+            // 1. Huidige bron: news/sitemap.xml
+            const sitemap = await tryFetch('huidige-sitemap', 'https://www.rijksoverheid.nl/news/sitemap.xml');
+            report.sitemap = {
+              url: sitemap.url, status: sitemap.status, ok: sitemap.ok,
+              urlCount: sitemap.ok ? countSitemapUrls(sitemap.text) : null,
+              dateRange: sitemap.ok ? sitemapDateRange(sitemap.text) : null,
+              byteLength: sitemap.length,
+            };
+
+            // 2. Officiële RSS-toelichtingspagina: ontdek de echte feed-URL(s),
+            //    niet gokken.
+            const rssServicePage = await tryFetch('rss-service-pagina', 'https://www.rijksoverheid.nl/service/rss');
+            const discoveredRssLinks = rssServicePage.ok ? discoverRssLinksFromHtml(rssServicePage.text) : [];
+            report.rssServicePage = { status: rssServicePage.status, ok: rssServicePage.ok, discoveredLinks: discoveredRssLinks };
+
+            // 3. Nieuwsoverzichtspagina zelf: client-side gerenderd of server-side?
+            const newsPage = await tryFetch('nieuws-overzichtspagina', 'https://www.rijksoverheid.nl/actueel/nieuws');
+            const newsPageArticleLinks = newsPage.ok
+              ? [...new Set([...newsPage.text.matchAll(/href=["'](\/actueel\/nieuws\/\d{4}\/\d{2}\/\d{2}\/[^"']+)["']/g)].map((m) => m[1]))]
+              : [];
+            report.newsOverviewPage = { status: newsPage.status, ok: newsPage.ok, serverRenderedArticleLinksFound: newsPageArticleLinks.length };
+
+            // 4. Elke ontdekte RSS-link daadwerkelijk ophalen en tellen.
+            report.rssFeeds = [];
+            for (const link of discoveredRssLinks) {
+              const r = await tryFetch('ontdekte-rss-link', link);
+              report.rssFeeds.push({
+                url: link, status: r.status, ok: r.ok,
+                itemCount: r.ok ? countRssItems(r.text) : null,
+                dateRange: r.ok ? rssDateRange(r.text) : null,
+                error: r.error ?? null,
+                sample: r.ok ? r.text.slice(0, 500) : null,
+              });
+            }
+
+            // 5. Bekende/eerder-genoemde kandidaat-URL's expliciet proberen, ook
+            //    als ze niet uit de service-pagina kwamen (zodat we zeker weten
+            //    of feeds.rijksoverheid.nl nu wel of niet bereikbaar is).
+            const explicitCandidates = [
+              'https://feeds.rijksoverheid.nl/nieuws.rss',
+              'https://www.rijksoverheid.nl/actueel/nieuws/rss',
+              'https://www.rijksoverheid.nl/rss/nieuws.xml',
+            ].filter((u) => !discoveredRssLinks.includes(u));
+            report.explicitCandidates = [];
+            for (const url of explicitCandidates) {
+              const r = await tryFetch('expliciete-kandidaat', url);
+              report.explicitCandidates.push({
+                url, status: r.status, ok: r.ok,
+                itemCount: r.ok ? countRssItems(r.text) : null,
+                dateRange: r.ok ? rssDateRange(r.text) : null,
+                error: r.error ?? null,
+              });
+            }
+
+            console.log(JSON.stringify(report, null, 2));
+          }
+
+          main();
+          NODESCRIPT
+          cat /tmp/report.json
+
+      - name: Samenvatting schrijven
+        if: always()
+        run: |
+          echo '## Rijksoverheid discovery — dry-run resultaten' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/report.json ]; then
+            node -e "
+              const r = require('/tmp/report.json');
+              console.log('### 1. Huidige sitemap-bron');
+              console.log('- URL: ' + r.sitemap.url);
+              console.log('- HTTP status: ' + r.sitemap.status + ' (ok=' + r.sitemap.ok + ')');
+              console.log('- Aantal <url>-entries: ' + r.sitemap.urlCount);
+              if (r.sitemap.dateRange) console.log('- Datumrange: ' + r.sitemap.dateRange.oldest + ' t/m ' + r.sitemap.dateRange.newest + ' (' + r.sitemap.dateRange.count + ' datums)');
+              console.log('');
+              console.log('### 2. Officiële RSS-toelichtingspagina (rijksoverheid.nl/service/rss)');
+              console.log('- HTTP status: ' + r.rssServicePage.status + ' (ok=' + r.rssServicePage.ok + ')');
+              console.log('- Ontdekte RSS-links op deze pagina: ' + JSON.stringify(r.rssServicePage.discoveredLinks));
+              console.log('');
+              console.log('### 3. Nieuwsoverzichtspagina (/actueel/nieuws)');
+              console.log('- HTTP status: ' + r.newsOverviewPage.status + ' (ok=' + r.newsOverviewPage.ok + ')');
+              console.log('- Server-side gerenderde artikel-links gevonden: ' + r.newsOverviewPage.serverRenderedArticleLinksFound);
+              console.log('');
+              console.log('### 4. Ontdekte RSS-feeds (daadwerkelijk opgehaald)');
+              console.log('| URL | status | items | datumrange |');
+              console.log('|---|---|---|---|');
+              for (const f of r.rssFeeds) {
+                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
+                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.itemCount + ' | ' + range + ' |');
+              }
+              console.log('');
+              console.log('### 5. Expliciete kandidaat-URL\'s (eerder genoemd/vermoed)');
+              console.log('| URL | status | items | datumrange | fout |');
+              console.log('|---|---|---|---|---|');
+              for (const f of r.explicitCandidates) {
+                const range = f.dateRange ? (f.dateRange.oldest + ' .. ' + f.dateRange.newest) : '-';
+                console.log('| ' + f.url + ' | ' + f.status + ' | ' + f.itemCount + ' | ' + range + ' | ' + (f.error ?? '-') + ' |');
+              }
+            " >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Geen report.json gevonden (scriptfout, zie vorige stap).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Volledig rapport als artifact bewaren
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rijksoverheid-discovery-report
+          path: /tmp/report.json
+          retention-days: 7
