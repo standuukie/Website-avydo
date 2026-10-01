@@ -298,6 +298,43 @@ function hasMinistryBypassExcludedTerm(lowerText) {
   return MINISTRY_BYPASS_EXCLUDED_TERMS.some((term) => keywordMatches(lowerText, term));
 }
 
+// Aanvulling op de ministryBypass (zie hierboven): naast de bestaande
+// negatieve uitsluitingslijst is er nu ook een positieve eis. Een
+// inhoudelijke audit van 30 echte Financiën-artikelen (2026-10-01) liet
+// zien dat ministryMatch zonder verdere eis te breed is — 13 van de 23
+// artikelen die uitsluitend via ministryMatch relevant werden, waren
+// inhoudelijk een false positive (interne Belastingdienst-ICT,
+// cybersecurity, herdenkingsmunten, staatsdeelnemingen, consumenten-
+// hypotheeknormen). De twee daadwerkelijk relevante uitzonderingen in die
+// audit ("Kabinet zet met belastingwijzigingen 2026 stappen naar een beter
+// belastingstelsel" en "Start internetconsultatie belastingmaatregelen om
+// startups en scale-ups te ondersteunen") bevatten beide, ondanks het
+// ontbreken van een categoryKeywords-treffer, wél het woordstam 'belasting'
+// resp. 'fiscaal' — geen van de onderzochte ruisgevallen deed dat. Deze
+// smalle, declaratieve lijst eist daarom dat de tekst zelf één van deze
+// twee stammen bevat, los van (en aanvullend op) de bestaande
+// MINISTRY_BYPASS_EXCLUDED_TERMS-uitsluiting hierboven, die intact blijft.
+// 'fisca' (niet 'fiscaal') zodat zowel 'fiscaal' als de attributieve vorm
+// 'fiscale' (bijv. "fiscale maatregel") matchen — 'fiscaal' zelf is geen
+// substring van 'fiscale'.
+const MINISTRY_BYPASS_REQUIRED_TERMS = ['belasting', 'fisca'];
+
+// 'belasting' als kale substring matcht ook binnen 'Belastingdienst' — de
+// organisatienaam, niet een inhoudelijk fiscaal signaal. Twee van de
+// onderzochte ruisgevallen ("Digitale autonomie prioriteit voor
+// Belastingdienst", "Dataomgeving Belastingdienst bleef jarenlang buiten
+// beeld") noemen uitsluitend de organisatie, zonder zelf over een
+// belastingregel te gaan — exact dezelfde soort onbedoelde substring-
+// botsing als bij 'nba' binnen 'openbaar' (zie WORD_BOUNDARY_KEYWORDS
+// hierboven). Een woordgrens-eis zou hier niet werken (die zou ook
+// 'belastingen'/'belastingmaatregelen' breken, die juist wél moeten
+// matchen), dus wordt de organisatienaam specifiek uit de tekst verwijderd
+// vóórdat op de stam wordt gecontroleerd.
+function hasMinistryBypassRequiredTerm(lowerText) {
+  const withoutMinistryOrganizationNames = lowerText.replaceAll('belastingdienst', '');
+  return MINISTRY_BYPASS_REQUIRED_TERMS.some((term) => keywordMatches(withoutMinistryOrganizationNames, term));
+}
+
 export function pickCategory(text, defaultCategory) {
   const scores = scoreCategories(text);
   const entries = Object.entries(scores);
@@ -748,7 +785,9 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       const scores = scoreCategories(combinedText);
       // ministryMatch geeft NIET automatisch relevantie aan puur
       // consumentengerichte Toeslagen-berichten (zie
-      // MINISTRY_BYPASS_EXCLUDED_TERMS hierboven) — dit raakt uitsluitend
+      // MINISTRY_BYPASS_EXCLUDED_TERMS hierboven), en eist daarnaast
+      // positief dat de tekst zelf een fiscale stam bevat (zie
+      // MINISTRY_BYPASS_REQUIRED_TERMS hierboven) — dit raakt uitsluitend
       // de ministryBypass zelf, niet `scores`/`audienceMatch` hieronder:
       // een artikel dat toevallig ook zo'n term noemt maar daarnaast een
       // echt categoryKeyword/audienceSignal bevat, blijft gewoon relevant
@@ -756,7 +795,8 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       const ministryMatch =
         source.ministryBypass &&
         ministry === source.ministryBypass &&
-        !hasMinistryBypassExcludedTerm(combinedText.toLowerCase());
+        !hasMinistryBypassExcludedTerm(combinedText.toLowerCase()) &&
+        hasMinistryBypassRequiredTerm(combinedText.toLowerCase());
       // Smalle, expliciete aanvulling op categoryKeywords (zie
       // rijksoverheidAudienceSignals in sources.config.mjs) — alleen voor
       // bronnen die zelf `audienceSignals` instellen (momenteel uitsluitend

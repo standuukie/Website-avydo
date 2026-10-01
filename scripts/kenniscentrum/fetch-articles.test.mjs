@@ -1519,12 +1519,14 @@ for (const [slug, term, title, description] of [
   });
 }
 
-test('processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel zonder categoryKeyword/audienceSignal én zonder consumententoeslagterm blijft relevant via ministryBypass', async () => {
-  const title = 'Kabinet werkt aan vereenvoudiging van de financiële regelgeving';
+test('processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel zonder categoryKeyword/audienceSignal maar wél met een fiscale stam blijft relevant via ministryBypass', async () => {
+  const title = 'Kabinet werkt aan vereenvoudiging van de fiscale regelgeving';
   const description = 'Het kabinet onderzoekt hoe regels rond geldstromen tussen overheid en bedrijfsleven eenvoudiger kunnen worden ingericht voor de komende jaren.';
   // Zekerstellen dat dit artikel ook geen categoryKeywords-/audienceSignals-
   // treffer heeft — zodat deze test daadwerkelijk het (nog altijd werkende)
-  // ministryBypass-pad dekt, niet een ander pad.
+  // ministryBypass-pad dekt, niet een ander pad. De titel bevat bewust wél
+  // de fiscale stam 'fiscale' (zie MINISTRY_BYPASS_REQUIRED_TERMS), anders
+  // zou dit artikel na de nieuwe corroboratie-eis niet meer relevant zijn.
   assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
   assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
 
@@ -1542,6 +1544,118 @@ test("processSitemapSource (sitemapIndexUrl-variant): 'zorgtoeslag' blokkeert de
   assert.ok('Fiscale actualiteit' in scoreCategories(`${title} ${description}`));
 
   const result = await runFinancienMinistryBypassCase('belastingplan-toeslagen', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+// --- Regressie: ministryBypass eist nu ook een positieve fiscale stam
+// ('belasting'/'fiscaal'), naast de bestaande negatieve uitsluitingslijst ---
+//
+// Een inhoudelijke audit van 30 echte Financiën-artikelen (2026-10-01) liet
+// zien dat ministryMatch zonder deze eis te breed was: 13 van de 23
+// artikelen die uitsluitend via ministryMatch relevant werden, waren
+// inhoudelijk een false positive (interne Belastingdienst-ICT,
+// cybersecurity, herdenkingsmunten, staatsdeelnemingen, consumenten-
+// hypotheeknormen). De twee daadwerkelijk relevante uitzonderingen in die
+// audit bevatten beide, ondanks het ontbreken van een categoryKeywords-
+// treffer, wél het woordstam 'belasting' resp. 'fiscaal'.
+
+test("processSitemapSource (sitemapIndexUrl-variant): 'Kabinet zet met belastingwijzigingen 2026 stappen naar een beter belastingstelsel' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
+  const title = 'Kabinet zet met belastingwijzigingen 2026 stappen naar een beter belastingstelsel';
+  const description = 'Per 1 januari 2026 wijzigen verschillende belastingen waarmee stappen worden gezet naar een beter belastingstelsel. Daarbij houdt het kabinet oog voor de koopkracht van Nederlanders.';
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+
+  const result = await runFinancienMinistryBypassCase('belastingwijzigingen-2026', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test("processSitemapSource (sitemapIndexUrl-variant): 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
+  const title = 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen';
+  const description = 'Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen. Er komt een nieuwe regeling die het aantrekkelijker maakt om medewerkers te belonen met opties op aandelen in het bedrijf.';
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+
+  const result = await runFinancienMinistryBypassCase('startups-scale-ups-belastingmaatregelen', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test("processSitemapSource (sitemapIndexUrl-variant): 'fiscaal' zonder 'belasting' is ook voldoende als fiscale stam voor ministryBypass", async () => {
+  const title = 'Kabinet kondigt nieuwe fiscale maatregel aan voor innovatieve bedrijven';
+  const description = 'Het kabinet neemt een nieuwe fiscale maatregel om innovatie bij bedrijven te stimuleren, zonder dat dit gevolgen heeft voor andere regelingen.';
+  assert.equal(`${title} ${description}`.toLowerCase().includes('belasting'), false);
+  assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
+  assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+
+  const result = await runFinancienMinistryBypassCase('fiscale-maatregel-innovatie', title, description);
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+test('processSitemapSource (sitemapIndexUrl-variant): een categoryKeyword-treffer blijft relevant zonder ministryBypass (de nieuwe fiscale-stam-eis raakt uitsluitend ministryMatch)', async () => {
+  const title = 'Nieuwe regels voor de btw-aangifte van kleine ondernemers';
+  const description = 'Het kabinet verduidelijkt de regels rond btw-aangifte voor kleine ondernemers vanaf volgend jaar.';
+  assert.ok('Btw' in scoreCategories(`${title} ${description}`));
+
+  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
+  const subSitemap = roSitemapPage([
+    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-aangifte-kleine-ondernemers', lastmod: 'niet-een-geldige-datum' },
+  ]);
+  const result = await withMockedFetch((url) => {
+    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
+    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-aangifte-kleine-ondernemers') {
+      // Bewust GEEN ministerie-breadcrumb in deze pagina — dit artikel moet
+      // relevant worden puur via scoreCategories, los van ministryMatch.
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 1);
+  assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+for (const [slug, naam, title, description] of [
+  ['cyberincident-financien', 'cyberincident', 'Ministerie van Financiën onderzoekt ongeautoriseerde toegang tot systemen', 'De ICT-beveiliging van het ministerie van Financiën heeft ongeautoriseerde toegang gesignaleerd tot systemen voor een aantal primaire processen op het beleidsdepartement.'],
+  ['digitale-autonomie-belastingdienst', 'interne Belastingdienst-IT', 'Digitale autonomie prioriteit voor Belastingdienst', 'De Belastingdienst wil rijksbreed koploper worden op het gebied van digitale autonomie door te investeren in eigen IT-beheer.'],
+  ['dataomgeving-belastingdienst', 'data/governance', 'Dataomgeving Belastingdienst bleef jarenlang buiten beeld', 'Tijdens werkzaamheden om de informatiehuishouding op orde te krijgen is een afgesloten bewaaromgeving na jaren opnieuw in beeld gekomen.'],
+  ['leennormen-2026', 'consumentenfinanciering', 'Leennormen 2026: hypotheek kan iets omhoog door verwachte loonstijging', 'De meeste huishoudens kunnen in 2026 wat meer lenen voor de aankoop van een woning door de verwachte inkomensgroei.'],
+  ['tennet-verkoop', 'staatsdeelneming', 'Nederland verkoopt deel TenneT Duitsland aan de Duitse staat', 'De Nederlandse staat verkoopt een deel van de aandelen in TenneT Duitsland aan de Duitse staat via een investeringsbank.'],
+  ['nieuwe-munten-2027', 'ceremonieel/munten', "Spinoza en Neder-Germaanse Limes thema's nieuwe munten 2027", 'Jaarlijks brengt het ministerie van Financiën twee bijzondere munten uit om speciale gebeurtenissen of personen te eren.'],
+]) {
+  test(`processSitemapSource (sitemapIndexUrl-variant): '${naam}' komt niet meer door via ministryBypass (geen fiscale stam 'belasting'/'fiscaal')`, async () => {
+    const combined = `${title} ${description}`;
+    assert.equal(Object.keys(scoreCategories(combined)).length, 0);
+    assert.equal(rijksoverheidAudienceSignals.some((kw) => combined.toLowerCase().includes(kw)), false);
+    // 'Belastingdienst' (de organisatienaam) bevat zelf de substring
+    // 'belasting' — dat is bewust geen fiscaal inhoudssignaal (zie
+    // hasMinistryBypassRequiredTerm in fetch-articles.mjs), dus die mentions
+    // worden hier eerst verwijderd voordat op de stam wordt gecontroleerd.
+    const withoutOrganizationName = combined.toLowerCase().replaceAll('belastingdienst', '');
+    assert.equal(withoutOrganizationName.includes('belasting'), false);
+    assert.equal(withoutOrganizationName.includes('fisca'), false);
+
+    const result = await runFinancienMinistryBypassCase(slug, title, description);
+    assert.equal(result.stages.relevant, 0);
+    assert.equal(result.stages.reasons.irrelevant, 1);
+  });
+}
+
+test('processSitemapSource (sitemapIndexUrl-variant): ministryMatch=false door de nieuwe fiscale-stam-eis blokkeert relevant=true niet als categoryKeywords het artikel al valideert (de eis raakt uitsluitend ministryMatch)', async () => {
+  const title = 'Kabinet wil administratieplicht voor digitale platformen aanscherpen';
+  const description = 'Het kabinet wil dat digitale platformen hun administratieplicht beter naleven om fraude te voorkomen.';
+  // Zekerstellen dat dit artikel géén fiscale stam heeft (ministryMatch zou
+  // dus nu zonder deze corroboratie-eis al ook via categoryKeywords
+  // relevant zijn; dit bewijst dat de nieuwe eis dat niet ongedaan maakt)
+  // en wél een categoryKeywords-treffer.
+  assert.equal(`${title} ${description}`.toLowerCase().includes('belasting'), false);
+  assert.equal(`${title} ${description}`.toLowerCase().includes('fiscaal'), false);
+  assert.ok('Administratie & jaarrekening' in scoreCategories(`${title} ${description}`));
+
+  const result = await runFinancienMinistryBypassCase('administratieplicht-digitale-platformen', title, description);
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
