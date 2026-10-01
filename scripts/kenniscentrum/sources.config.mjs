@@ -164,6 +164,20 @@ export const sources = [
     // opvragen, aanvragen, uittreksel, machtig) die zowel in de URL-
     // vóórfilter als in het eindfilter op titel+samenvatting wordt
     // toegepast.
+    //
+    // Verder aangescherpt 2026-10-01 (na de tweede dry-run): een kale
+    // categoryKeywords-treffer bleek nog steeds te ruim — algemene
+    // KVK-onderwerpen als "Hoe werkt een faillissement?", "Schulden oplossen
+    // bij een eenmanszaak" en "Wat is een rechtsvorm?" bevatten dezelfde
+    // trefwoorden als echte fiscale/accountancy-artikelen. Toegevoegd:
+    // classifyKvkRelevance (een redactionele laag met sterke fiscale
+    // signalen, vergelijkende-rechtsvorm-signalen en een lijst algemene
+    // KVK-onderwerpen die alleen met een sterk signaal alsnog meetellen),
+    // isKvkHubPage (sluit /onderwerp/...-overzichtspagina's uit), een
+    // rangschikking op tier+lastmod vóór het ophalen van pagina's (i.p.v.
+    // simpelweg de 50 meest recente), en een overlapcontrole tegen bestaande
+    // Kenniscentrum-artikelen (findOverlappingArticle). Zie
+    // fetch-articles.mjs voor de volledige implementatie.
     requireKeywordMatch: true,
   },
 ];
@@ -217,6 +231,15 @@ export const categoryKeywords = {
   'Ondernemen & rechtsvormen': [
     'eenmanszaak', 'besloten vennootschap', 'rechtsvorm', 'bv oprichten', 'bv omzetten',
     'bedrijfsovername', 'fusie', 'overname', 'faillissement', 'vof', 'maatschap',
+    // Toegevoegd 2026-10-01 (KVK-redactionele aanscherping, ronde 3): deze
+    // categorie had t/m dan geen enkel zzp-/DBA-trefwoord, waardoor een
+    // inhoudelijk artikel over schijnzelfstandigheid nergens op scoorde en
+    // dus altijd werd afgewezen — ook als het expliciet fiscaal relevant
+    // was. Puur additief: bestaande matches/gedrag voor andere bronnen
+    // (Belastingdienst/Rijksoverheid/MKB-Nederland) blijven ongewijzigd,
+    // dit voegt alleen herkenning toe voor content die voorheen nergens op
+    // scoorde.
+    'schijnzelfstandigheid', 'dba', 'zzp-wetgeving',
   ],
 };
 

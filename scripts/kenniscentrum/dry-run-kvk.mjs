@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
  * Fase 1-dry-run voor de KVK-source (sources.config.mjs, id
- * "kvk-kennisartikelen"). Voert dezelfde discovery- en filterpijplijn uit
- * als de productie-run (processKvkSource in fetch-articles.mjs), maar
- * schrijft NOOIT content weg, wijzigt geen bestaande artikelen en commit
- * niets. Bedoeld om de daadwerkelijk geselecteerde kandidaten te kunnen
- * beoordelen vóórdat de bron in sources.config.mjs op enabled:true gezet
- * wordt.
+ * "kvk-kennisartikelen"). Voert dezelfde discovery-, redactionele filter-,
+ * ranking- en overlapcontrolepijplijn uit als de productie-run
+ * (processKvkSource in fetch-articles.mjs), maar schrijft NOOIT content weg,
+ * wijzigt geen bestaande artikelen en commit niets. Bedoeld om de
+ * daadwerkelijk geselecteerde kandidaten te kunnen beoordelen vóórdat de
+ * bron in sources.config.mjs op enabled:true gezet wordt.
  *
  * Gebruik: node scripts/kenniscentrum/dry-run-kvk.mjs
  */
@@ -14,9 +14,11 @@ import {
   fetchKvkDocumentUrls,
   selectKvkCandidates,
   fetchKvkArticleMeta,
-  scoreCategories,
   pickCategory,
   isKvkProcedurePage,
+  classifyKvkRelevance,
+  loadExistingArticlesMeta,
+  findOverlappingArticle,
   KVK_MAX_PAGE_FETCHES_PER_RUN,
 } from './fetch-articles.mjs';
 import { sources } from './sources.config.mjs';
@@ -28,7 +30,7 @@ function section(title) {
 }
 
 async function main() {
-  console.log(`KVK dry-run (Fase 1) — ${new Date().toISOString()}`);
+  console.log(`KVK dry-run (Fase 1, redactionele laag) — ${new Date().toISOString()}`);
   console.log('Dit script wijzigt niets, voegt geen content toe en commit niets.\n');
 
   if (!kvkSource) {
@@ -46,21 +48,27 @@ async function main() {
   }
   console.log(`Totaal sitemap-URL's (vóór dedupliceren, over alle documents-*.xml): ${entries.length}`);
 
-  const { deduped, afterUrlFilter, afterRelevanceFilter } = selectKvkCandidates(entries, new Set());
-  console.log(`Na dedupliceren op URL: ${deduped.length}`);
-  console.log(`Na URL-vormfilter (kvk.nl/<categorie>/<slug>/, precies 2 padsegmenten): ${afterUrlFilter.length}`);
-  console.log(`Na relevantie-vóórfilter (URL-slug tegen categoryKeywords): ${afterRelevanceFilter.length}`);
+  const { deduped, afterUrlFilter, afterRelevanceFilter, ranked } = selectKvkCandidates(entries, new Set());
+  console.log(`Unieke URL's (na dedupliceren): ${deduped.length}`);
+  console.log(`Na URL-/hub-vormfilter (2 padsegmenten, geen /onderwerp/...): ${afterUrlFilter.length}`);
+  console.log(`Na redactionele/relevantiefilter (URL-slug, incl. procedure- en algemeen-onderwerp-uitsluiting): ${afterRelevanceFilter.length}`);
+  console.log(`Kandidaten vóór ranking: ${afterRelevanceFilter.length}`);
+  console.log(`Na rangschikken op tier (hoog voor twijfel) + lastmod: ${ranked.length} kandidaten`);
 
-  section('2. Artikelpagina\'s ophalen en beoordelen (titel/samenvatting + eindfilter)');
-  // Zelfde veiligheidsgrens als de productie-run (KVK_MAX_PAGE_FETCHES_PER_RUN
-  // in fetch-articles.mjs), zodat de dry-run een realistisch beeld geeft
-  // zonder bij elke run de hele sitemap (~1.800 URL's) op te vragen.
-  const toCheck = afterRelevanceFilter.slice(0, KVK_MAX_PAGE_FETCHES_PER_RUN);
-  console.log(`Kandidaten na vóórfilters: ${afterRelevanceFilter.length}`);
-  console.log(`Pagina's die voor deze dry-run daadwerkelijk worden opgehaald: ${toCheck.length} (meest recente lastmod eerst)`);
+  section('2. Artikelpagina\'s ophalen en redactioneel beoordelen (incl. overlapcontrole)');
+  // Zelfde veiligheidsgrens als de productie-run. De kandidaten zijn al
+  // gerangschikt (hoogste tier + meest recente lastmod eerst), dus de
+  // 50 opgehaalde pagina's zijn nu de meest kansrijke, niet simpelweg de
+  // 50 meest recente.
+  const toCheck = ranked.slice(0, KVK_MAX_PAGE_FETCHES_PER_RUN);
+  console.log(`Pagina's die voor deze dry-run daadwerkelijk worden opgehaald: ${toCheck.length} (hoogste tier + meest recente lastmod eerst)`);
+
+  const existingArticlesMeta = loadExistingArticlesMeta();
+  console.log(`Bestaande Kenniscentrum-artikelen gebruikt voor overlapcontrole: ${existingArticlesMeta.length}`);
 
   const selected = [];
   const rejected = [];
+  const overlaps = [];
   let pagesFetched = 0;
 
   for (const candidate of toCheck) {
@@ -69,7 +77,7 @@ async function main() {
     if (!meta) {
       rejected.push({
         url: candidate.loc,
-        category: 'geen-velden',
+        bucket: 'geen-velden',
         reason: 'geen betrouwbare titel/samenvatting op de pagina (geen bruikbare <h1> of geen samenvattingstekst)',
       });
       continue;
@@ -80,45 +88,103 @@ async function main() {
       rejected.push({
         url: candidate.loc,
         title: meta.title,
-        category: 'procedure-servicepagina',
-        reason: 'formulier-/product-/procedure-/servicepagina, geen kennisartikel (eindfilter)',
+        bucket: 'procedure-servicepagina',
+        reason: 'formulier-/product-/procedure-/servicepagina, geen kennisartikel',
       });
       continue;
     }
 
-    const scores = scoreCategories(combinedText);
-    if (Object.keys(scores).length === 0) {
+    const classification = classifyKvkRelevance(combinedText);
+    if (classification.tier === 'afgewezen') {
       rejected.push({
         url: candidate.loc,
         title: meta.title,
-        category: 'geen-trefwoord',
-        reason: 'titel/samenvatting bevatten geen fiscaal/accountancy-trefwoord (eindfilter)',
+        bucket: 'redactioneel-afgewezen',
+        reason: classification.reason,
       });
       continue;
     }
+
+    const category = pickCategory(combinedText, kvkSource.defaultCategory);
+    const overlap = findOverlappingArticle(meta.title, category, existingArticlesMeta);
+    if (overlap) {
+      overlaps.push({
+        url: candidate.loc,
+        title: meta.title,
+        existingTitle: overlap.title,
+        existingFile: overlap.file,
+        jaccard: overlap.jaccard,
+      });
+      continue;
+    }
+
     selected.push({
       title: meta.title,
       url: candidate.loc,
       lastmod: candidate.lastmod,
-      category: pickCategory(combinedText, kvkSource.defaultCategory),
-      reason: `trefwoordtreffer(s) in titel/samenvatting: ${Object.keys(scores).join(', ')}`,
+      category,
+      tier: classification.tier,
+      reason: classification.reason,
     });
   }
 
+  const hoog = selected.filter((s) => s.tier === 'hoog');
+  const twijfel = selected.filter((s) => s.tier === 'twijfel');
+
   section('3. Resultaat');
   console.log(`Totaal sitemap-URL's: ${entries.length}`);
-  console.log(`Unieke URL's (na dedupliceren): ${deduped.length}`);
-  console.log(`Kandidaten na URL-filter: ${afterUrlFilter.length}`);
-  console.log(`Kandidaten na relevantie-vóórfilter (URL-slug, incl. procedure-uitsluiting): ${afterRelevanceFilter.length}`);
+  console.log(`Unieke URL's: ${deduped.length}`);
+  console.log(`Na URL-filter: ${afterUrlFilter.length}`);
+  console.log(`Na redactionele/relevance-filter: ${afterRelevanceFilter.length}`);
+  console.log(`Kandidaten vóór ranking: ${afterRelevanceFilter.length}`);
   console.log(`Daadwerkelijk opgehaalde pagina's: ${pagesFetched}`);
-  console.log(`Bruikbare artikelen (titel + samenvatting + eindfilter OK): ${selected.length}`);
-  console.log(`Afgewezen: ${rejected.length}`);
-  console.log(`  waarvan geen bruikbare velden (<h1>/samenvatting): ${rejected.filter((r) => r.category === 'geen-velden').length}`);
-  console.log(`  waarvan formulier-/product-/procedure-/servicepagina: ${rejected.filter((r) => r.category === 'procedure-servicepagina').length}`);
-  console.log(`  waarvan geen fiscaal/accountancy-trefwoord: ${rejected.filter((r) => r.category === 'geen-trefwoord').length}`);
-  console.log(`Procedure-/servicepagina's onder de GESELECTEERDE kandidaten: 0 (uitgesloten door het eindfilter, zie hierboven)`);
+  console.log(`Bruikbare kandidaten (geselecteerd): ${selected.length}`);
+  console.log(`  waarvan tier 'hoog': ${hoog.length}`);
+  console.log(`  waarvan tier 'twijfel': ${twijfel.length}`);
+  console.log(`Afgewezen kandidaten: ${rejected.length}`);
+  console.log(`  waarvan geen bruikbare velden: ${rejected.filter((r) => r.bucket === 'geen-velden').length}`);
+  console.log(`  waarvan procedure-/servicepagina: ${rejected.filter((r) => r.bucket === 'procedure-servicepagina').length}`);
+  console.log(`  waarvan redactioneel afgewezen (algemeen onderwerp/definitie/trendrapport/rechtsvorm-basic): ${rejected.filter((r) => r.bucket === 'redactioneel-afgewezen').length}`);
+  console.log(`Overlapgevallen (inhoudelijk al gedekt door bestaand Avydo-artikel): ${overlaps.length}`);
 
-  section(`4. Afwijzingen (${rejected.length}, met reden)`);
+  section(`4. Hoog relevante kandidaten (${hoog.length})`);
+  if (hoog.length === 0) {
+    console.log('(geen)');
+  } else {
+    hoog.forEach((s, i) => {
+      console.log(`[${i + 1}] ${s.title}`);
+      console.log(`    URL: ${s.url}`);
+      console.log(`    lastmod: ${s.lastmod ?? '(geen lastmod)'}`);
+      console.log(`    categorie: ${s.category}`);
+      console.log(`    reden: ${s.reason}`);
+    });
+  }
+
+  section(`5. Twijfelgevallen (${twijfel.length})`);
+  if (twijfel.length === 0) {
+    console.log('(geen)');
+  } else {
+    twijfel.forEach((s, i) => {
+      console.log(`[${i + 1}] ${s.title}`);
+      console.log(`    URL: ${s.url}`);
+      console.log(`    lastmod: ${s.lastmod ?? '(geen lastmod)'}`);
+      console.log(`    categorie: ${s.category}`);
+      console.log(`    reden: ${s.reason}`);
+    });
+  }
+
+  section(`6. Overlapgevallen (${overlaps.length})`);
+  if (overlaps.length === 0) {
+    console.log('(geen)');
+  } else {
+    overlaps.forEach((o, i) => {
+      console.log(`[${i + 1}] KVK-kandidaat: ${o.title}`);
+      console.log(`    URL: ${o.url}`);
+      console.log(`    overlapt met bestaand artikel: "${o.existingTitle}" (${o.existingFile}, overlapscore ${o.jaccard.toFixed(2)})`);
+    });
+  }
+
+  section(`7. Afgewezen kandidaten (${rejected.length}, met reden)`);
   if (rejected.length === 0) {
     console.log('(geen)');
   } else {
@@ -129,23 +195,10 @@ async function main() {
     });
   }
 
-  section(`5. Geselecteerde kandidaten (${selected.length})`);
-  if (selected.length === 0) {
-    console.log('(geen kandidaten voldeden aan alle filters)');
-  } else {
-    selected.forEach((s, i) => {
-      console.log(`[${i + 1}] ${s.title}`);
-      console.log(`    URL: ${s.url}`);
-      console.log(`    lastmod: ${s.lastmod ?? '(geen lastmod)'}`);
-      console.log(`    voorgestelde categorie: ${s.category}`);
-      console.log(`    reden: ${s.reason}`);
-    });
-  }
-
   if (selected.length < 15) {
     console.log(
-      `\nLet op: slechts ${selected.length} kandid${selected.length === 1 ? 'aat' : 'aten'} gevonden binnen de ${toCheck.length} opgehaalde pagina's (gevraagd: minimaal 15 ter beoordeling). ` +
-      'Dit kan betekenen dat de filters streng genoeg zijn om weinig door te laten, of dat er op dit moment simpelweg niet meer duidelijk fiscaal/accountancy-relevante KVK-artikelen in de sitemap staan. ' +
+      `\nLet op: slechts ${selected.length} kandid${selected.length === 1 ? 'aat' : 'aten'} geselecteerd binnen de ${toCheck.length} opgehaalde pagina's (gevraagd: minimaal 15 ter beoordeling). ` +
+      'Dit kan betekenen dat de redactionele filter streng genoeg is om weinig door te laten, of dat er op dit moment simpelweg niet meer duidelijk fiscaal/accountancy-relevante KVK-artikelen in de sitemap staan. ' +
       'Verhoog zo nodig KVK_MAX_PAGE_FETCHES_PER_RUN in fetch-articles.mjs om meer kandidaten te beoordelen (let op: dit wijzigt ook de productie-veiligheidsgrens).',
     );
   }

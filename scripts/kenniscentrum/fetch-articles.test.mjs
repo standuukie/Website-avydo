@@ -24,6 +24,10 @@ import {
   selectKvkCandidates,
   extractKvkArticleFields,
   isKvkProcedurePage,
+  isKvkHubPage,
+  classifyKvkRelevance,
+  isKvkPureDefinitionTitle,
+  findOverlappingArticle,
 } from './fetch-articles.mjs';
 
 test('stripHtml verwijdert markup en decodeert entities', () => {
@@ -373,4 +377,130 @@ test('extractKvkArticleFields + isKvkProcedurePage samen: inhoudelijk administra
   assert.ok(fields);
   assert.equal(isKvkProcedurePage(`${fields.title} ${fields.description}`), false);
   assert.ok(Object.keys(scoreCategories(`${fields.title} ${fields.description}`)).length > 0);
+});
+
+// --- Redactionele relevantielaag (dry-run 2 -> 3) ---
+// categoryKeywords/scoreCategories alleen was niet genoeg: algemene
+// KVK-onderwerpen bevatten dezelfde brede trefwoorden als echte
+// kennisartikelen. classifyKvkRelevance test is bewust NIET alleen op de
+// exacte titels uit de opdracht, maar ook op structureel vergelijkbare
+// varianten, zodat de regels toekomstbestendig zijn.
+
+test('isKvkHubPage herkent /onderwerp/...-overzichtspagina\'s generiek, niet alleen het exacte voorbeeld', () => {
+  assert.ok(isKvkHubPage('https://www.kvk.nl/onderwerp/prinsjesdag/'));
+  assert.ok(isKvkHubPage('https://www.kvk.nl/onderwerp/btw/'));
+  assert.ok(isKvkHubPage('https://www.kvk.nl/onderwerpen/fiscaal/'));
+  assert.equal(isKvkHubPage('https://www.kvk.nl/geldzaken/btw-aangifte-doen/'), false);
+});
+
+test('isKvkPureDefinitionTitle herkent een pure "Wat is ..."-vraag ongeacht het onderwerp', () => {
+  assert.ok(isKvkPureDefinitionTitle('Wat is een rechtsvorm?'));
+  assert.ok(isKvkPureDefinitionTitle('Wat is de EU-KOR?'));
+  assert.ok(isKvkPureDefinitionTitle('wat is het verschil tussen een bv en een eenmanszaak'));
+  assert.equal(isKvkPureDefinitionTitle('Eenmanszaak of bv: zo kies je je rechtsvorm'), false);
+});
+
+test('classifyKvkRelevance wijst algemene KVK-onderwerpen af, ook in varianten die niet letterlijk de voorbeeldtitel zijn', () => {
+  const afgewezen = [
+    'Hoe werkt een faillissement?',
+    'Wat moet u weten over een faillissement als ondernemer?',
+    'Schulden oplossen bij een eenmanszaak',
+    'Schulden oplossen bij een maatschap',
+    'Financiering bedrijfsovername',
+    'Op zoek naar financiering voor uw bedrijfsovername?',
+    'Faillissementsfraude',
+    'Wat is een rechtsvorm?',
+    'Wat is een eenmanszaak?',
+    'De besloten vennootschap (bv): wat je moet weten',
+    'Eenmanszaak: alles wat je moet weten',
+    'VOF: de basis op een rij',
+    'KVK-trendrapport: ondernemersvertrouwen onder starters en stoppers',
+    'Onderzoek onder ondernemers: het algemene conjunctuurbeeld',
+    'Kies de juiste boekhoudsoftware voor uw eenmanszaak',
+  ];
+  for (const title of afgewezen) {
+    assert.equal(classifyKvkRelevance(title).tier, 'afgewezen', `verwacht 'afgewezen' voor: ${title}`);
+  }
+});
+
+test('classifyKvkRelevance geeft sterke fiscale/accountancy-artikelen tier \'hoog\', ook in varianten die niet letterlijk de voorbeeldtitel zijn', () => {
+  const hoog = [
+    'Wat is de EU-KOR?',
+    'Ontdek hoe je de EU-KOR voor je webshop gebruikt',
+    'Nieuwe btw-regels voor e-commerce binnen de EU',
+    'Inzicht in de belastingtarieven en cijfers van 2026',
+    'Belastingtarieven 2027: wat verandert er voor ondernemers?',
+    'Je bv en Prinsjesdag: dit zijn de fiscale gevolgen voor ondernemers',
+    'Prinsjesdag 2026: dit betekenen de belastingplannen voor uw bv',
+    'Belastingplannen 2027 voor eenmanszaak, vof, maatschap of cv',
+    'Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?',
+    'Btw-aangifte: zo doet u dit als zzp\'er',
+    'Schijnzelfstandigheid en de DBA: wat betekent dit voor opdrachtgevers?',
+    'DBA-wetgeving: wat verandert er voor zzp\'ers?',
+    'Eenmanszaak of bv: zo kies je je rechtsvorm',
+    'Eenmanszaak versus bv: de fiscale verschillen op een rij',
+    'Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?',
+  ];
+  for (const title of hoog) {
+    assert.equal(classifyKvkRelevance(title).tier, 'hoog', `verwacht 'hoog' voor: ${title}`);
+  }
+});
+
+test('classifyKvkRelevance geeft een twijfelgeval bij een brede, niet-rechtsvorm categoriematch zonder sterk signaal', () => {
+  const r = classifyKvkRelevance('Nieuwe cao-afspraken voor werkgevers');
+  assert.equal(r.tier, 'twijfel');
+});
+
+test('classifyKvkRelevance: een sterk fiscaal signaal overstemt een demotie-signaal (bijv. "bedrijfsovername")', () => {
+  const r = classifyKvkRelevance('Fiscale gevolgen van een bedrijfsovername voor de vennootschapsbelasting');
+  assert.equal(r.tier, 'hoog');
+});
+
+test('selectKvkCandidates sluit hub-pagina\'s (/onderwerp/...) uit, ook met een recente lastmod', () => {
+  const entries = [
+    { loc: 'https://www.kvk.nl/onderwerp/prinsjesdag/', lastmod: '2026-09-30T00:00:00.000Z' },
+    { loc: 'https://www.kvk.nl/geldzaken/btw-aangifte-doen-als-ondernemer/', lastmod: '2026-01-01T00:00:00.000Z' },
+  ];
+  const { afterUrlFilter, ranked } = selectKvkCandidates(entries, new Set());
+  assert.equal(afterUrlFilter.some((e) => e.loc.includes('/onderwerp/')), false);
+  assert.equal(ranked.some((e) => e.loc.includes('/onderwerp/')), false);
+});
+
+test('selectKvkCandidates rangschikt tier \'hoog\' vóór \'twijfel\', ook als het twijfelgeval recenter is', () => {
+  const entries = [
+    { loc: 'https://www.kvk.nl/geldzaken/btw-aangifte-doen-als-ondernemer/', lastmod: '2026-01-01T00:00:00.000Z' },
+    { loc: 'https://www.kvk.nl/personeel/nieuwe-cao-afspraken-voor-werkgevers/', lastmod: '2026-09-25T00:00:00.000Z' },
+  ];
+  const { ranked } = selectKvkCandidates(entries, new Set());
+  assert.deepEqual(ranked.map((e) => e.loc), [
+    'https://www.kvk.nl/geldzaken/btw-aangifte-doen-als-ondernemer/',
+    'https://www.kvk.nl/personeel/nieuwe-cao-afspraken-voor-werkgevers/',
+  ]);
+});
+
+// --- Overlapcontrole met de bestaande Avydo-kennisbank ---
+
+test('findOverlappingArticle herkent inhoudelijke overlap (zelfde categorie, grotendeels dezelfde woorden) ondanks enkelvoud/meervoud', () => {
+  const existing = [
+    { file: 'a.md', title: 'Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?', category: 'Btw' },
+  ];
+  const overlap = findOverlappingArticle('Btw-aangifte doen als ondernemer: zo werkt het', 'Btw', existing);
+  assert.ok(overlap);
+  assert.equal(overlap.file, 'a.md');
+});
+
+test('findOverlappingArticle vergelijkt alleen binnen dezelfde categorie', () => {
+  const existing = [
+    { file: 'a.md', title: 'Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?', category: 'Btw' },
+  ];
+  const overlap = findOverlappingArticle('Btw-aangifte doen als ondernemer: zo werkt het', 'Vennootschapsbelasting', existing);
+  assert.equal(overlap, null);
+});
+
+test('findOverlappingArticle geeft null bij een duidelijk ander onderwerp binnen dezelfde categorie', () => {
+  const existing = [
+    { file: 'a.md', title: 'Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?', category: 'Btw' },
+  ];
+  const overlap = findOverlappingArticle('Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?', 'Btw', existing);
+  assert.equal(overlap, null);
 });

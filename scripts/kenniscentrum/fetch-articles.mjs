@@ -607,7 +607,9 @@ export const kvkProcedureKeywords = [
   'rekentool',
   'rekenmodule',
   'autorisatie', // autorisatie, autorisaties
-  'opvragen',
+  'opvragen', // dry-run 2: "Jaarrekeningen opvragen"
+  'opvraag', // opvraagprocedure, opvraagformulier, ... — NB: "opvraag" (dubbele a) is geen substring van "opvragen" (enkele a), vandaar beide vormen apart
+  'deponeringsprocedure', // de inhoudelijke "deponeren jaarrekening"-artikelen gebruiken dit woord niet
   'aanvragen',
   'uittreksel',
   'machtig', // machtiging, machtigen, gemachtigde
@@ -618,15 +620,136 @@ export function isKvkProcedurePage(text) {
   return kvkProcedureKeywords.some((kw) => lower.includes(kw));
 }
 
+// Hub-/overzichtspagina's (bijv. /onderwerp/prinsjesdag/) zijn geen concreet
+// kennisartikel maar een verzameling verwijzingen naar andere pagina's.
+// Generiek op het eerste padsegment, niet op een exacte URL-lijst — zodat
+// vergelijkbare hub-secties automatisch meegenomen worden.
+const KVK_HUB_PATH_SEGMENTS = new Set(['onderwerp', 'onderwerpen']);
+
+export function isKvkHubPage(url) {
+  try {
+    const { pathname } = new URL(url);
+    const [firstSegment] = pathname.split('/').filter(Boolean);
+    return KVK_HUB_PATH_SEGMENTS.has((firstSegment ?? '').toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+// --- Redactionele relevantielaag (dry-run 2 -> 3) ---
+//
+// De eerste twee dry-runs lieten zien dat categoryKeywords/scoreCategories
+// alléén onvoldoende is: een los trefwoord als "belasting" of "eenmanszaak"
+// komt evengoed voor in een algemene KVK-pagina (bijv. "Hoe werkt een
+// faillissement?", "Wat is een rechtsvorm?") als in een echt fiscaal/
+// accountancy-artikel. Deze laag combineert drie soorten signalen bovenop
+// de bestaande categoryKeywords-match, zonder die te vervangen.
+
+// Specifieke, hoge-precisie fiscale/accountancy-termen: komen vrijwel nooit
+// voor in een algemene KVK-pagina, wél in een echt kennisartikel.
+export const kvkStrongFiscalKeywords = [
+  'btw-aangifte', 'kleineondernemersregeling', 'eu-kor', 'omzetbelasting',
+  'naheffingsaanslag', 'btw-tarie', 'btw-regel', 'vennootschapsbelasting', 'vpb', // "btw-tarie" dekt zowel btw-tarief als btw-tarieven
+  'box 2', 'box 3', 'dividendbelasting', 'dividend', 'gebruikelijk loon', 'dga',
+  'loonheffing', 'werkgeversheffing', 'jaarrekening', 'belastingplan', 'belastingtarie', // "belastingtarie" dekt zowel belastingtarief als belastingtarieven
+  'inkomstenbelasting', 'fiscale gevolgen', 'fiscale wijziging', 'fiscaal voordeel',
+  'schijnzelfstandigheid', 'dba', 'zzp-wetgeving', 'administratieplicht',
+  'boekhouden', 'boekhouding',
+];
+
+// Signalen die wijzen op een vergelijkende/keuze-insteek bij een
+// rechtsvorm-onderwerp (i.t.t. een pure, algemene definitie- of basispagina
+// zoals "Wat is een rechtsvorm?").
+export const kvkComparisonKeywords = [
+  'versus', ' of bv', ' of een bv', ' of eenmanszaak', 'vergelijk', 'verschil tussen',
+  'voor- en nadelen', 'overstap van', 'overstap naar', 'omzetten naar',
+  'wisselen van rechtsvorm', 'welke rechtsvorm', 'rechtsvorm kiezen',
+  'kies je rechtsvorm', 'kies je je rechtsvorm',
+];
+
+// Algemene KVK-onderwerpen die structureel NIET automatisch relevant zijn
+// voor een accountancy-/belastingadvieskantoor, tenzij er ook een sterk
+// fiscaal signaal (kvkStrongFiscalKeywords) of vergelijkende insteek
+// (kvkComparisonKeywords) aanwezig is. Voorbeelden uit dry-run 2: "Hoe werkt
+// een faillissement?", "Schulden oplossen bij een eenmanszaak",
+// "Financiering bedrijfsovername", "Faillissementsfraude".
+export const kvkGeneralTopicKeywords = [
+  'faillissement', 'schulden oplossen', 'financiering', 'bedrijfsovername',
+  'risico', 'bedrijfsinformatie', 'boekhoudsoftware', 'dataset', 'open data',
+  'trendrapport', 'conjunctuur', 'ondernemersvertrouwen', 'ondernemerssentiment',
+  'starters en stoppers', 'onderzoek onder ondernemers',
+];
+
+// Titels die louter een basisdefinitie geven ("Wat is een rechtsvorm?",
+// "Wat is de EU-KOR?") — op zichzelf geen signaal vóór of tegen relevantie,
+// maar in combinatie met het ontbreken van een sterk/vergelijkend signaal
+// wijst dit op een algemene basispagina (zie classifyKvkRelevance).
+export function isKvkPureDefinitionTitle(title) {
+  return /^wat is (een|de|het)\b/i.test(title.trim());
+}
+
+const KVK_RECHTSVORM_CATEGORY = 'Ondernemen & rechtsvormen';
+
+// Combineert categoryKeywords/scoreCategories met de drie signalen hierboven
+// tot een redactionele tier: 'hoog' (duidelijk relevant voor Avydo),
+// 'twijfel' (alleen een brede trefwoordtreffer, geen sterk fiscaal signaal —
+// menselijke beoordeling aanbevolen) of 'afgewezen'. Een sterk signaal of
+// vergelijkende insteek overstemt altijd een demotie-signaal (bijv. een
+// artikel over de fiscale gevolgen van een bedrijfsovername blijft
+// bruikbaar, ondanks het woord "bedrijfsovername").
+// kvkSlugToText zet "-" om naar spaties (zie hierboven), dus een hyphen in
+// een trefwoord (bijv. "btw-aangifte") zou op URL-slug-niveau nooit matchen
+// zonder normalisatie. Vervangt "-" door een spatie aan beide kanten van de
+// vergelijking, zodat "btw-aangifte" (echte titel) en "btw aangifte doen"
+// (URL-slug) allebei herkend worden.
+function normalizeKvkText(text) {
+  return text.toLowerCase().replace(/-/g, ' ');
+}
+
+export function classifyKvkRelevance(text) {
+  const lower = normalizeKvkText(text);
+  const hasStrong = kvkStrongFiscalKeywords.some((kw) => lower.includes(normalizeKvkText(kw)));
+  const hasComparison = kvkComparisonKeywords.some((kw) => lower.includes(normalizeKvkText(kw)));
+  const hasGeneralTopic = kvkGeneralTopicKeywords.some((kw) => lower.includes(normalizeKvkText(kw)));
+  const isPureDefinition = isKvkPureDefinitionTitle(text);
+  const categoryScores = scoreCategories(text);
+  const matchedCategories = Object.keys(categoryScores);
+
+  if (matchedCategories.length === 0) {
+    return { tier: 'afgewezen', reason: 'geen treffer op een bestaande Kenniscentrum-categorie' };
+  }
+  if (isPureDefinition && !hasStrong && !hasComparison) {
+    return { tier: 'afgewezen', reason: 'algemene definitie-/basispagina zonder fiscale verdieping of vergelijking' };
+  }
+  if (hasGeneralTopic && !hasStrong && !hasComparison) {
+    return { tier: 'afgewezen', reason: 'algemeen KVK-onderwerp zonder aantoonbare fiscale/accountancy-insteek' };
+  }
+  if (hasStrong) {
+    return { tier: 'hoog', reason: 'sterk fiscaal/accountancy-trefwoord gevonden' };
+  }
+  if (hasComparison) {
+    return { tier: 'hoog', reason: 'inhoudelijke vergelijking/keuze tussen rechtsvormen met fiscale relevantie' };
+  }
+  const onlyRechtsvormMatch = matchedCategories.every((c) => c === KVK_RECHTSVORM_CATEGORY);
+  if (onlyRechtsvormMatch) {
+    return { tier: 'afgewezen', reason: 'algemene rechtsvorm-pagina (bv/eenmanszaak/vof/maatschap) zonder vergelijking of fiscale verdieping' };
+  }
+  return { tier: 'twijfel', reason: 'alleen een brede trefwoordtreffer, geen sterk fiscaal signaal — handmatige beoordeling aanbevolen' };
+}
+
+const KVK_TIER_ORDER = { hoog: 0, twijfel: 1 };
+
 // Zuiver filter-/selectiepad, gedeeld door de productie-run (processKvkSource)
 // en het aparte dry-run-script (dry-run-kvk.mjs): dedupliceert op URL,
 // sorteert op lastmod (meest recent eerst), past het URL-vormfilter toe
 // (bevestigde artikel-URL's volgen het patroon kvk.nl/<categorie>/<slug>/,
-// precies twee padsegmenten — sluit overduidelijke niet-artikel-URL's uit
-// zonder te gokken op een deny-list), daarna de procedure-/formuliersignaal-
-// uitsluiting en ten slotte de relevantie-vóórfilter op de URL-slug.
-// Hergebruikt bewust dezelfde categoryKeywords/scoreCategories als de andere
-// bronnen — geen tweede, parallel filtersysteem.
+// precies twee padsegmenten, geen hub-/overzichtspagina zoals
+// /onderwerp/...), daarna de procedure-/formuliersignaal-uitsluiting en de
+// redactionele relevantiefilter (classifyKvkRelevance) op de URL-slug, en
+// ten slotte een rangschikking vóór er ook maar één pagina wordt opgehaald:
+// eerst tier 'hoog', dan 'twijfel', met lastmod als tie-breaker binnen een
+// tier. Hergebruikt bewust dezelfde categoryKeywords/scoreCategories als de
+// andere bronnen — geen tweede, parallel filtersysteem.
 export function selectKvkCandidates(entries, existingUrls) {
   const uniqueByUrl = new Map();
   for (const e of entries) {
@@ -641,6 +764,7 @@ export function selectKvkCandidates(entries, existingUrls) {
   });
 
   const afterUrlFilter = deduped.filter((e) => {
+    if (isKvkHubPage(e.loc)) return false;
     try {
       const { pathname } = new URL(e.loc);
       const segments = pathname.split('/').filter(Boolean);
@@ -652,12 +776,22 @@ export function selectKvkCandidates(entries, existingUrls) {
 
   const afterRelevanceFilter = afterUrlFilter.filter((e) => {
     const text = kvkSlugToText(e.loc);
-    return Object.keys(scoreCategories(text)).length > 0 && !isKvkProcedurePage(text);
+    if (isKvkProcedurePage(text)) return false;
+    return classifyKvkRelevance(text).tier !== 'afgewezen';
   });
 
   const afterDedupAgainstExisting = afterRelevanceFilter.filter((e) => !existingUrls.has(e.loc));
 
-  return { deduped, afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting };
+  const ranked = [...afterDedupAgainstExisting].sort((a, b) => {
+    const tierA = KVK_TIER_ORDER[classifyKvkRelevance(kvkSlugToText(a.loc)).tier] ?? 1;
+    const tierB = KVK_TIER_ORDER[classifyKvkRelevance(kvkSlugToText(b.loc)).tier] ?? 1;
+    if (tierA !== tierB) return tierA - tierB;
+    const da = a.lastmod ? Date.parse(a.lastmod) : 0;
+    const db = b.lastmod ? Date.parse(b.lastmod) : 0;
+    return db - da;
+  });
+
+  return { deduped, afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting, ranked };
 }
 
 // Zuiver (geen netwerk): onderzoekt de HTML van een KVK-artikelpagina op een
@@ -696,6 +830,87 @@ export async function fetchKvkArticleMeta(url) {
   return extractKvkArticleFields(html);
 }
 
+// --- Overlapcontrole met de bestaande Avydo-kennisbank ---
+//
+// Puur tekstueel/trefwoord-gebaseerd (Jaccard-overlap over betekenisvolle
+// woorden in de titel) — geen AI/embeddings, geen externe aanroep. Alleen
+// bedoeld om dubbele varianten van hetzelfde onderwerp te voorkomen, niet
+// als vervanging van categoryKeywords/classifyKvkRelevance.
+
+const KVK_OVERLAP_STOPWORDS = new Set([
+  'de', 'het', 'een', 'en', 'of', 'van', 'voor', 'met', 'bij', 'op', 'aan', 'is', 'zijn',
+  'wat', 'hoe', 'je', 'jouw', 'uw', 'u', 'dit', 'die', 'dat', 'als', 'om', 'te', 'in',
+  'naar', 'over', 'uit', 'niet', 'zo', 'werkt', 'wordt', 'worden', 'kan', 'kunt', 'moet',
+  'moeten', 'welke', 'wanneer', 'deze', 'dan', 'ook', 'per',
+]);
+
+// Grove, veilige stam-normalisatie voor Nederlandse meervouden (bijv.
+// "ondernemer"/"ondernemers", "artikel"/"artikelen"), zodat de Jaccard-
+// overlap niet onterecht laag uitvalt puur door enkelvoud/meervoud. Bewust
+// conservatief (alleen op langere woorden): onregelmatige meervouden
+// (loon/lonen) worden gemist, wat voor deze losse overlap-heuristiek
+// acceptabel is.
+function kvkWordStem(word) {
+  if (word.length > 6 && word.endsWith('en')) return word.slice(0, -2);
+  if (word.length > 5 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+function kvkSignificantWords(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !KVK_OVERLAP_STOPWORDS.has(w))
+    .map(kvkWordStem);
+}
+
+// Minimale Jaccard-overlap (gedeelde woorden / unie van woorden) tussen een
+// KVK-kandidaat-titel en een bestaande artikeltitel om als "overlap" te
+// gelden. Bewust ruim ingesteld: liever een kandidaat onterecht als
+// twijfelgeval rapporteren dan stilzwijgend een inhoudelijke dubbeling
+// publiceren.
+export const KVK_OVERLAP_JACCARD_THRESHOLD = 0.4;
+
+// Leest titel + categorie van alle bestaande Kenniscentrum-artikelen, als
+// basis voor de overlapcontrole hieronder.
+export function loadExistingArticlesMeta() {
+  if (!existsSync(CONTENT_DIR)) return [];
+  const articles = [];
+  for (const file of readdirSync(CONTENT_DIR)) {
+    if (!file.endsWith('.md')) continue;
+    const text = readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+    const title = text.match(/^title:\s*"([^"]*)"/m)?.[1];
+    const category = text.match(/^category:\s*"([^"]*)"/m)?.[1] ?? null;
+    if (!title) continue;
+    articles.push({ file, title, category });
+  }
+  return articles;
+}
+
+// Vergelijkt alleen binnen dezelfde categorie (voorkomt toevallige overlap
+// tussen totaal verschillende onderwerpen) en geeft de sterkst overlappende
+// bestaande artikel terug, of null als niets de drempel haalt.
+export function findOverlappingArticle(candidateTitle, candidateCategory, existingArticles) {
+  const candidateWords = new Set(kvkSignificantWords(candidateTitle));
+  if (candidateWords.size === 0) return null;
+
+  let best = null;
+  for (const article of existingArticles) {
+    if (candidateCategory && article.category && article.category !== candidateCategory) continue;
+    const existingWords = new Set(kvkSignificantWords(article.title));
+    if (existingWords.size === 0) continue;
+    const intersectionSize = [...candidateWords].filter((w) => existingWords.has(w)).length;
+    const unionSize = new Set([...candidateWords, ...existingWords]).size;
+    const jaccard = unionSize === 0 ? 0 : intersectionSize / unionSize;
+    if (jaccard >= KVK_OVERLAP_JACCARD_THRESHOLD && (!best || jaccard > best.jaccard)) {
+      best = { file: article.file, title: article.title, jaccard };
+    }
+  }
+  return best;
+}
+
 // Veiligheidsgrens op het aantal daadwerkelijk opgehaalde artikelpagina's
 // per run: de sitemap bevat ~1.800 URL's, en zonder grens zou een eerste
 // run (vóór dedup tegen bestaande content opbouwt) in theorie honderden
@@ -719,14 +934,16 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
   stages.fetched = entries.length;
   log(`  ${entries.length} URL-entries in documents-*.xml-sitemaps`);
 
-  const { afterUrlFilter, afterRelevanceFilter, afterDedupAgainstExisting } = selectKvkCandidates(entries, existingUrls);
-  log(`  ${afterUrlFilter.length} na URL-vormfilter, ${afterRelevanceFilter.length} na relevantie-vóórfilter, ${afterDedupAgainstExisting.length} nog niet eerder opgenomen`);
+  const { afterUrlFilter, afterRelevanceFilter, ranked } = selectKvkCandidates(entries, existingUrls);
+  log(`  ${afterUrlFilter.length} na URL-/hub-vormfilter, ${afterRelevanceFilter.length} na redactionele relevantiefilter, ${ranked.length} gerangschikt en klaar om op te halen`);
+
+  const existingArticlesMeta = loadExistingArticlesMeta();
 
   let added = 0;
   let sourceCount = 0;
   let pagesFetched = 0;
 
-  for (const candidate of afterDedupAgainstExisting) {
+  for (const candidate of ranked) {
     if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
     if (pagesFetched >= KVK_MAX_PAGE_FETCHES_PER_RUN) {
       log(`  grens van ${KVK_MAX_PAGE_FETCHES_PER_RUN} opgehaalde pagina's per run bereikt, stoppen (overige kandidaten volgen in een volgende run).`);
@@ -753,9 +970,16 @@ async function processKvkSource(source, existingUrls, remainingBudget) {
       continue;
     }
 
-    const scores = scoreCategories(combinedText);
-    if (Object.keys(scores).length === 0) {
-      log(`  - overgeslagen (titel/samenvatting bevatten geen fiscaal/accountancy-trefwoord): ${candidate.loc}`);
+    const classification = classifyKvkRelevance(combinedText);
+    if (classification.tier === 'afgewezen') {
+      log(`  - overgeslagen (${classification.reason}): ${candidate.loc}`);
+      continue;
+    }
+
+    const category = pickCategory(combinedText, source.defaultCategory) ?? source.defaultCategory;
+    const overlap = findOverlappingArticle(meta.title, category, existingArticlesMeta);
+    if (overlap) {
+      log(`  - overgeslagen (overlap met bestaand artikel "${overlap.title}", ${overlap.file}): ${candidate.loc}`);
       continue;
     }
     stages.relevant += 1;
