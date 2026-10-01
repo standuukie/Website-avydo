@@ -4,13 +4,13 @@ name: "TIJDELIJK: test Kenniscentrum-bronnen (KVK)"
 # Kenniscentrum-pipeline. Wijzigt niets, voegt geen content toe, schrijft
 # niets weg en commit niets.
 #
-# Ronde 3 (KVK-only): ronde 2 vond in __NEXT_DATA__ alleen "siteMenuItems"
-# (navigatie), geen artikeldata. Deze ronde zoekt gerichter: server-rendered
-# HTML rond echte artikel-links, ALLE embedded JSON-datasets (niet alleen de
-# eerste match), Next.js' eigen publieke per-pagina data-route
-# (/_next/data/<buildId>/…, een gedocumenteerd publiek mechanisme), en de
-# sitemapstructuur (sitemap/pages.xml + documents-*.xml). Alleen publieke
-# URL's, geen reverse engineering van private endpoints.
+# Ronde 4 (KVK-only): rondes 1-3 sloten __NEXT_DATA__ (alleen "siteMenuItems")
+# en de Next.js-data-route (404) uit als bruikbare bron. Deze ronde
+# onderzoekt gericht of sitemap_index.xml → documents-*.xml een betrouwbare
+# artikelindex is (tellingen, <lastmod>, zoeken naar drie bekende,
+# nu-zichtbare artikel-slugs), met als cross-check ook de publieke HTML van
+# diezelfde drie artikelpagina's (title/meta/canonical/JSON-LD/datum).
+# Alleen publieke URL's, geen reverse engineering van private endpoints.
 #
 # Haalt alleen de publieke pagina op zoals een gewone browser dat zou doen
 # (geen login, geen cookies, geen paywall-/toegangsomzeiling).
