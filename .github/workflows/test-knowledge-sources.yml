@@ -4,11 +4,13 @@ name: "TIJDELIJK: test Kenniscentrum-bronnen (KVK)"
 # Kenniscentrum-pipeline. Wijzigt niets, voegt geen content toe, schrijft
 # niets weg en commit niets.
 #
-# Ronde 2 (KVK-only): FD is komen te vervallen — geen commerciële licentie,
-# zie het Kenniscentrum-auditrapport van 2026-10-01. Deze ronde onderzoekt
-# uitsluitend de daadwerkelijke, ruwe __NEXT_DATA__/JSON-structuur van
-# https://www.kvk.nl/overzicht/ (en sitemap_index.xml), zodat de productie-
-# parsing op geverifieerde data gebaseerd kan worden in plaats van aannames.
+# Ronde 3 (KVK-only): ronde 2 vond in __NEXT_DATA__ alleen "siteMenuItems"
+# (navigatie), geen artikeldata. Deze ronde zoekt gerichter: server-rendered
+# HTML rond echte artikel-links, ALLE embedded JSON-datasets (niet alleen de
+# eerste match), Next.js' eigen publieke per-pagina data-route
+# (/_next/data/<buildId>/…, een gedocumenteerd publiek mechanisme), en de
+# sitemapstructuur (sitemap/pages.xml + documents-*.xml). Alleen publieke
+# URL's, geen reverse engineering van private endpoints.
 #
 # Haalt alleen de publieke pagina op zoals een gewone browser dat zou doen
 # (geen login, geen cookies, geen paywall-/toegangsomzeiling).
