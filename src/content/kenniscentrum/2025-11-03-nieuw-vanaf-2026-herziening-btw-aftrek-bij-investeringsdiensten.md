@@ -1,6 +1,6 @@
 ---
 title: "Nieuw vanaf 2026: Herziening btw-aftrek bij investeringsdiensten"
-category: "Belastingen"
+category: "Btw"
 priority: "praktisch"
 publishedAt: 2025-11-03T14:15:00.000Z
 sourceName: "Belastingdienst"

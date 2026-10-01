@@ -1,6 +1,6 @@
 ---
 title: "'Landelijke Landbouwnormen 2025' beschikbaar"
-category: "Belastingen"
+category: "Administratie & jaarrekening"
 priority: "praktisch"
 publishedAt: 2026-01-02T09:15:00.000Z
 sourceName: "Belastingdienst"

@@ -1,6 +1,6 @@
 ---
 title: "Handleiding 'Waardering van verpachte gronden in box 3 2025'"
-category: "Belastingen"
+category: "Inkomstenbelasting"
 priority: "praktisch"
 publishedAt: 2026-02-24T09:15:00.000Z
 sourceName: "Belastingdienst"

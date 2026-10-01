@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
@@ -16,6 +16,15 @@ export async function getStaticPaths() {
 
 const { article, allArticles } = Astro.props;
 const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences } = article.data;
+
+// De meeste (automatisch opgehaalde) artikelen hebben een body die
+// vrijwel gelijk is aan summary — dan voegt een apart "volledige
+// toelichting"-blok niets toe. Uitgebreidere, redactionele artikelen
+// (handmatig of via aiAssisted geschreven) hebben een substantieel langere
+// body; alleen dan tonen we 'm, om duplicatie met de Samenvatting hierboven
+// te voorkomen.
+const { Content } = await render(article);
+const hasExtendedBody = article.body != null && article.body.trim().length > summary.length * 1.3;
 
 const related = allArticles
   .filter((a) => a.slug !== article.slug && a.data.category === category)
@@ -85,6 +94,12 @@ const structuredData = {
           <h2 class="font-display text-lg font-semibold text-ink-900">Wat betekent dit voor uw onderneming?</h2>
           <p class="mt-2 text-ink-700 leading-relaxed">{relevance}</p>
         </div>
+
+        {hasExtendedBody && (
+          <div class="prose prose-slate mt-10 max-w-none prose-headings:font-display prose-headings:text-ink-900 prose-h2:text-xl prose-h2:mt-8 prose-a:text-brand-600 prose-strong:text-ink-900">
+            <Content />
+          </div>
+        )}
 
         <div class="mt-8 rounded-md border border-ink-100 p-6">
           <h2 class="font-display text-base font-semibold text-ink-900">Bron</h2>

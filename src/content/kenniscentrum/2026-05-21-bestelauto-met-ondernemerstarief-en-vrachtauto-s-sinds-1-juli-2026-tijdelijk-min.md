@@ -1,6 +1,6 @@
 ---
 title: "Bestelauto met ondernemerstarief en vrachtauto's: sinds 1 juli 2026 tijdelijk minder motorrijtuigenbelasting"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "belangrijk"
 publishedAt: 2026-05-21T13:00:00.000Z
 sourceName: "Belastingdienst"

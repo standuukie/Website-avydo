@@ -256,16 +256,17 @@ export function pickPriority(text, pubDate) {
   return 'praktisch';
 }
 
+// Herzien op 2026-10-01, in lijn met de nieuwe categorie-indeling (zie
+// src/content/config.ts en categoryKeywords in sources.config.mjs).
 const RELEVANCE_TEMPLATES = {
-  Belastingen: 'Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
-  Accountancy: 'Dit kan relevant zijn voor uw jaarrekening of financiële verslaggeving. Bespreek met uw accountant of dit gevolgen heeft voor uw administratie.',
-  'Personeel & loon': 'Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent.',
-  Ondernemen: 'Dit kan relevant zijn voor uw bedrijfsvoering als MKB-ondernemer. Bekijk de volledige publicatie om te bepalen of actie nodig is.',
-  'Wet- en regelgeving': 'Deze wijziging in wet- of regelgeving kan verplichtingen met zich meebrengen voor ondernemers. Ga na of en wanneer dit voor u van toepassing wordt.',
-  Subsidies: 'Mogelijk komt uw onderneming in aanmerking voor deze regeling. Controleer de voorwaarden en eventuele deadlines bij de bron.',
-  Financiën: 'Dit kan invloed hebben op de financiële planning van uw onderneming. Bekijk de volledige publicatie voor de precieze details.',
-  Digitalisering: 'Dit kan gevolgen hebben voor uw administratieve of digitale processen. Controleer of en wanneer deze verplichting voor uw onderneming gaat gelden.',
-  Duurzaamheid: 'Dit kan relevant zijn voor de duurzaamheidsverplichtingen of -kansen van uw onderneming. Bekijk de volledige publicatie voor de precieze details.',
+  'Fiscale actualiteit': 'Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
+  Inkomstenbelasting: 'Dit kan gevolgen hebben voor uw aangifte inkomstenbelasting. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
+  Btw: 'Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
+  'BV & DGA': 'Als DGA of BV kan dit gevolgen hebben voor uw fiscale positie. Bespreek met uw adviseur of dit voor uw situatie relevant is.',
+  Vennootschapsbelasting: 'Dit kan gevolgen hebben voor de vennootschapsbelasting van uw BV. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
+  'Personeel & loonheffingen': 'Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent.',
+  'Administratie & jaarrekening': 'Dit kan relevant zijn voor uw jaarrekening of financiële administratie. Bespreek met uw accountant of dit gevolgen heeft voor uw onderneming.',
+  'Ondernemen & rechtsvormen': 'Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de volledige publicatie om te bepalen of actie nodig is.',
 };
 
 function extractiveSummary(item) {
@@ -311,7 +312,7 @@ Geef terug als JSON met exact deze velden, geen andere tekst:
   } catch (err) {
     log(`    AI-samenvatting mislukt (${err.message}), val terug op extractieve samenvatting.`);
     const { summary } = extractiveSummary(item);
-    return { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES.Ondernemen, aiAssisted: false };
+    return { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES['Fiscale actualiteit'], aiAssisted: false };
   }
 }
 
@@ -360,7 +361,7 @@ async function publishItem(item, source) {
   const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date();
   if (Number.isNaN(publishedAt.getTime())) return null;
 
-  const category = pickCategory(combinedText, source.defaultCategory) ?? 'Ondernemen';
+  const category = pickCategory(combinedText, source.defaultCategory) ?? 'Fiscale actualiteit';
   const priority = pickPriority(combinedText, publishedAt);
   const audiences = pickAudiences(combinedText);
 
@@ -369,7 +370,7 @@ async function publishItem(item, source) {
     summaryData = await aiSummary(item, category);
   } else {
     const { summary } = extractiveSummary(item);
-    summaryData = { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES.Ondernemen, aiAssisted: false };
+    summaryData = { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES['Fiscale actualiteit'], aiAssisted: false };
   }
 
   return writeArticle({

@@ -1,6 +1,6 @@
 ---
 title: "Bezwaar motorrijtuigenbelasting vanaf 10 september 2026 ook online"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "actueel"
 publishedAt: 2026-09-09T08:15:00.000Z
 sourceName: "Belastingdienst"

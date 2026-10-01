@@ -1,15 +1,19 @@
 import { defineCollection, z } from 'astro:content';
 
+// Categorie-indeling (2026-10-01, redactionele aanscherping): gericht op de
+// kernexpertise van een accountants- en belastingadvieskantoor, i.p.v. de
+// eerdere brede "algemeen ondernemersnieuws"-indeling. Zie
+// scripts/kenniscentrum/sources.config.mjs voor de bijbehorende, eveneens
+// aangescherpte bronfiltering.
 export const categories = [
-  'Belastingen',
-  'Accountancy',
-  'Personeel & loon',
-  'Ondernemen',
-  'Wet- en regelgeving',
-  'Subsidies',
-  'Financiën',
-  'Digitalisering',
-  'Duurzaamheid',
+  'Fiscale actualiteit',
+  'Inkomstenbelasting',
+  'Btw',
+  'BV & DGA',
+  'Vennootschapsbelasting',
+  'Personeel & loonheffingen',
+  'Administratie & jaarrekening',
+  'Ondernemen & rechtsvormen',
 ] as const;
 
 export const priorities = ['belangrijk', 'actueel', 'praktisch'] as const;

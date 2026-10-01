@@ -1,6 +1,6 @@
 ---
 title: "De Belastingdienst heeft sinds 1 mei nieuwe rekeningnummers"
-category: "Belastingen"
+category: "Administratie & jaarrekening"
 priority: "praktisch"
 publishedAt: 2026-09-03T07:00:00.000Z
 sourceName: "Belastingdienst"

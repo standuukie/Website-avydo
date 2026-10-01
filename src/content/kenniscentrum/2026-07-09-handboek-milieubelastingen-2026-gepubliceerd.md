@@ -1,6 +1,6 @@
 ---
 title: "Handboek Milieubelastingen 2026 gepubliceerd"
-category: "Wet- en regelgeving"
+category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-07-09T13:00:00.000Z
 sourceName: "Belastingdienst"

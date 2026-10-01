@@ -1,6 +1,6 @@
 ---
 title: "Aanpassing mededingingswet: beter en gerichter toezicht fusies en overnames"
-category: "Wet- en regelgeving"
+category: "Ondernemen & rechtsvormen"
 priority: "actueel"
 publishedAt: 2026-09-23T14:36:31.152Z
 sourceName: "Rijksoverheid"

@@ -1,6 +1,6 @@
 ---
 title: "Bent u cryptodienstverlener? Meld u dan aan voor de DAC8/CARF vraag- en antwoordsessie op 7 oktober"
-category: "Wet- en regelgeving"
+category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-08-18T15:30:00.000Z
 sourceName: "Belastingdienst"

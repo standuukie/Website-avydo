@@ -1,6 +1,6 @@
 ---
 title: "Motorrijtuigenbelasting: veranderingen sinds 1 juli 2026"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-07-01T08:00:00.000Z
 sourceName: "Belastingdienst"

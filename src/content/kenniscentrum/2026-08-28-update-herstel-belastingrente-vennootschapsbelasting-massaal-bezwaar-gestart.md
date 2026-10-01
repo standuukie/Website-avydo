@@ -1,6 +1,6 @@
 ---
 title: "Update: Herstel belastingrente vennootschapsbelasting (massaal bezwaar) gestart"
-category: "Belastingen"
+category: "Vennootschapsbelasting"
 priority: "praktisch"
 publishedAt: 2026-08-28T12:00:00.000Z
 sourceName: "Belastingdienst"

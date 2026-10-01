@@ -1,6 +1,6 @@
 ---
 title: "Vanaf 1 januari 2026: BTWwft en BEH worden Dienst Financieel-Economische Integriteit (DFEI)"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2025-12-03T12:45:00.000Z
 sourceName: "Belastingdienst"

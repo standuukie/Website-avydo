@@ -1,6 +1,6 @@
 ---
 title: "Begin augustus herinneren wij ondernemers via sms aan btw-aangifte"
-category: "Belastingen"
+category: "Btw"
 priority: "praktisch"
 publishedAt: 2026-08-03T09:30:00.000Z
 sourceName: "Belastingdienst"

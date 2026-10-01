@@ -1,6 +1,6 @@
 ---
 title: "Geen verzuimboete Minimumbelasting tot en met 31 oktober 2026"
-category: "Belastingen"
+category: "Vennootschapsbelasting"
 priority: "praktisch"
 publishedAt: 2026-08-18T11:30:00.000Z
 sourceName: "Belastingdienst"

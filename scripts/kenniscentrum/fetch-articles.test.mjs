@@ -77,29 +77,45 @@ test('extractMetaDescription geeft null als er geen description-meta staat', () 
   assert.equal(extractMetaDescription('<html><head></head><body>geen meta</body></html>'), null);
 });
 
-// Dit is de kern van de regressie die opgelost is: dit exacte artikel (titel
-// + brontekst) moet nu een categorie scoren, waar het onder de oude,
-// smallere trefwoordenlijst (alleen belasting/btw/ondernemer-achtige termen)
-// door de mazen zou zijn geglipt en dus als "niet relevant" was weggefilterd.
-test('het e-facturatie-testcase-artikel wordt herkend als relevant (Digitalisering)', () => {
+// Redactionele aanscherping (2026-10-01): het Kenniscentrum is versmald tot
+// accountancy/fiscale onderwerpen (zie src/content/config.ts en
+// categoryKeywords in sources.config.mjs). Een algemene "e-facturatie en
+// rapportage"-verplichting voor bedrijven blijft relevant, maar nu specifiek
+// als administratieve/boekhoudkundige verplichting — niet langer onder een
+// brede "Digitalisering"-categorie, die bij de aanscherping is komen te
+// vervallen omdat hij te veel niet-fiscaal nieuws doorliet.
+test('het e-facturatie-testcase-artikel scoort nu Administratie & jaarrekening (niet langer Digitalisering)', () => {
   const title = 'Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven';
   const description = 'Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven.';
   const scores = scoreCategories(`${title} ${description}`);
   assert.ok(Object.keys(scores).length > 0, 'artikel moet minstens één categorie scoren en dus niet weggefilterd worden');
-  assert.equal(pickCategory(`${title} ${description}`, null), 'Digitalisering');
+  assert.equal(pickCategory(`${title} ${description}`, null), 'Administratie & jaarrekening');
 });
 
-test('een klassiek belastingartikel blijft correct categoriseren (regressie Belastingdienst-bron)', () => {
+test('een klassiek btw-artikel categoriseert correct (regressie Belastingdienst-bron)', () => {
   const text = 'Vanaf 1 januari 2026 geldt een nieuw btw-tarief voor logies-ondernemers.';
-  assert.equal(pickCategory(text, 'Belastingen'), 'Belastingen');
+  assert.equal(pickCategory(text, 'Fiscale actualiteit'), 'Btw');
 });
 
 test('een artikel zonder enig relevant trefwoord scoort geen categorie (filter blijft werken)', () => {
   const scores = scoreCategories('Koning bezoekt jubileumfeest op Sint Eustatius voor 250 jaar The First Salute.');
   // Mag leeg zijn of alleen zwakke toevalstreffers; belangrijkste is dat dit
   // niet in de kernonderwerpen scoort.
-  assert.ok(!('Belastingen' in scores));
-  assert.ok(!('Digitalisering' in scores));
+  assert.equal(Object.keys(scores).length, 0);
+});
+
+// Regressie voor de aanscherping zelf: generiek, niet-fiscaal
+// overheids-/lobbynieuws (zoals destijds daadwerkelijk in de kennisbank
+// terechtkwam — gemeentelijke herindeling, bestuursbenoemingen, algemene
+// MKB-lobbystandpunten) mag NIET meer scoren, ook al bevat het woorden als
+// "wet", "ondernemer" of "bedrijven" — dat was precies de te brede
+// trefwoordenlijst die hiervoor zorgde.
+test('algemeen overheids- en lobbynieuws zonder fiscale/accountancy-kern scoort geen categorie meer', () => {
+  const municipality = scoreCategories('Wetsvoorstel herindeling van de gemeenten Best en Oirschot naar de Raad van State.');
+  assert.equal(Object.keys(municipality).length, 0);
+
+  const lobby = scoreCategories('Ondernemersorganisaties vinden dat het kabinet meer moet doen tegen regeldruk voor het mkb en bedrijfsleven.');
+  assert.equal(Object.keys(lobby).length, 0);
 });
 
 // Echte (ingekorte) RSS-fixture van https://www.mkb.nl/rss/nieuws-mkb-nederland
@@ -142,10 +158,20 @@ test('extractMinistryTag geeft null voor een onbekend of ontbrekend ministerie',
   assert.equal(extractMinistryTag('<p>geen breadcrumb hier</p>'), null);
 });
 
-test('nieuwe trefwoorden uit de bredere relevantiefilter worden herkend', () => {
-  assert.ok('Accountancy' in scoreCategories('De audit door de accountant leverde nieuwe inzichten op.'));
-  assert.ok('Digitalisering' in scoreCategories('Kunstmatige intelligentie en de EU AI-verordening: wat verandert er?'));
-  assert.ok('Ondernemen' in scoreCategories('Een bedrijfsovername vraagt om een goede vergunning en due diligence.'));
+test('kerntrefwoorden van de aangescherpte, smalle categorieën worden herkend', () => {
+  assert.ok('Administratie & jaarrekening' in scoreCategories('De audit door de accountant leverde nieuwe inzichten op.'));
+  assert.ok('Ondernemen & rechtsvormen' in scoreCategories('Een bedrijfsovername van deze omvang vraagt om zorgvuldige due diligence.'));
+  assert.ok('BV & DGA' in scoreCategories('Als DGA moet u zichzelf een gebruikelijk loon uitkeren.'));
+});
+
+// Regressie: een onderwerp dat vóór de aanscherping via de brede
+// "Digitalisering"-categorie meetelde (kunstmatige intelligentie / AI-
+// verordening, los van enige fiscale of administratieve context) scoort nu
+// bewust geen categorie meer — dat was precies het soort te algemene content
+// dat niet meer bij een accountants-/belastingadvieskantoor past.
+test('algemene AI-/digitaliseringsonderwerpen zonder fiscale kern scoren niet langer', () => {
+  const scores = scoreCategories('Kunstmatige intelligentie en de EU AI-verordening: wat verandert er voor de sector?');
+  assert.equal(Object.keys(scores).length, 0);
 });
 
 test('pickAudiences herkent werkgever en mkb-ondernemer in het e-facturatie-testcase-artikel', () => {

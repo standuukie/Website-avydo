@@ -1,6 +1,6 @@
 ---
 title: "Vanaf 1 januari 2026: btw-tarief logies omhoog naar 21%"
-category: "Belastingen"
+category: "Btw"
 priority: "praktisch"
 publishedAt: 2025-10-30T10:15:00.000Z
 sourceName: "Belastingdienst"

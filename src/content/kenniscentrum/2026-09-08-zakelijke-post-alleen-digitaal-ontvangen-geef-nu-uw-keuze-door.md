@@ -1,6 +1,6 @@
 ---
 title: "Zakelijke post alleen digitaal ontvangen? Geef nu uw keuze door"
-category: "Belastingen"
+category: "Administratie & jaarrekening"
 priority: "praktisch"
 publishedAt: 2026-09-08T06:00:00.000Z
 sourceName: "Belastingdienst"

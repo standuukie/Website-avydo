@@ -78,7 +78,7 @@ export const sources = [
     name: 'Belastingdienst',
     type: 'rss',
     feedUrl: 'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/rss/nieuwsfeed_actueel_zakelijk.xml',
-    defaultCategory: 'Belastingen',
+    defaultCategory: 'Fiscale actualiteit',
     enabled: true,
     urlConfidence: 'confirmed',
     // Deze feed is al specifiek voor ondernemers/intermediairs: geen extra
@@ -90,12 +90,16 @@ export const sources = [
     name: 'Rijksoverheid',
     type: 'sitemap',
     sitemapUrl: 'https://www.rijksoverheid.nl/news/sitemap.xml',
-    defaultCategory: null,
+    defaultCategory: 'Fiscale actualiteit',
     enabled: true,
     urlConfidence: 'confirmed',
     // Sitewide nieuws-sitemap van de hele Rijksoverheid (alle ministeries):
-    // strikt filteren op brede MKB-relevantie is hier essentieel, anders
-    // komt er te veel niet-ondernemersnieuws doorheen.
+    // strikt filteren is hier essentieel. Sinds de redactionele aanscherping
+    // (2026-10-01, zie categoryKeywords hieronder) is deze filtering
+    // bewust smal gehouden tot échte accountancy-/fiscale termen, nadat
+    // bleek dat brede trefwoorden als "wet"/"wetsvoorstel" volstrekt
+    // onrelevant overheidsnieuws doorlieten (bijv. gemeentelijke
+    // herindeling, bestuursbenoemingen op Bonaire, lijkbezorgingswetgeving).
     requireKeywordMatch: true,
     // Publicaties van het Ministerie van Financiën tellen altijd als
     // relevant, ook zonder trefwoordtreffer (zie extractMinistryTag).
@@ -106,15 +110,17 @@ export const sources = [
     name: 'MKB-Nederland',
     type: 'rss',
     feedUrl: 'https://www.mkb.nl/rss/nieuws-mkb-nederland',
-    defaultCategory: 'Ondernemen',
+    defaultCategory: 'Fiscale actualiteit',
     enabled: true,
     urlConfidence: 'confirmed',
-    // Dit is al de eigen, specifieke nieuwsfeed van MKB-Nederland (niet hun
-    // algemene/agenda/blog-feeds) — net als bij de Belastingdienst is een
-    // extra keywordfilter hier niet nodig: het is per definitie
-    // ondernemersnieuws (ondernemersklimaat, economie, regelgeving,
-    // arbeidsmarkt).
-    requireKeywordMatch: false,
+    // Aangescherpt op 2026-10-01: deze feed bevat overwegend politieke
+    // lobby-standpunten en algemeen ondernemersnieuws (stikstof, cao-
+    // overleg, conjunctuurcijfers) die niet specifiek over accountancy of
+    // belastingen gaan — dat paste niet bij een kenniscentrum van een
+    // accountants- en belastingadvieskantoor. Voortaan telt een item van
+    // deze bron alleen mee bij een treffer op een daadwerkelijk fiscaal/
+    // accountancy-trefwoord (zie categoryKeywords hieronder).
+    requireKeywordMatch: true,
   },
 ];
 
@@ -123,57 +129,50 @@ export const sources = [
 // requireKeywordMatch:true worden alleen opgenomen als er in minstens één
 // categorie een treffer is.
 //
-// Bewust breder dan alleen klassieke belastingtermen: het Kenniscentrum is
-// voor Nederlandse MKB-ondernemers in brede zin, dus ook arbeidsrecht,
-// digitalisering/AI/e-facturatie, subsidies, duurzaamheid, privacy, fraude,
-// import/export en EU-regelgeving met gevolgen voor bedrijven horen hierbij.
-// Een relevant artikel mag niet worden weggefilterd alleen omdat het geen
-// klassiek belastingonderwerp is.
+// Herzien op 2026-10-01 (redactionele aanscherping naar "het kenniscentrum
+// van een accountants- en belastingadvieskantoor"): bewust SMAL gehouden
+// tot termen die daadwerkelijk op accountancy, belastingen of fiscale
+// compliance duiden. De eerdere, bredere opzet (generieke termen als "wet",
+// "ondernemer", "bedrijven", "economie") liet veel te veel niet-fiscaal
+// overheids- en lobbynieuws door — zie het Kenniscentrum-auditrapport van
+// 2026-10-01. Let op: deze trefwoorden bepalen niet alleen de categorie,
+// maar via requireKeywordMatch ook OF een artikel (van Rijksoverheid of
+// MKB-Nederland) überhaupt wordt opgenomen — bewust specifiek houden.
 export const categoryKeywords = {
-  Belastingen: [
-    'belasting', 'btw', 'omzetbelasting', 'inkomstenbelasting', 'vennootschapsbelasting',
-    'vpb', 'aangifte', 'aanslag', 'belastingplan', 'prinsjesdag', 'belastingdienst',
-    'heffing', 'fiscaal', 'fiscale', 'fiscaliteit', 'toeslag', 'box 1', 'box 2', 'box 3',
+  'Fiscale actualiteit': [
+    'belastingplan', 'prinsjesdag', 'miljoenennota', 'fiscale wetswijziging',
+    'belastingwetgeving', 'belastingtarief', 'belastingtarieven', 'motorrijtuigenbelasting',
+    'accijns', 'invoerheffing', 'douane', 'bpm',
   ],
-  'Personeel & loon': [
-    'loon', 'loonheffing', 'payroll', 'werkgever', 'werknemer', 'arbeidsrecht',
-    'cao', 'minimumloon', 'arbeidsovereenkomst', 'arbeidsvoorwaarden', 'ontslag',
-    'ziekteverzuim', 're-integratie', 'pensioen', 'arbeidsmarkt', 'zzp', 'personeel',
-    'sociale zekerheid', 'werkgeverschap', 'arbeidsproductiviteit',
+  Inkomstenbelasting: [
+    'inkomstenbelasting', 'box 1', 'box 2', 'box 3', 'ondernemersaftrek',
+    'zelfstandigenaftrek', 'startersaftrek', 'mkb-winstvrijstelling', 'heffingskorting',
+    'urencriterium',
   ],
-  Ondernemen: [
-    'ondernemer', 'ondernemen', 'mkb', 'midden- en kleinbedrijf', 'starter',
-    'zzp', 'bedrijfsvoering', 'bedrijven', 'kvk', 'kamer van koophandel', 'zakendoen',
-    'ondernemersplein', 'ondernemersregeling', 'bedrijfsleven', 'bedrijfsovername',
-    'faillissement', 'faillissementen', 'handel', 'import', 'export',
-    'vergunning', 'vergunningen', 'administratieve verplichting', 'administratieve lasten',
+  Btw: [
+    'btw', 'omzetbelasting', 'btw-aangifte', 'btw-tarief', 'kleineondernemersregeling',
+    'kor', 'voorbelasting',
   ],
-  'Wet- en regelgeving': [
-    'wet', 'wetswijziging', 'regelgeving', 'wetsvoorstel', 'wettelijk',
-    'verplicht', 'wetgeving', 'besluit', 'richtlijn', 'eu-richtlijn',
-    'europese richtlijn', 'eu-verordening', 'europese regelgeving',
-    'implementatiewet', 'compliance', 'fraude',
+  'BV & DGA': [
+    'dga', 'directeur-grootaandeelhouder', 'gebruikelijk loon', 'gebruikelijkloonregeling',
+    'dividendbelasting', 'dividend', 'rekening-courant', 'aanmerkelijk belang', 'holdingstructuur',
   ],
-  Subsidies: [
-    'subsidie', 'subsidieregeling', 'tegemoetkoming', 'financieringsregeling',
-    'steunmaatregel', 'investeringsregeling',
+  Vennootschapsbelasting: [
+    'vennootschapsbelasting', 'vpb', 'fiscale winst', 'minimumbelasting', 'pijler 2',
   ],
-  Financiën: [
-    'financiering', 'jaarrekening', 'verslaggeving', 'rente', 'rentetarief', 'inflatie',
-    'begroting', 'overheidsfinanciën', 'economie', 'economische', 'investeringen',
+  'Personeel & loonheffingen': [
+    'loonheffing', 'loonheffingen', 'payroll', 'minimumloon', 'werkkostenregeling', 'wkr',
+    'cao', 'arbeidsovereenkomst', 'loonbelasting', 'pensioenpremie', 're-integratie',
+    'ziekteverzuim', 'loonaangifte',
   ],
-  Accountancy: [
-    'accountant', 'accountancy', 'jaarrekening', 'audit', 'controle', 'nba',
-    'boekhoud', 'administratie', 'verslaggeving', 'financiële administratie',
+  'Administratie & jaarrekening': [
+    'jaarrekening', 'deponeren', 'administratieplicht', 'boekhoud', 'financiële administratie',
+    'accountantscontrole', 'accountant', 'accountancy', 'nba', 'audit', 'jaarverslaggeving',
+    'e-facturatie', 'efactureren',
   ],
-  Digitalisering: [
-    'e-facturatie', 'efactureren', 'digitalisering', 'digitaal', 'rapportage',
-    'rapportageverplichting', 'rapportageverplichtingen', 'gegevensuitwisseling',
-    'gegevensbescherming', 'avg', 'privacy', 'cybersecurity',
-    'kunstmatige intelligentie', 'ai-verordening',
-  ],
-  Duurzaamheid: [
-    'duurzaamheid', 'verduurzaming', 'csrd', 'klimaat', 'duurzaam ondernemen', 'energie',
+  'Ondernemen & rechtsvormen': [
+    'eenmanszaak', 'besloten vennootschap', 'rechtsvorm', 'bv oprichten', 'bv omzetten',
+    'bedrijfsovername', 'fusie', 'overname', 'faillissement', 'vof', 'maatschap',
   ],
 };
 

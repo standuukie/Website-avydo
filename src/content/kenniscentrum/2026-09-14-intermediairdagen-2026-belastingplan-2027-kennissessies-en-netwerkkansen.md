@@ -1,6 +1,6 @@
 ---
 title: "Intermediairdagen 2026: Belastingplan 2027, kennissessies en netwerkkansen"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "belangrijk"
 publishedAt: 2026-09-14T08:30:00.000Z
 sourceName: "Belastingdienst"

@@ -1,6 +1,6 @@
 ---
 title: "Wetsvoorstel Onafhankelijkheid cao-partijen"
-category: "Wet- en regelgeving"
+category: "Personeel & loonheffingen"
 priority: "belangrijk"
 publishedAt: 2026-09-22T09:44:44.245Z
 sourceName: "Rijksoverheid"

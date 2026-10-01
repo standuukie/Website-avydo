@@ -1,6 +1,6 @@
 ---
 title: "Bpm: extra controles aangiften bpm met taxatierapport"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-07-08T16:15:00.000Z
 sourceName: "Belastingdienst"

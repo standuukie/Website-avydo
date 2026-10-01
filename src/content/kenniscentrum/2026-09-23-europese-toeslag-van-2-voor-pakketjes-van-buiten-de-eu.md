@@ -1,6 +1,6 @@
 ---
 title: "Europese toeslag van € 2 voor pakketjes van buiten de EU"
-category: "Belastingen"
+category: "Fiscale actualiteit"
 priority: "actueel"
 publishedAt: 2026-09-23T14:30:20.053Z
 sourceName: "Rijksoverheid"
