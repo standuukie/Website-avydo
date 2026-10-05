@@ -1,0 +1,35 @@
+name: Kenniscentrum single-article diagnose (tijdelijk, read-only)
+
+# TIJDELIJK workflow-bestand, uitsluitend om de volledige inhoud van één
+# specifiek, al bekend Rijksoverheid-artikel ("Transacties met crypto
+# straks meer in beeld bij Belastingdienst") op te halen en te toetsen
+# tegen de bestaande relevantielogica (commit 3859281). Geen schrijfacties
+# naar src/content, geen commit/push-stap. Wordt na gebruik weer
+# verwijderd, samen met scripts/kenniscentrum/diagnose-single-article.mjs.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Artikel ophalen en analyseren (read-only)
+        run: node scripts/kenniscentrum/diagnose-single-article.mjs
