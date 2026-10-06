@@ -173,7 +173,41 @@ async function captureNetworkForUrl(page, url, label) {
     console.log(`  ZICHTBARE_ARTIKEL_LINKS_NA_KLIK (${visibleArticleLinksPage2.length}): ${JSON.stringify([...new Set(visibleArticleLinksPage2)].slice(0, 20))}`);
   }
 
-  return { captured, visibleArticleLinks, paginationControl };
+  return { captured, visibleArticleLinks, paginationControl, apiSearchEntry: captured.find((e) => e.phase === 'request' && e.url.includes('/api/search')) };
+}
+
+// Herhaalt de door de browser daadwerkelijk uitgevoerde /api/search-
+// request EXACT (zelfde URL/method/body/content-type), maar dan met
+// gewone Node fetch() i.p.v. een browser — geen cookies, geen
+// JavaScript-executie. Dit beantwoordt Stap 6/Test A: werkt de request
+// ook buiten de browser?
+async function replayRequestWithPlainFetch(apiSearchEntry, label) {
+  if (!apiSearchEntry) {
+    console.log(`REPLAY_TEST [${label}]: geen /api/search-request gevangen om te herhalen.`);
+    return;
+  }
+  console.log(`\n--- REPLAY BUITEN BROWSER (plain fetch, geen cookies): ${label} ---`);
+  console.log(`  URL: ${apiSearchEntry.url}`);
+  try {
+    const res = await fetch(apiSearchEntry.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/plain, */*' },
+      body: apiSearchEntry.postData,
+    });
+    const text = await res.text();
+    console.log(`  REPLAY_STATUS: ${res.status}`);
+    console.log(`  REPLAY_CONTENT_TYPE: ${res.headers.get('content-type')}`);
+    console.log(`  REPLAY_BODY_LENGTH: ${text.length}`);
+    let resultCount = null;
+    try {
+      const parsed = JSON.parse(text);
+      resultCount = parsed?.rawResponse?.rawResults?.length ?? null;
+    } catch { /* ignore */ }
+    console.log(`  REPLAY_RESULT_COUNT: ${resultCount}`);
+    console.log(`  REPLAY_BODY_SAMPLE: ${text.slice(0, 500)}`);
+  } catch (err) {
+    console.log(`  REPLAY_FOUT: ${err.message}`);
+  }
 }
 
 async function main() {
@@ -186,6 +220,12 @@ async function main() {
   }
 
   await browser.close();
+
+  console.log('\n=== STAP 6 / TEST A: reproduceerbaarheid buiten de browser ===');
+  for (const topic of TOPICS) {
+    await replayRequestWithPlainFetch(results[topic.key].apiSearchEntry, topic.key);
+  }
+
   console.log('\n=== KLAAR ===');
 }
 
