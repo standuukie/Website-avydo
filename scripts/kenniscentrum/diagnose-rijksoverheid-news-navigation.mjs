@@ -71,7 +71,24 @@ function findClientRenderedStateHints(html) {
   const jsonLdMatches = [...html.matchAll(/<script[^>]+type=["']application\/(ld\+json|json)["'][^>]*>([\s\S]*?)<\/script>/gi)];
   hints.jsonScriptBlockCount = jsonLdMatches.length;
   hints.jsonScriptBlockSampleLengths = jsonLdMatches.slice(0, 5).map((m) => m[2].length);
+  // Volledige inhoud (gekapt op 400 tekens) van elk gevonden JSON-
+  // scriptblok, om daadwerkelijk te kunnen vaststellen wat erin staat
+  // i.p.v. alleen de lengte te noteren.
+  hints.jsonScriptBlockContents = jsonLdMatches.slice(0, 5).map((m) => m[2].trim().slice(0, 400));
   return hints;
+}
+
+// Zoekt de letterlijke vindplaats van de onderwerp-filterwaarde in de
+// ruwe HTML (eerste 150 tekens vóór en na), om te bepalen WAAR die tekst
+// staat (bijv. in een <title>, breadcrumb, verborgen input, of iets
+// anders) — nooit alleen "komt voor", altijd ook de context.
+function findTopicValueContext(html, topicValueDecoded) {
+  if (!topicValueDecoded) return null;
+  const idx = html.indexOf(topicValueDecoded);
+  if (idx === -1) return null;
+  const start = Math.max(0, idx - 150);
+  const end = Math.min(html.length, idx + topicValueDecoded.length + 150);
+  return html.slice(start, end);
 }
 
 const NAV_KEYWORD_RE = /nieuws|meer nieuws|al het nieuws|alle nieuws|bekijk meer|bekijk alle/i;
@@ -273,6 +290,8 @@ async function main() {
         renderHints.topicFilterValueFoundLiterallyInHtml = topicValueDecoded ? res.text.includes(topicValueDecoded) : null;
         renderHints.rawHtmlByteLength = res.text.length;
         console.log(`  CLIENT_RENDER_HINTS (0 artikel-links): ${JSON.stringify(renderHints)}`);
+        const topicContext = findTopicValueContext(res.text, topicValueDecoded);
+        console.log(`  TOPIC_VALUE_CONTEXT: ${JSON.stringify(topicContext)}`);
       }
       pages.push({ pageNum, url: currentUrl, status: res.status, canonical, articleLinks, pagination });
       currentUrl = pagination.relNext ?? pagination.volgendeLink?.url ?? null;
