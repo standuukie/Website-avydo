@@ -4,11 +4,16 @@
  * pijplijn, importeert niets uit fetch-articles.mjs/sources.config.mjs en
  * schrijft niets naar src/content/. Wordt na gebruik volledig verwijderd.
  *
- * Doel: de daadwerkelijke rijksoverheid.nl topic-API
- * (POST /api/search) bevragen voor een reeks kandidaat-onderwerpen,
- * zonder te gokken op topicnamen — exacte namen worden ontdekt via (a) de
- * API's eigen topic-facet en (b) de echte thema-overzichtspagina.
+ * Doel: de daadwerkelijke rijksoverheid.nl topic-API (POST /api/search)
+ * bevragen voor een reeks kandidaat-onderwerpen, zonder te gokken op
+ * topicnamen of op de exacte request-body-structuur. Ronde 2: een eerdere
+ * poging om de body uit het geheugen te reconstrueren gaf HTTP 400
+ * "Invalid search request" — dus nu wordt de ECHTE, huidige request eerst
+ * opnieuw live gecaptured met Playwright (net als het eerdere onderzoek),
+ * en die exacte body wordt als sjabloon hergebruikt (alleen topic/pagina
+ * aangepast), nooit hertypt.
  */
+import { chromium } from 'playwright';
 
 const FETCH_TIMEOUT_MS = 20000;
 const UA = 'AvydoKenniscentrumOnderzoek/1.0 (+https://www.avydo.nl) Mozilla/5.0';
@@ -27,40 +32,66 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = FETCH_TIMEOUT_MS) {
   }
 }
 
-const RESULT_FIELDS = {
-  page_title: { raw: {} },
-  url: { raw: {} },
-  sort_date: { raw: {} },
-  meta_description: { raw: {}, snippet: { size: 200, fallback: true } },
-  information_type: { raw: {} },
-};
-
-function buildSearchBody({ topic, current, resultsPerPage = 10, includeTopicFacet = false, topicFacetSize = 300 }) {
-  const filters = [];
-  if (topic) filters.push({ field: 'topic', values: [topic], type: 'all' });
-  filters.push({ field: 'content_type', values: ['pro:newsDocument'], type: 'all' });
-  const facets = {
-    ministry: { type: 'value', size: 250 },
-    information_type: { type: 'value', size: 250 },
-  };
-  const disjunctiveFacets = ['ministry', 'information_type'];
-  if (includeTopicFacet) {
-    facets.topic = { type: 'value', size: topicFacetSize };
-    disjunctiveFacets.push('topic');
+async function fetchHtml(url) {
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return { ok: false, status: res.status };
+    const text = await res.text();
+    return { ok: true, status: res.status, text };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
-  return {
-    requestState: { searchTerm: '', filters, resultsPerPage, current, sortDirection: '', sortField: '' },
-    queryConfig: { result_fields: RESULT_FIELDS, facets, disjunctiveFacets, search_fields: { page_title: {} } },
-  };
 }
 
-async function callSearchApi(body, hashVariant) {
-  const url = hashVariant === 'none'
-    ? 'https://www.rijksoverheid.nl/api/search'
-    : `https://www.rijksoverheid.nl/api/search?hash=${hashVariant}`;
+// --- Stap A: de ECHTE, huidige /api/search-request live capturen met een browser ---
+
+async function captureRealApiTemplate(page) {
+  log('\n=== STAP A: echte /api/search-request opnieuw live capturen (Belasting betalen) ===');
+  const url = 'https://www.rijksoverheid.nl/actueel/nieuws?size=n_10_n&filters[0][field]=topic&filters[0][values][0]=Belasting%20betalen&filters[0][type]=all';
+  let captured = null;
+  const onRequest = (req) => {
+    if (req.url().includes('/api/search') && req.method() === 'POST' && !captured) {
+      captured = { url: req.url(), postData: req.postData() };
+    }
+  };
+  page.on('request', onRequest);
+  try {
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 25000 });
+    await page.waitForTimeout(1500);
+  } catch (err) {
+    log(`CAPTURE_TEMPLATE_NAV_ERROR: ${err.message}`);
+  }
+  page.off('request', onRequest);
+  if (!captured) {
+    log('CAPTURE_TEMPLATE_RESULT: GEEN /api/search-request gezien tijdens page load');
+    return null;
+  }
+  log(`CAPTURE_TEMPLATE_RESULT: gevonden, url=${captured.url}`);
+  console.log('CAPTURE_TEMPLATE_POSTDATA: ' + captured.postData);
+  let parsedBody = null;
+  try {
+    parsedBody = JSON.parse(captured.postData);
+  } catch (err) {
+    log(`CAPTURE_TEMPLATE_PARSE_ERROR: ${err.message}`);
+    return null;
+  }
+  return { apiUrl: captured.url, body: parsedBody };
+}
+
+function cloneTemplateForTopic(template, topicValue, current) {
+  const body = JSON.parse(JSON.stringify(template.body));
+  const filters = body.requestState?.filters ?? [];
+  const topicFilter = filters.find((f) => f.field === 'topic');
+  if (topicFilter) topicFilter.values = [topicValue];
+  else filters.push({ field: 'topic', values: [topicValue], type: 'all' });
+  body.requestState.current = current;
+  return body;
+}
+
+async function callSearchApi(apiUrl, body) {
   let res;
   try {
-    res = await fetchWithTimeout(url, {
+    res = await fetchWithTimeout(apiUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json, text/plain, */*' },
       body: JSON.stringify(body),
@@ -80,30 +111,45 @@ async function callSearchApi(body, hashVariant) {
   try {
     parsed = JSON.parse(text);
   } catch {
-    // niet-JSON response, bv. HTML-foutpagina
+    // niet-JSON response
   }
   return { ok: res.ok, status, contentType, text, parsed };
 }
 
-async function testHashRequirement() {
-  log('\n=== STAP 0: vereist de API een geldige/overeenkomende hash? ===');
-  const body = buildSearchBody({ topic: 'Belasting betalen', current: 1 });
-  for (const variant of ['none', 'test123', 'deadbeef']) {
-    const r = await callSearchApi(body, variant);
+async function testHashVariants(template) {
+  log('\n=== STAP 0: is de ?hash=-parameter daadwerkelijk nodig (nu met de echte, correcte body)? ===');
+  const base = new URL(template.apiUrl);
+  const noHashUrl = `${base.origin}${base.pathname}`;
+  const variants = [
+    { label: 'origineel-gecaptured-hash', url: template.apiUrl },
+    { label: 'geen-hash-param', url: noHashUrl },
+    { label: 'dummy-hash', url: `${noHashUrl}?hash=deadbeef` },
+  ];
+  for (const v of variants) {
+    const r = await callSearchApi(v.url, template.body);
     const count = r.parsed?.rawResponse?.rawResults?.length ?? 'n/a';
-    log(`HASH_TEST variant=${variant} status=${r.status ?? 'ERR'} content-type=${r.contentType ?? ''} resultCount=${count} error=${r.error ?? ''}`);
+    log(`HASH_TEST variant=${v.label} status=${r.status ?? 'ERR'} resultCount=${count} error=${r.error ?? ''}`);
   }
 }
 
-async function discoverTopicFacet() {
-  log('\n=== STAP 2a: topic-facet opvragen (geen topicfilter, alleen content_type) ===');
-  const body = buildSearchBody({ topic: null, current: 1, resultsPerPage: 1, includeTopicFacet: true, topicFacetSize: 300 });
-  const r = await callSearchApi(body, 'none');
+async function discoverTopicFacet(template) {
+  log('\n=== STAP 2a: topic-facet opvragen via de echte sjabloon-body (extra facet toegevoegd) ===');
+  const body = JSON.parse(JSON.stringify(template.body));
+  body.requestState.filters = (body.requestState.filters ?? []).filter((f) => f.field !== 'topic');
+  body.requestState.current = 1;
+  body.requestState.resultsPerPage = 1;
+  body.queryConfig = body.queryConfig || {};
+  body.queryConfig.facets = body.queryConfig.facets || {};
+  body.queryConfig.facets.topic = { type: 'value', size: 300 };
+  if (Array.isArray(body.queryConfig.disjunctiveFacets)) {
+    if (!body.queryConfig.disjunctiveFacets.includes('topic')) body.queryConfig.disjunctiveFacets.push('topic');
+  }
+  const r = await callSearchApi(template.apiUrl, body);
   log(`TOPIC_FACET_HTTP_STATUS: ${r.status ?? 'ERR'} error=${r.error ?? ''}`);
   const topicFacetData = r.parsed?.facets?.topic?.[0]?.data ?? null;
   if (!topicFacetData) {
-    log('TOPIC_FACET_RESULT: geen topic-facet in response (veld afwezig of leeg) — body-sample volgt');
-    log('TOPIC_FACET_BODY_SAMPLE:', (r.text || '').slice(0, 1500));
+    log('TOPIC_FACET_RESULT: geen topic-facet in response');
+    log('TOPIC_FACET_BODY_SAMPLE: ' + (r.text || '').slice(0, 1200));
     return null;
   }
   log(`TOPIC_FACET_COUNT: ${topicFacetData.length} topicwaarden gevonden`);
@@ -111,16 +157,7 @@ async function discoverTopicFacet() {
   return topicFacetData;
 }
 
-async function fetchHtml(url) {
-  try {
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) return { ok: false, status: res.status };
-    const text = await res.text();
-    return { ok: true, status: res.status, text };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-}
+// --- Stap B: thema-overzichtspagina's (plain fetch werkte hier al, status 200) ---
 
 async function crawlLinksOnPage(url, hrefPrefix) {
   const r = await fetchHtml(url);
@@ -154,84 +191,69 @@ async function crawlAllThemaOverviews() {
     log(`THEMA_OVERVIEW_SUBPAGES_COUNT thema=${t.themaKey}: ${r.list.length}`);
   }
   console.log('THEMA_OVERVIEW_ALL_JSON: ' + JSON.stringify(byThema));
-
-  const azResult = await crawlLinksOnPage('https://www.rijksoverheid.nl/onderwerpen', '/onderwerpen/');
-  log(`ONDERWERPEN_AZ_COUNT: ${azResult.list.length}`);
-  console.log('ONDERWERPEN_AZ_JSON: ' + JSON.stringify(azResult.list));
-
-  return { byThema, onderwerpenAZ: azResult.list };
+  return { byThema };
 }
 
-async function findTopicLinkOnPage(pageUrl) {
-  const r = await fetchHtml(pageUrl);
-  if (!r.ok) return { pageOk: false, status: r.status, error: r.error };
-  const re = /filters\[0\]\[field\]=topic&(?:amp;)?filters\[0\]\[values\]\[0\]=([^&"'<>]+)/i;
-  const m = re.exec(r.text);
-  if (!m) return { pageOk: true, topicValueFound: null };
-  const decoded = decodeURIComponent(m[1].replace(/\+/g, ' '));
-  return { pageOk: true, topicValueFound: decoded };
+// --- Stap C: topic-link per pagina via de ECHTE browser-DOM (robuust tegen encoding) ---
+
+async function findTopicValueViaDom(page, pageUrl) {
+  let resp;
+  try {
+    resp = await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+  } catch (err) {
+    return { pageOk: false, error: err.message };
+  }
+  if (!resp || !resp.ok()) return { pageOk: false, status: resp ? resp.status() : null };
+  let hrefs = [];
+  try {
+    hrefs = await page.$$eval('a', (as) => as.map((a) => a.href).filter((h) => h.includes('filters') && h.toLowerCase().includes('topic')));
+  } catch (err) {
+    return { pageOk: true, status: resp.status(), error: err.message, topicValueFound: null };
+  }
+  if (hrefs.length === 0) return { pageOk: true, status: resp.status(), topicValueFound: null };
+  try {
+    const u = new URL(hrefs[0]);
+    const val = u.searchParams.get('filters[0][values][0]');
+    return { pageOk: true, status: resp.status(), topicValueFound: val, matchedHref: hrefs[0] };
+  } catch {
+    return { pageOk: true, status: resp.status(), topicValueFound: null, matchedHref: hrefs[0] };
+  }
 }
 
 const CANDIDATE_PAGES = [
   { key: 'belasting-betalen', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/belasting-betalen' },
   { key: 'inkomstenbelasting', url: 'https://www.rijksoverheid.nl/themas/werk/inkomstenbelasting' },
   { key: 'belastingverdragen', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/belastingverdragen' },
-  { key: 'bbz', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/bbz' },
+  { key: 'bbz', url: 'https://www.rijksoverheid.nl/themas/werk/bijstand-voor-zelfstandigen-bbz' },
   { key: 'europese-subsidies', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/europese-subsidies' },
-  { key: 'prinsjesdag-belastingplan', url: 'https://www.rijksoverheid.nl/onderwerpen/prinsjesdag' },
-  { key: 'belastingplan', url: 'https://www.rijksoverheid.nl/onderwerpen/belastingplan' },
+  { key: 'prinsjesdag-belastingplan', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/belastingplan' },
   { key: 'belastingontwijking', url: 'https://www.rijksoverheid.nl/themas/belastingen-uitkeringen-en-toeslagen/aanpak-belastingontwijking-en-belastingontduiking' },
   { key: 'zzp', url: 'https://www.rijksoverheid.nl/themas/werk/zelfstandigen-zonder-personeel-zzp' },
-  { key: 'ziekteverzuim', url: 'https://www.rijksoverheid.nl/themas/werk/ziekteverzuim-en-herstel-naar-werk' },
+  { key: 'ziekteverzuim', url: 'https://www.rijksoverheid.nl/themas/werk/ziekteverzuim-van-het-werk' },
   { key: 'arbeidsbeperking', url: 'https://www.rijksoverheid.nl/themas/werk/werken-met-arbeidsbeperking' },
   { key: 'buitenlandse-werknemers', url: 'https://www.rijksoverheid.nl/themas/migratie-en-reizen/buitenlandse-werknemers' },
   { key: 'ondernemen-innovatie', url: 'https://www.rijksoverheid.nl/themas/economie/ondernemen-en-innovatie' },
 ];
 
-function findFallbackUrl(candidateLabel, crawlData) {
-  const needle = candidateLabel.toLowerCase();
-  const pools = [
-    ...Object.values(crawlData.byThema).flat(),
-    ...crawlData.onderwerpenAZ,
-  ];
-  const match = pools.find((p) => p.text.toLowerCase().includes(needle) || needle.includes(p.text.toLowerCase()));
-  return match ? `https://www.rijksoverheid.nl${match.href}` : null;
-}
-
-async function resolveCandidateTopicNames(crawlData) {
-  log('\n=== STAP 2: exacte topicnaam per kandidaat-onderwerp bepalen (via live thema-pagina, geen gok) ===');
+async function resolveCandidateTopicNames(page) {
+  log('\n=== STAP 2: exacte topicnaam per kandidaat-onderwerp bepalen (via echte browser-DOM, geen gok) ===');
   const resolved = [];
   for (const cand of CANDIDATE_PAGES) {
-    let r = await findTopicLinkOnPage(cand.url);
-    let usedUrl = cand.url;
-    let fallbackUsed = false;
-    if (!r.pageOk || !r.topicValueFound) {
-      const fallbackLabel = cand.key.replace(/-/g, ' ');
-      const fallbackUrl = findFallbackUrl(fallbackLabel, crawlData);
-      if (fallbackUrl && fallbackUrl !== cand.url) {
-        const r2 = await findTopicLinkOnPage(fallbackUrl);
-        log(`CANDIDATE_FALLBACK_ATTEMPT key=${cand.key} fallbackUrl=${fallbackUrl} pageOk=${r2.pageOk} topicValueFound=${r2.topicValueFound ?? 'GEEN'}`);
-        if (r2.pageOk && r2.topicValueFound) {
-          r = r2;
-          usedUrl = fallbackUrl;
-          fallbackUsed = true;
-        }
-      }
-    }
-    log(`CANDIDATE_PAGE key=${cand.key} url=${usedUrl} fallbackUsed=${fallbackUsed} pageOk=${r.pageOk} status=${r.status ?? ''} topicValueFound=${r.topicValueFound ?? 'GEEN'} error=${r.error ?? ''}`);
-    resolved.push({ ...cand, resolvedUrl: usedUrl, fallbackUsed, ...r });
+    const r = await findTopicValueViaDom(page, cand.url);
+    log(`CANDIDATE_PAGE key=${cand.key} url=${cand.url} pageOk=${r.pageOk} status=${r.status ?? ''} topicValueFound=${r.topicValueFound ?? 'GEEN'} error=${r.error ?? ''}`);
+    resolved.push({ ...cand, ...r });
   }
   console.log('CANDIDATE_RESOLUTION_JSON: ' + JSON.stringify(resolved));
   return resolved;
 }
 
-async function resolveAllBelastingenSubtopics(crawlData) {
+async function resolveAllBelastingenSubtopics(page, crawlData) {
   log('\n=== STAP 9: ALLE subonderwerpen onder "Belastingen, uitkeringen en toeslagen" resolven (volledige enumeratie, geen selectie) ===');
   const subpages = crawlData.byThema['belastingen-uitkeringen-en-toeslagen'] || [];
   const resolved = [];
   for (const sp of subpages) {
     const fullUrl = `https://www.rijksoverheid.nl${sp.href}`;
-    const r = await findTopicLinkOnPage(fullUrl);
+    const r = await findTopicValueViaDom(page, fullUrl);
     log(`BELASTINGEN_SUBTOPIC href=${sp.href} text="${sp.text}" pageOk=${r.pageOk} topicValueFound=${r.topicValueFound ?? 'GEEN'}`);
     resolved.push({ href: sp.href, text: sp.text, url: fullUrl, ...r });
   }
@@ -251,13 +273,13 @@ function extractArticles(parsed) {
   }));
 }
 
-async function testTopicPages(topicName, label, maxPages = 3) {
+async function testTopicPages(template, topicName, label, maxPages = 3) {
   log(`\n--- API-test voor topic="${topicName}" (label=${label}) ---`);
   const pages = [];
   let infoTypeFacetTotal = null;
   for (let current = 1; current <= maxPages; current++) {
-    const body = buildSearchBody({ topic: topicName, current, resultsPerPage: 10 });
-    const r = await callSearchApi(body, 'none');
+    const body = cloneTemplateForTopic(template, topicName, current);
+    const r = await callSearchApi(template.apiUrl, body);
     const articles = r.parsed ? extractArticles(r.parsed) : [];
     if (current === 1) {
       const facetData = r.parsed?.facets?.information_type?.[0]?.data ?? [];
@@ -285,10 +307,7 @@ async function crawlGeneralSitemapUrls() {
   const all = [];
   for (const sm of subSitemaps) {
     const rr = await fetchHtml(sm);
-    if (!rr.ok) {
-      log(`SITEMAP_SUB_FAILED: ${sm} status=${rr.status ?? rr.error}`);
-      continue;
-    }
+    if (!rr.ok) continue;
     const urlBlocks = Array.from(rr.text.matchAll(/<url>([\s\S]*?)<\/url>/g)).map((m) => m[1]);
     for (const block of urlBlocks) {
       const locM = /<loc>([^<]+)<\/loc>/.exec(block);
@@ -323,11 +342,23 @@ async function crawlGeneralSitemapUrls() {
 }
 
 async function main() {
-  await testHashRequirement();
-  const topicFacet = await discoverTopicFacet();
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ userAgent: UA });
+
+  const template = await captureRealApiTemplate(page);
+  if (!template) {
+    log('FATALE FOUT: kon geen geldige /api/search-sjabloon capturen. Stoppen.');
+    await browser.close();
+    process.exit(1);
+  }
+
+  await testHashVariants(template);
+  await discoverTopicFacet(template);
   const crawlData = await crawlAllThemaOverviews();
-  const candidateResolution = await resolveCandidateTopicNames(crawlData);
-  const belastingenSubtopics = await resolveAllBelastingenSubtopics(crawlData);
+  const candidateResolution = await resolveCandidateTopicNames(page);
+  const belastingenSubtopics = await resolveAllBelastingenSubtopics(page, crawlData);
+
+  await browser.close();
 
   log('\n=== STAP 3/4/5/6: API per opgelost topic testen (pagina 1-3, max 20 artikelen) ===');
   const topicsToTest = [];
@@ -344,13 +375,11 @@ async function main() {
       seenTopicNames.add(sub.topicValueFound);
     }
   }
-  // Ook de twee al eerder bevestigde topics expliciet opnieuw testen voor consistentie.
   if (!seenTopicNames.has('Belasting betalen')) topicsToTest.push({ label: 'belasting-betalen-fallback', topicName: 'Belasting betalen' });
-  if (!seenTopicNames.has('Inkomstenbelasting')) topicsToTest.push({ label: 'inkomstenbelasting-fallback', topicName: 'Inkomstenbelasting' });
 
   const allResults = [];
   for (const t of topicsToTest) {
-    const res = await testTopicPages(t.topicName, t.label, 3);
+    const res = await testTopicPages(template, t.topicName, t.label, 3);
     allResults.push({ label: t.label, ...res });
   }
   console.log('ALL_TOPIC_RESULTS_SUMMARY_JSON: ' + JSON.stringify(allResults.map((r) => ({

@@ -16,6 +16,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Playwright tijdelijk installeren (niet opgeslagen in package.json)
+        run: npm install --no-save playwright
+      - name: Chromium-browser installeren voor Playwright
+        run: npx playwright install --with-deps chromium
       - name: Topic-matrix onderzoek draaien (read-only, schrijft niets naar src/content)
         run: node scripts/kenniscentrum/diagnose-rijksoverheid-topic-matrix.mjs
         timeout-minutes: 15
