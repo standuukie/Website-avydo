@@ -44,7 +44,7 @@ async function captureNetworkForUrl(page, url, label) {
       method: request.method(),
       resourceType: request.resourceType(),
       requestHeaders: sanitizeHeaders(request.headers()),
-      postData: request.postData() ? request.postData().slice(0, 500) : null,
+      postData: request.postData() ? request.postData().slice(0, 2000) : null,
     });
   };
   const onResponse = async (response) => {
@@ -99,6 +99,9 @@ async function captureNetworkForUrl(page, url, label) {
   console.log(`  ZICHTBARE_ARTIKEL_LINKS_NA_JS (${visibleArticleLinks.length}): ${JSON.stringify([...new Set(visibleArticleLinks)].slice(0, 20))}`);
 
   for (const entry of captured) {
+    if (entry.phase === 'request' && KEYWORD_RE.test(entry.url)) {
+      console.log(`CAPTURED_REQUEST_JSON: ${JSON.stringify({ topic: label, ...entry })}`);
+    }
     if (entry.phase === 'response') {
       console.log(`CAPTURED_RESPONSE_JSON: ${JSON.stringify({ topic: label, ...entry })}`);
     }
@@ -118,6 +121,57 @@ async function captureNetworkForUrl(page, url, label) {
     console.log(`  PAGINATION_DOM_QUERY_FOUT: ${err.message}`);
   }
   console.log(`  PAGINATION_CONTROL_IN_DOM: ${JSON.stringify(paginationControl)}`);
+
+  // Als er een "volgende"-besturingselement bestaat: daadwerkelijk klikken
+  // en de nieuwe netwerkrequests vastleggen, i.p.v. een parameter te
+  // gokken. Alleen interessante (JSON/keyword-matchende) requests worden
+  // gelogd, net als bij de eerste paginalading.
+  if (paginationControl) {
+    const page2Captured = [];
+    const onReq2 = (request) => {
+      page2Captured.push({
+        phase: 'request',
+        url: request.url(),
+        method: request.method(),
+        requestHeaders: sanitizeHeaders(request.headers()),
+        postData: request.postData() ? request.postData().slice(0, 2000) : null,
+      });
+    };
+    const onRes2 = async (response) => {
+      const contentType = response.headers()['content-type'] ?? '';
+      if (/json|graphql/i.test(contentType) || KEYWORD_RE.test(response.url())) {
+        const entry = { phase: 'response', url: response.url(), status: response.status(), responseHeaders: sanitizeHeaders(response.headers()) };
+        try {
+          const bodyText = await response.text();
+          entry.bodySample = bodyText.slice(0, 3000);
+          entry.bodyLength = bodyText.length;
+        } catch (err) {
+          entry.bodyError = err.message;
+        }
+        page2Captured.push(entry);
+      }
+    };
+    page.on('request', onReq2);
+    page.on('response', onRes2);
+    try {
+      await page.getByText(/^volgende\b/i).first().click({ timeout: 5000 });
+      await page.waitForTimeout(3000);
+      console.log('  KLIK_OP_VOLGENDE_PAGINA: gelukt');
+    } catch (err) {
+      console.log(`  KLIK_OP_VOLGENDE_PAGINA_MISLUKT: ${err.message}`);
+    }
+    page.off('request', onReq2);
+    page.off('response', onRes2);
+    for (const entry of page2Captured) {
+      if (entry.phase === 'request' && KEYWORD_RE.test(entry.url)) console.log(`CAPTURED_PAGE2_REQUEST_JSON: ${JSON.stringify({ topic: label, ...entry })}`);
+      if (entry.phase === 'response') console.log(`CAPTURED_PAGE2_RESPONSE_JSON: ${JSON.stringify({ topic: label, ...entry })}`);
+    }
+    let visibleArticleLinksPage2 = [];
+    try {
+      visibleArticleLinksPage2 = await page.$$eval('a[href*="/actueel/nieuws/"]', (as) => as.map((a) => a.getAttribute('href')));
+    } catch { /* ignore */ }
+    console.log(`  ZICHTBARE_ARTIKEL_LINKS_NA_KLIK (${visibleArticleLinksPage2.length}): ${JSON.stringify([...new Set(visibleArticleLinksPage2)].slice(0, 20))}`);
+  }
 
   return { captured, visibleArticleLinks, paginationControl };
 }
