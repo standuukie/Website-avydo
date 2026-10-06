@@ -46,6 +46,34 @@ function stripTags(html) {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 }
 
+// Decodeert alleen de HTML-entities die daadwerkelijk in href-attributen
+// voorkomen (vooral &amp;), zodat een href als
+// "...?a=1&amp;b=2" correct als "...?a=1&b=2" door new URL() wordt
+// geparsed. Zonder deze stap zou de queryparameter-naam van elk
+// queryparameter na de eerste onterecht "amp;"-geprefixt worden.
+function decodeHtmlEntitiesInUrl(raw) {
+  return raw.replace(/&amp;/g, '&').replace(/&#0?39;/g, "'").replace(/&quot;/g, '"');
+}
+
+// Zoekt naar aanwijzingen dat de pagina haar inhoud (deels) via
+// ingebedde JSON-state of client-side JavaScript laadt, in plaats van
+// als server-gerenderde <a href>-links — relevant om te bepalen of een
+// "0 artikel-links gevonden"-resultaat betekent dat er daadwerkelijk
+// niets is, of dat de inhoud alleen buiten het bereik van een simpele
+// HTML-fetch valt.
+function findClientRenderedStateHints(html) {
+  const hints = {};
+  hints.scriptTagCount = (html.match(/<script[\s>]/gi) || []).length;
+  hints.hasNextData = /__NEXT_DATA__/.test(html);
+  hints.hasNuxt = /__NUXT__/.test(html);
+  hints.hasApplicationJsonScript = /<script[^>]+type=["']application\/json["']/i.test(html);
+  hints.mentionsTopicFilterValueInRawHtml = null; // per-call ingevuld door caller
+  const jsonLdMatches = [...html.matchAll(/<script[^>]+type=["']application\/(ld\+json|json)["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  hints.jsonScriptBlockCount = jsonLdMatches.length;
+  hints.jsonScriptBlockSampleLengths = jsonLdMatches.slice(0, 5).map((m) => m[2].length);
+  return hints;
+}
+
 const NAV_KEYWORD_RE = /nieuws|meer nieuws|al het nieuws|alle nieuws|bekijk meer|bekijk alle/i;
 
 // Zoekt alle <a ...>...</a>-blokken, haalt href + zichtbare tekst +
@@ -67,7 +95,7 @@ function findNavLinks(html, baseUrl) {
     if (!NAV_KEYWORD_RE.test(combinedText)) continue;
     let absUrl = null;
     try {
-      absUrl = new URL(hrefMatch[1], baseUrl).toString();
+      absUrl = new URL(decodeHtmlEntitiesInUrl(hrefMatch[1]), baseUrl).toString();
     } catch {
       continue;
     }
@@ -96,7 +124,7 @@ function findActueelNieuwsLinks(html, baseUrl) {
   let m;
   while ((m = re.exec(html))) {
     try {
-      links.add(new URL(m[1], baseUrl).toString());
+      links.add(new URL(decodeHtmlEntitiesInUrl(m[1]), baseUrl).toString());
     } catch {
       // ignore
     }
@@ -112,11 +140,11 @@ function findPaginationSignals(html, baseUrl) {
   const relNextMatch = html.match(/<link[^>]+rel=["']next["'][^>]*href=["']([^"']+)["']/i)
     ?? html.match(/<a[^>]+rel=["']next["'][^>]*href=["']([^"']+)["']/i);
   if (relNextMatch) {
-    try { signals.relNext = new URL(relNextMatch[1], baseUrl).toString(); } catch { /* ignore */ }
+    try { signals.relNext = new URL(decodeHtmlEntitiesInUrl(relNextMatch[1]), baseUrl).toString(); } catch { /* ignore */ }
   }
   const relPrevMatch = html.match(/<link[^>]+rel=["']prev(?:ious)?["'][^>]*href=["']([^"']+)["']/i);
   if (relPrevMatch) {
-    try { signals.relPrev = new URL(relPrevMatch[1], baseUrl).toString(); } catch { /* ignore */ }
+    try { signals.relPrev = new URL(decodeHtmlEntitiesInUrl(relPrevMatch[1]), baseUrl).toString(); } catch { /* ignore */ }
   }
 
   const aTagRe = /<a\s+([^>]*)>([\s\S]*?)<\/a>/gi;
@@ -126,10 +154,10 @@ function findPaginationSignals(html, baseUrl) {
     if (!hrefMatch) continue;
     const text = stripTags(m[2]);
     if (!signals.volgendeLink && /^volgende\b|volgende\s*(pagina|resultaten)?/i.test(text)) {
-      try { signals.volgendeLink = { text, url: new URL(hrefMatch[1], baseUrl).toString() }; } catch { /* ignore */ }
+      try { signals.volgendeLink = { text, url: new URL(decodeHtmlEntitiesInUrl(hrefMatch[1]), baseUrl).toString() }; } catch { /* ignore */ }
     }
     if (!signals.meerLink && /^meer\b/i.test(text)) {
-      try { signals.meerLink = { text, url: new URL(hrefMatch[1], baseUrl).toString() }; } catch { /* ignore */ }
+      try { signals.meerLink = { text, url: new URL(decodeHtmlEntitiesInUrl(hrefMatch[1]), baseUrl).toString() }; } catch { /* ignore */ }
     }
   }
 
@@ -140,7 +168,7 @@ function findPaginationSignals(html, baseUrl) {
   const seenParams = new Set();
   while ((m = hrefRe.exec(html))) {
     try {
-      const u = new URL(m[1], baseUrl);
+      const u = new URL(decodeHtmlEntitiesInUrl(m[1]), baseUrl);
       for (const p of paramNames) {
         if (u.searchParams.has(p) && !seenParams.has(p)) {
           seenParams.add(p);
@@ -157,7 +185,7 @@ function findPaginationSignals(html, baseUrl) {
 function extractCanonical(html, baseUrl) {
   const m = html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i);
   if (!m) return null;
-  try { return new URL(m[1], baseUrl).toString(); } catch { return null; }
+  try { return new URL(decodeHtmlEntitiesInUrl(m[1]), baseUrl).toString(); } catch { return null; }
 }
 
 function extractPublishedDateFromText(fullText) {
@@ -234,6 +262,18 @@ async function main() {
       console.log(`  CANONICAL: ${canonical}`);
       console.log(`  ARTIKEL_LINKS_OP_PAGINA: ${articleLinks.length}`);
       console.log(`  PAGINATION_SIGNALS: ${JSON.stringify(pagination)}`);
+      // Als er 0 artikel-links worden gevonden: controleer of dat is omdat
+      // de pagina haar resultaten (mogelijk) client-side/via JavaScript
+      // laadt in plaats van als server-gerenderde <a href>-links, vóórdat
+      // "0 resultaten" als conclusie wordt genomen.
+      if (articleLinks.length === 0) {
+        const renderHints = findClientRenderedStateHints(res.text);
+        const topicValueMatch = currentUrl.match(/values%5D%5B0%5D=([^&]+)/);
+        const topicValueDecoded = topicValueMatch ? decodeURIComponent(topicValueMatch[1].replace(/\+/g, ' ')) : null;
+        renderHints.topicFilterValueFoundLiterallyInHtml = topicValueDecoded ? res.text.includes(topicValueDecoded) : null;
+        renderHints.rawHtmlByteLength = res.text.length;
+        console.log(`  CLIENT_RENDER_HINTS (0 artikel-links): ${JSON.stringify(renderHints)}`);
+      }
       pages.push({ pageNum, url: currentUrl, status: res.status, canonical, articleLinks, pagination });
       currentUrl = pagination.relNext ?? pagination.volgendeLink?.url ?? null;
       if (currentUrl && visited.has(currentUrl)) {
