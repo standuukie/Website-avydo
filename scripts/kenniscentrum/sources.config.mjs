@@ -200,6 +200,48 @@ export const sources = [
     corroborationRequiredKeywords: ['prinsjesdag'],
   },
   {
+    id: 'rijksoverheid-topic-api',
+    name: 'Rijksoverheid (fiscale topics)',
+    type: 'rijksoverheid-topic-api',
+    // Aanvullende discovery-bron náást (niet in plaats van) de algemene
+    // sitemap hierboven. Toegevoegd na read-only onderzoek (zie
+    // git-historie) dat de daadwerkelijk werkende Rijksoverheid topic-API
+    // (POST /api/search) en de exacte requestState/queryConfig-structuur
+    // bevestigde via een live gecapturede browser-request. Bewust beperkt
+    // tot deze 4 topics — de enige 4 die uit dat onderzoek naar voren kwamen
+    // als zowel voldoende volume als hoge precision (geen van de overige
+    // onderzochte topics, zoals Bbz/Europese subsidies/Prinsjesdag/zzp/
+    // Buitenlandse werknemers/Ondernemen en innovatie, is hier toegevoegd).
+    // Exacte topicnamen zoals de API ze verwacht, niet gegokt.
+    topics: [
+      'Belasting betalen',
+      'Inkomstenbelasting',
+      'Belastingverdragen',
+      'Aanpak belastingontwijking en belastingontduiking',
+    ],
+    defaultCategory: 'Fiscale actualiteit',
+    enabled: true,
+    urlConfidence: 'confirmed',
+    // Dezelfde relevantiepoort als de algemene Rijksoverheid-sitemapbron
+    // hierboven, ongewijzigd hergebruikt: een topic-kandidaat is geen
+    // automatische publicatie, en moet nog steeds door exact dezelfde
+    // categoryKeywords-/ministryBypass-/audienceSignals-/corroboratie-
+    // logica (zie processSitemapSource in fetch-articles.mjs).
+    requireKeywordMatch: true,
+    ministryBypass: 'Ministerie van Financiën',
+    audienceSignals: rijksoverheidAudienceSignals,
+    corroborationRequiredKeywords: ['prinsjesdag'],
+    // Eigen, conservatieve discovery-grenzen voor de topic-API — los van
+    // (en zonder wijziging aan) de bestaande RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN
+    // in fetch-articles.mjs. 5 pagina's × 10 resultaten = maximaal 50
+    // kandidaten per topic bevraagd; maxArticlesPerTopicPerRun begrenst
+    // daarna hoeveel kandidaten per topic daadwerkelijk worden meegenomen,
+    // ruim boven het werkelijk geobserveerde volume per topic (8–29) uit
+    // het onderzoek.
+    maxPagesPerTopic: 5,
+    maxArticlesPerTopicPerRun: 20,
+  },
+  {
     id: 'mkb-nederland-nieuws',
     name: 'MKB-Nederland',
     type: 'rss',

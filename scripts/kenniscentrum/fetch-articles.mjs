@@ -684,6 +684,191 @@ export async function fetchRijksoverheidGeneralSitemapUrls(sitemapIndexUrl, arti
   return deduped;
 }
 
+// --- Rijksoverheid: topic-API (POST /api/search) ---
+//
+// Aanvullende discovery-bron naast de algemene sitemap hierboven, voor een
+// klein, vast aantal fiscale onderwerpen (zie sources.config.mjs). Live
+// read-only onderzoek (zie git-historie) bevestigde de daadwerkelijk
+// werkende requestState/queryConfig-structuur hieronder via een echte,
+// opnieuw gecapturede browser-request — niet zelf verzonnen of uit het
+// geheugen gereconstrueerd (een eerdere reconstructie-poging gaf HTTP 400
+// "Invalid search request"). De ?hash=-queryparameter die de browser
+// meestuurt is bevestigd een cache-sleutel, geen beveiliging: drie
+// varianten (originele hash / geen hash / een willekeurige hash) gaven
+// allemaal HTTP 200 met identieke resultaten, dus wordt hij hier
+// weggelaten i.p.v. hard te coderen als geheim.
+const RIJKSOVERHEID_TOPIC_API_URL = 'https://www.rijksoverheid.nl/api/search';
+const RIJKSOVERHEID_TOPIC_RESULTS_PER_PAGE = 10;
+// Veilige standaardwaarden, alleen gebruikt als een bron geen eigen
+// maxPagesPerTopic/maxArticlesPerTopicPerRun instelt (zie
+// sources.config.mjs) — voorkomt dat een ontbrekende configuratiewaarde
+// stilzwijgend tot nul iteraties leidt.
+const RIJKSOVERHEID_TOPIC_API_DEFAULT_MAX_PAGES_PER_TOPIC = 5;
+const RIJKSOVERHEID_TOPIC_API_DEFAULT_MAX_ARTICLES_PER_TOPIC_PER_RUN = 20;
+
+// result_fields/facets/sortList zijn 1-op-1 overgenomen uit de live
+// gecapturede request (zie git-historie), bewust niet vereenvoudigd. De
+// sort_date/activity_start_date facet-ranges zijn statisch overgenomen uit
+// het capture-moment: dit zijn uitsluitend facet-bucketgrenzen (voor een
+// UI-widget die hier niet gebruikt wordt), geen filter — ze hebben geen
+// invloed op wélke resultaten worden teruggegeven, dus veroudering van deze
+// vaste datums is hier onschadelijk.
+export function buildRijksoverheidTopicSearchBody(topic, current) {
+  return {
+    requestState: {
+      current,
+      filters: [
+        { field: 'topic', values: [topic], type: 'all' },
+        { field: 'content_type', values: ['pro:newsDocument'], type: 'all' },
+      ],
+      resultsPerPage: RIJKSOVERHEID_TOPIC_RESULTS_PER_PAGE,
+      searchTerm: '',
+      sortDirection: '',
+      sortField: '',
+      sortList: [],
+    },
+    queryConfig: {
+      filters: [{ field: 'content_type', values: ['pro:newsDocument'], type: 'all' }],
+      result_fields: {
+        author: { raw: {} },
+        url: { raw: {} },
+        page_title: { raw: {} },
+        meta_description: { raw: {}, snippet: { size: 140, fallback: true } },
+        sort_date: { raw: {} },
+        information_type: { raw: {} },
+        activity_start_date: { raw: {} },
+        activity_end_date: { raw: {} },
+        activity_type: { raw: {} },
+        activity_location_title: { raw: {} },
+        activity_location_description: { raw: {} },
+        activity_organiser: { raw: {} },
+        activity_show_time: { raw: {} },
+        image_url: { raw: {} },
+        edition_summary: { raw: {} },
+      },
+      disjunctiveFacets: ['information_type', 'activity_type', 'ministry'],
+      facets: {
+        ministry: { type: 'value', size: 100 },
+        information_type: { type: 'value', size: 100 },
+        activity_type: { type: 'value', size: 100 },
+        sort_date: {
+          type: 'range',
+          ranges: [
+            { from: '2026-09-29T00:00:00.000Z', to: '2026-10-06T23:59:59.999Z', name: 'past007Days' },
+            { from: '2026-09-06T00:00:00.000Z', to: '2026-10-06T23:59:59.999Z', name: 'past030Days' },
+            { from: '2025-10-06T00:00:00.000Z', to: '2026-10-06T23:59:59.999Z', name: 'past365Days' },
+          ],
+        },
+        activity_start_date: {
+          type: 'range',
+          ranges: [
+            { to: '2026-10-06T00:00:00.000Z', name: 'allPastPeriod' },
+            { from: '2026-10-06T00:00:00.000Z', name: 'allFuturePeriod' },
+          ],
+        },
+      },
+      sortList: [{ field: 'sort_date', direction: 'desc' }],
+    },
+  };
+}
+
+async function postJsonWithTimeout(url, bodyObj, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'AvydoKenniscentrumBot/1.0 (+https://www.avydo.nl)',
+        'content-type': 'application/json',
+        accept: 'application/json, text/plain, */*',
+      },
+      body: JSON.stringify(bodyObj),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Haalt kandidaat-URL's op via de Rijksoverheid topic-API voor elk
+// geconfigureerd onderwerp. Levert dezelfde {loc, lastmod}-vorm op als
+// fetchRijksoverheidGeneralSitemapUrls hierboven, zodat processSitemapSource
+// ze via exact dezelfde route (relevantie, deduplicatie, publicatie) kan
+// verwerken — deze functie levert uitsluitend kandidaten, nooit een directe
+// publish-beslissing.
+//
+// Paginering (requestState.current, 1-indexed) stopt zodra een pagina
+// minder dan RIJKSOVERHEID_TOPIC_RESULTS_PER_PAGE resultaten teruggeeft
+// (laatste pagina), of bij het bereiken van maxPagesPerTopic/
+// maxArticlesPerTopicPerRun — altijd een harde bovengrens, zodat een
+// onverwachte of foutieve API-response nooit tot een oneindige lus kan
+// leiden. Eén falend of onverwacht geformatteerd topic-verzoek slaat alleen
+// dat topic over en blokkeert de andere topics niet.
+export async function fetchRijksoverheidTopicApiUrls(topics, options = {}) {
+  const maxPagesPerTopic = options.maxPagesPerTopic ?? RIJKSOVERHEID_TOPIC_API_DEFAULT_MAX_PAGES_PER_TOPIC;
+  const maxArticlesPerTopicPerRun = options.maxArticlesPerTopicPerRun ?? RIJKSOVERHEID_TOPIC_API_DEFAULT_MAX_ARTICLES_PER_TOPIC_PER_RUN;
+  const allEntries = [];
+
+  for (const topic of topics) {
+    const topicEntries = [];
+    let pagesFetched = 0;
+    for (let current = 1; current <= maxPagesPerTopic; current++) {
+      let res;
+      try {
+        res = await postJsonWithTimeout(RIJKSOVERHEID_TOPIC_API_URL, buildRijksoverheidTopicSearchBody(topic, current), FETCH_TIMEOUT_MS);
+      } catch (err) {
+        log(`  topic "${topic}": FOUT bij ophalen pagina ${current} (${err.message}), overige topics gaan door.`);
+        break;
+      }
+      pagesFetched += 1;
+      if (!res.ok) {
+        log(`  topic "${topic}": HTTP ${res.status} bij pagina ${current}, stoppen met dit topic.`);
+        break;
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        log(`  topic "${topic}": onverwachte (niet-JSON) response bij pagina ${current}, stoppen met dit topic.`);
+        break;
+      }
+      const rawResults = data?.rawResponse?.rawResults;
+      if (!Array.isArray(rawResults) || rawResults.length === 0) break;
+
+      for (const r of rawResults) {
+        const rawUrl = r?.url?.raw;
+        if (!rawUrl) continue;
+        const loc = rawUrl.startsWith('http') ? rawUrl : `https://www.rijksoverheid.nl${rawUrl}`;
+        topicEntries.push({ loc, lastmod: r?.sort_date?.raw ?? null });
+        if (topicEntries.length >= maxArticlesPerTopicPerRun) break;
+      }
+      if (topicEntries.length >= maxArticlesPerTopicPerRun) break;
+      if (rawResults.length < RIJKSOVERHEID_TOPIC_RESULTS_PER_PAGE) break; // laatste pagina
+    }
+    log(`  topic: ${topic} | pagina's opgehaald: ${pagesFetched} | API-kandidaten: ${topicEntries.length}`);
+    allEntries.push(...topicEntries);
+  }
+
+  const uniqueByUrl = new Map();
+  let duplicatesAcrossTopics = 0;
+  for (const e of allEntries) {
+    if (uniqueByUrl.has(e.loc)) {
+      duplicatesAcrossTopics += 1;
+      continue;
+    }
+    uniqueByUrl.set(e.loc, e);
+  }
+  log(`  nieuwe kandidaten over alle topics samen: ${uniqueByUrl.size} (${duplicatesAcrossTopics} dubbel(e) tussen topics verwijderd)`);
+  const deduped = [...uniqueByUrl.values()];
+  deduped.sort((a, b) => {
+    const da = a.lastmod ? Date.parse(a.lastmod) : 0;
+    const db = b.lastmod ? Date.parse(b.lastmod) : 0;
+    return db - da;
+  });
+  return deduped;
+}
+
 // Veiligheidsgrens op het aantal daadwerkelijk opgehaalde artikelpagina's
 // per run, zelfde motivatie als KVK_MAX_PAGE_FETCHES_PER_RUN hieronder: de
 // genummerde sub-sitemaps bevatten samen een paar honderd nieuwsartikel-
@@ -699,7 +884,25 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   const samples = {};
 
   let items;
-  if (source.sitemapIndexUrl) {
+  if (source.type === 'rijksoverheid-topic-api') {
+    let entries;
+    try {
+      entries = await fetchRijksoverheidTopicApiUrls(source.topics, {
+        maxPagesPerTopic: source.maxPagesPerTopic,
+        maxArticlesPerTopicPerRun: source.maxArticlesPerTopicPerRun,
+      });
+    } catch (err) {
+      log(`  FOUT: kon topic-API niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
+      return { added: 0, seen: 0, ok: false, stages };
+    }
+    // Title/description: null/leeg -> wordt net als bij de sitemapIndexUrl-
+    // variant van de artikelpagina zelf gehaald (zie fetchArticlePageMeta
+    // hieronder). De topic-API levert uitsluitend kandidaat-URL's, de
+    // bestaande article-fetch blijft verantwoordelijk voor de uiteindelijke
+    // titel/samenvatting/ministerie.
+    items = entries.map((e) => ({ title: null, link: e.loc, pubDate: e.lastmod, description: '' }));
+    log(`  ${items.length} nieuwsartikel-URL('s) gevonden via de topic-API (gededupliceerd over ${source.topics.length} topic(s))`);
+  } else if (source.sitemapIndexUrl) {
     let entries;
     try {
       entries = await fetchRijksoverheidGeneralSitemapUrls(source.sitemapIndexUrl, source.articleUrlPattern ?? '/actueel/nieuws/');
@@ -1477,7 +1680,7 @@ async function processSource(source, existingUrls, remainingBudget) {
   let result;
   if (source.type === 'kvk-sitemap') {
     result = await processKvkSource(source, existingUrls, remainingBudget);
-  } else if (source.type === 'sitemap') {
+  } else if (source.type === 'sitemap' || source.type === 'rijksoverheid-topic-api') {
     result = await processSitemapSource(source, existingUrls, remainingBudget);
   } else {
     result = await processRssSource(source, existingUrls, remainingBudget);

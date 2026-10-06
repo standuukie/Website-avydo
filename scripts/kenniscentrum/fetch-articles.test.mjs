@@ -39,8 +39,10 @@ import {
   processSitemapSource,
   extractPageTitle,
   fetchRijksoverheidGeneralSitemapUrls,
+  fetchRijksoverheidTopicApiUrls,
+  buildRijksoverheidTopicSearchBody,
 } from './fetch-articles.mjs';
-import { rijksoverheidAudienceSignals } from './sources.config.mjs';
+import { rijksoverheidAudienceSignals, sources } from './sources.config.mjs';
 
 // --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
 //
@@ -1658,4 +1660,375 @@ test('processSitemapSource (sitemapIndexUrl-variant): ministryMatch=false door d
   const result = await runFinancienMinistryBypassCase('administratieplicht-digitale-platformen', title, description);
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
+});
+
+// --- Rijksoverheid topic-API (POST /api/search) — aanvullende discovery-bron ---
+//
+// De ?hash=-queryparameter is bevestigd een cache-sleutel, geen
+// beveiliging (zie fetch-articles.mjs): alle requests in deze tests gaan
+// naar exact dezelfde URL, ongeacht topic/pagina. De bestaande
+// withMockedFetch-helper hierboven geeft de aanroeper alleen de URL door,
+// niet de POST-body — onvoldoende om hier topic/pagina te onderscheiden.
+// Deze nieuwe, losse helper geeft ook de fetch-opties (method/body) door,
+// zonder de bestaande withMockedFetch/zijn aanroepers aan te raken.
+async function withMockedFetchAndBody(handler, fn) {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => handler(String(url), opts);
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+const RIJKSOVERHEID_TOPIC_API_URL = 'https://www.rijksoverheid.nl/api/search';
+
+// Eén rawResults-item in de daadwerkelijk live geobserveerde vorm (zie
+// git-historie van het read-only onderzoek).
+function apiSearchResult({ url, title = 'Testartikel', date = '2026-01-01T00:00:00.000Z', description = 'Een testbeschrijving.', informationType = 'Nieuwsbericht' }) {
+  return {
+    id: { raw: `doc-${Math.random().toString(36).slice(2)}` },
+    url: { raw: url },
+    page_title: { raw: title },
+    sort_date: { raw: date },
+    meta_description: { raw: description, snippet: description },
+    information_type: { raw: informationType },
+  };
+}
+
+function apiSearchResponse(rawResults, status = 200) {
+  return new Response(JSON.stringify({ rawResponse: { rawResults } }), { status, headers: { 'content-type': 'application/json' } });
+}
+
+// --- Topic-config ---
+
+test('sources.config.mjs: de rijksoverheid-topic-api-bron bevat exact de vier bedoelde topics, met de exacte namen, geen extra topics', () => {
+  const source = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+  assert.ok(source, 'rijksoverheid-topic-api moet als bron geconfigureerd zijn');
+  assert.equal(source.type, 'rijksoverheid-topic-api');
+  assert.deepEqual(source.topics, [
+    'Belasting betalen',
+    'Inkomstenbelasting',
+    'Belastingverdragen',
+    'Aanpak belastingontwijking en belastingontduiking',
+  ]);
+  assert.equal(source.topics.length, 4);
+  assert.equal(source.enabled, true);
+});
+
+test('sources.config.mjs: de algemene Rijksoverheid-sitemapbron blijft ongewijzigd naast de nieuwe topic-API-bron bestaan', () => {
+  const generalSource = sources.find((s) => s.id === 'rijksoverheid-nieuws');
+  assert.ok(generalSource, 'de bestaande algemene sitemapbron mag niet verwijderd zijn');
+  assert.equal(generalSource.type, 'sitemap');
+  assert.equal(generalSource.sitemapIndexUrl, 'https://www.rijksoverheid.nl/sitemap.xml');
+  assert.equal(generalSource.enabled, true);
+});
+
+// --- API-request ---
+
+test('buildRijksoverheidTopicSearchBody zet het bewezen topicfilter en content_type-filter correct op', () => {
+  const body = buildRijksoverheidTopicSearchBody('Belasting betalen', 1);
+  assert.deepEqual(body.requestState.filters[0], { field: 'topic', values: ['Belasting betalen'], type: 'all' });
+  assert.deepEqual(body.requestState.filters[1], { field: 'content_type', values: ['pro:newsDocument'], type: 'all' });
+  assert.equal(body.requestState.resultsPerPage, 10);
+});
+
+test('buildRijksoverheidTopicSearchBody gebruikt requestState.current voor paginering en de juiste topicnaam per aanroep', () => {
+  const page2 = buildRijksoverheidTopicSearchBody('Inkomstenbelasting', 2);
+  assert.equal(page2.requestState.current, 2);
+  assert.deepEqual(page2.requestState.filters[0].values, ['Inkomstenbelasting']);
+});
+
+// --- Pagination ---
+
+test("fetchRijksoverheidTopicApiUrls: haalt pagina's op totdat een pagina leeg is, en verzamelt alle kandidaten", async () => {
+  const calls = [];
+  const page1 = Array.from({ length: 10 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/pagina1-${i}` }));
+  const page2 = Array.from({ length: 10 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/pagina2-${i}` }));
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    calls.push(body.requestState.current);
+    if (body.requestState.current === 1) return apiSearchResponse(page1);
+    if (body.requestState.current === 2) return apiSearchResponse(page2);
+    return apiSearchResponse([]); // pagina 3: leeg
+  }, () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 5, maxArticlesPerTopicPerRun: 100 }));
+
+  assert.deepEqual(calls, [1, 2, 3]);
+  assert.equal(result.length, 20);
+});
+
+test("fetchRijksoverheidTopicApiUrls: stopt ook zodra een pagina minder dan resultsPerPage (10) resultaten bevat, zonder een extra lege pagina op te vragen", async () => {
+  const page1 = Array.from({ length: 10 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/a-${i}` }));
+  const page2 = Array.from({ length: 3 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/b-${i}` })); // laatste, onvolledige pagina
+  const calls = [];
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    calls.push(body.requestState.current);
+    if (body.requestState.current === 1) return apiSearchResponse(page1);
+    if (body.requestState.current === 2) return apiSearchResponse(page2);
+    throw new Error('mag pagina 3 niet aanroepen: pagina 2 was al een onvolledige pagina');
+  }, () => fetchRijksoverheidTopicApiUrls(['Inkomstenbelasting'], { maxPagesPerTopic: 5, maxArticlesPerTopicPerRun: 100 }));
+
+  assert.deepEqual(calls, [1, 2]);
+  assert.equal(result.length, 13);
+});
+
+// --- Max-pages guard ---
+
+test('fetchRijksoverheidTopicApiUrls: maxPagesPerTopic is een harde bovengrens, ook als de API altijd volle pagina\'s blijft teruggeven (geen oneindige lus)', async () => {
+  let callCount = 0;
+  const result = await withMockedFetchAndBody(() => {
+    callCount += 1;
+    const fullPage = Array.from({ length: 10 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/altijd-vol-${callCount}-${i}` }));
+    return apiSearchResponse(fullPage);
+  }, () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 1000 }));
+
+  assert.equal(callCount, 2);
+  assert.equal(result.length, 20);
+});
+
+test('fetchRijksoverheidTopicApiUrls: maxArticlesPerTopicPerRun begrenst het aantal kandidaten per topic, ook middenin een pagina', async () => {
+  const page1 = Array.from({ length: 10 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/cap-${i}` }));
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse(page1),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 5, maxArticlesPerTopicPerRun: 4 }),
+  );
+  assert.equal(result.length, 4);
+});
+
+// --- URL extraction ---
+
+test('fetchRijksoverheidTopicApiUrls: maakt van een relatieve url.raw een absolute rijksoverheid.nl-URL (nooit naar de algemene homepage)', async () => {
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse([apiSearchResult({ url: '/actueel/nieuws/voorbeeld-artikel' })]),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 1, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result.map((e) => e.loc), ['https://www.rijksoverheid.nl/actueel/nieuws/voorbeeld-artikel']);
+});
+
+test('fetchRijksoverheidTopicApiUrls: laat een al-absolute url.raw ongewijzigd staan', async () => {
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse([apiSearchResult({ url: 'https://www.rijksoverheid.nl/actueel/nieuws/al-absoluut' })]),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 1, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result.map((e) => e.loc), ['https://www.rijksoverheid.nl/actueel/nieuws/al-absoluut']);
+});
+
+// --- Response parsing ---
+
+test('fetchRijksoverheidTopicApiUrls: leest url.raw en sort_date.raw correct, en sorteert op sort_date (meest recent eerst), net als de algemene sitemapbron', async () => {
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse([
+      apiSearchResult({ url: '/actueel/nieuws/oud', date: '2024-01-01T00:00:00.000Z' }),
+      apiSearchResult({ url: '/actueel/nieuws/nieuw', date: '2026-01-01T00:00:00.000Z' }),
+    ]),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 1, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result.map((e) => e.loc), [
+    'https://www.rijksoverheid.nl/actueel/nieuws/nieuw',
+    'https://www.rijksoverheid.nl/actueel/nieuws/oud',
+  ]);
+});
+
+test('fetchRijksoverheidTopicApiUrls: een volledige, realistische respons (met page_title/meta_description/information_type) wordt zonder crash verwerkt tot {loc, lastmod}', async () => {
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse([apiSearchResult({
+      url: '/actueel/nieuws/2026/01/01/volledig-voorbeeld',
+      title: 'Belangrijkste belastingwijzigingen',
+      date: '2026-01-01T00:00:00.000Z',
+      description: 'Een samenvatting van de wijzigingen.',
+      informationType: 'Nieuwsbericht',
+    })]),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 1, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result, [{ loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/01/01/volledig-voorbeeld', lastmod: '2026-01-01T00:00:00.000Z' }]);
+});
+
+// --- Deduplicatie ---
+
+test('fetchRijksoverheidTopicApiUrls: dedupliceert hetzelfde artikel dat via twee verschillende topics wordt gevonden tot één kandidaat', async () => {
+  const sharedUrl = '/actueel/nieuws/2025/06/27/kabinet-kijkt-naar-dividendstripping';
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    const topic = body.requestState.filters[0].values[0];
+    if (body.requestState.current > 1) return apiSearchResponse([]);
+    if (topic === 'Belasting betalen' || topic === 'Aanpak belastingontwijking en belastingontduiking') {
+      return apiSearchResponse([apiSearchResult({ url: sharedUrl })]);
+    }
+    return apiSearchResponse([]);
+  }, () => fetchRijksoverheidTopicApiUrls(['Belasting betalen', 'Aanpak belastingontwijking en belastingontduiking'], { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 10 }));
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].loc, `https://www.rijksoverheid.nl${sharedUrl}`);
+});
+
+const fakeTopicApiSource = {
+  id: 'test-rijksoverheid-topic-api',
+  name: 'Test-Rijksoverheid-topic-API',
+  type: 'rijksoverheid-topic-api',
+  topics: ['Belasting betalen', 'Inkomstenbelasting'],
+  defaultCategory: 'Fiscale actualiteit',
+  requireKeywordMatch: true,
+  ministryBypass: 'Ministerie van Financiën',
+  audienceSignals: rijksoverheidAudienceSignals,
+  corroborationRequiredKeywords: ['prinsjesdag'],
+  maxPagesPerTopic: 2,
+  maxArticlesPerTopicPerRun: 10,
+};
+
+test('processSitemapSource (rijksoverheid-topic-api-variant): een kandidaat die al in existingUrls staat (bv. al gevonden via de algemene sitemap) wordt overgeslagen, niet dubbel verwerkt', async () => {
+  const alreadyKnownUrl = 'https://www.rijksoverheid.nl/actueel/nieuws/2025/06/27/kabinet-kijkt-naar-dividendstripping';
+  const existingUrls = new Set([alreadyKnownUrl]);
+
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.requestState.current > 1) return apiSearchResponse([]);
+    const topic = body.requestState.filters[0].values[0];
+    if (topic === 'Belasting betalen') {
+      return apiSearchResponse([apiSearchResult({ url: '/actueel/nieuws/2025/06/27/kabinet-kijkt-naar-dividendstripping' })]);
+    }
+    return apiSearchResponse([]);
+  }, () => processSitemapSource(fakeTopicApiSource, existingUrls, { count: 50 }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stages.fetched, 1);
+  assert.equal(result.stages.reasons.duplicate, 1);
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+// --- Bestaande relevantie-flow blijft volledig van toepassing (geen bypass) ---
+
+test('processSitemapSource (rijksoverheid-topic-api-variant): een topic-kandidaat doorloopt nog steeds de volledige bestaande relevantiepoort — title/description komen van de artikelpagina zelf (fetchArticlePageMeta), niet van de API, en een irrelevant artikel wordt gewoon afgewezen', async () => {
+  const relevantUrl = '/actueel/nieuws/2025/06/27/kabinet-kijkt-naar-dividendstripping';
+  const irrelevantUrl = '/actueel/nieuws/2025/01/15/kabinet-vraagt-mening-over-vliegbelasting';
+
+  const result = await withMockedFetchAndBody((url, opts) => {
+    if (url === RIJKSOVERHEID_TOPIC_API_URL && opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      if (body.requestState.current > 1) return apiSearchResponse([]);
+      // Bewust een onzinnige titel zonder enig fiscaal trefwoord: als de
+      // relevantiebeoordeling hier per ongeluk toch de API-titel zou
+      // gebruiken (bypass van fetchArticlePageMeta), zou dit artikel
+      // nooit relevant kunnen scoren — de test bewijst dus dat dat niet
+      // gebeurt.
+      return apiSearchResponse([
+        apiSearchResult({ url: relevantUrl, title: 'TITEL DIE NIET GEBRUIKT MAG WORDEN', date: 'niet-een-geldige-datum' }),
+        apiSearchResult({ url: irrelevantUrl, title: 'TITEL DIE NIET GEBRUIKT MAG WORDEN 2', date: 'niet-een-geldige-datum' }),
+      ]);
+    }
+    if (url === `https://www.rijksoverheid.nl${relevantUrl}`) {
+      return htmlResponse('<html><head><title>Kabinet kijkt naar aanvullende mogelijkheden dividendstripping aan te pakken | Rijksoverheid.nl</title><meta name="description" content="Het kabinet onderzoekt extra maatregelen tegen dividendstripping, relevant voor DGA\'s en BV\'s."/></head></html>');
+    }
+    if (url === `https://www.rijksoverheid.nl${irrelevantUrl}`) {
+      return htmlResponse('<html><head><title>Kabinet vraagt mening over vliegbelasting vanaf 2027 | Rijksoverheid.nl</title><meta name="description" content="Een algemene consultatie over vliegbelasting voor reizigers, zonder fiscaal ondernemerssignaal."/></head></html>');
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(fakeTopicApiSource, new Set(), { count: 50 }));
+
+  assert.equal(result.stages.relevant, 1); // alleen het dividendstripping-artikel (via categoryKeyword 'dividend')
+  assert.equal(result.stages.reasons.irrelevant, 1); // het vliegbelasting-artikel
+  assert.equal(result.stages.published, 0); // ongeldige datum voorkomt een echte schrijfactie (zelfde patroon als de andere tests in dit bestand)
+});
+
+// --- Empty/error response ---
+
+test('fetchRijksoverheidTopicApiUrls: een lege resultaten-array op pagina 1 levert 0 kandidaten voor dat topic, zonder crash', async () => {
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse([]),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 3, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result, []);
+});
+
+test('fetchRijksoverheidTopicApiUrls: een HTTP-fout op één topic blokkeert het andere topic niet en laat de fetcher niet crashen', async () => {
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.requestState.current > 1) return apiSearchResponse([]);
+    const topic = body.requestState.filters[0].values[0];
+    if (topic === 'Belasting betalen') return new Response('Internal Server Error', { status: 500 });
+    return apiSearchResponse([apiSearchResult({ url: '/actueel/nieuws/werkt-wel' })]);
+  }, () => fetchRijksoverheidTopicApiUrls(['Belasting betalen', 'Inkomstenbelasting'], { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 10 }));
+
+  assert.deepEqual(result.map((e) => e.loc), ['https://www.rijksoverheid.nl/actueel/nieuws/werkt-wel']);
+});
+
+test('fetchRijksoverheidTopicApiUrls: een onverwachte (niet-JSON) respons wordt afgehandeld zonder te crashen', async () => {
+  const result = await withMockedFetchAndBody(
+    () => new Response('<html>geen json</html>', { status: 200, headers: { 'content-type': 'text/html' } }),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result, []);
+});
+
+test("fetchRijksoverheidTopicApiUrls: een resultaat zonder url.raw wordt overgeslagen, de overige resultaten in dezelfde pagina blijven behouden", async () => {
+  const resultsWithOneMissingUrl = [
+    apiSearchResult({ url: '/actueel/nieuws/geldig-1' }),
+    { ...apiSearchResult({ url: '/actueel/nieuws/wordt-genegeerd' }), url: { raw: undefined } },
+    apiSearchResult({ url: '/actueel/nieuws/geldig-2' }),
+  ];
+  const result = await withMockedFetchAndBody(
+    () => apiSearchResponse(resultsWithOneMissingUrl),
+    () => fetchRijksoverheidTopicApiUrls(['Belasting betalen'], { maxPagesPerTopic: 1, maxArticlesPerTopicPerRun: 10 }),
+  );
+  assert.deepEqual(result.map((e) => e.loc).sort(), [
+    'https://www.rijksoverheid.nl/actueel/nieuws/geldig-1',
+    'https://www.rijksoverheid.nl/actueel/nieuws/geldig-2',
+  ]);
+});
+
+test('processSitemapSource (rijksoverheid-topic-api-variant): rapporteert een foutresultaat als de topic-API een onverwachte fout gooit, zonder de run te laten crashen', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('netwerk volledig onbereikbaar');
+  };
+  try {
+    const result = await processSitemapSource(fakeTopicApiSource, new Set(), { count: 50 });
+    // fetchRijksoverheidTopicApiUrls vangt netwerkfouten per topic af (zie
+    // hierboven) en geeft dus normaliter gewoon een lege lijst terug i.p.v.
+    // te gooien — dit bevestigt dat processSitemapSource in dat geval
+    // gewoon doorgaat met 0 kandidaten, zonder te crashen.
+    assert.equal(result.ok, true);
+    assert.equal(result.stages.fetched, 0);
+    assert.equal(result.added, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// --- Four-topic regression ---
+
+test('fetchRijksoverheidTopicApiUrls: haalt onafhankelijk kandidaten op voor alle vier de geconfigureerde topics', async () => {
+  const perTopicCounts = {
+    'Belasting betalen': 3,
+    Inkomstenbelasting: 2,
+    Belastingverdragen: 1,
+    'Aanpak belastingontwijking en belastingontduiking': 4,
+  };
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.requestState.current > 1) return apiSearchResponse([]);
+    const topic = body.requestState.filters[0].values[0];
+    const count = perTopicCounts[topic] ?? 0;
+    return apiSearchResponse(Array.from({ length: count }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/${topic.replace(/\s+/g, '-')}-${i}` })));
+  }, () => fetchRijksoverheidTopicApiUrls(Object.keys(perTopicCounts), { maxPagesPerTopic: 3, maxArticlesPerTopicPerRun: 20 }));
+
+  assert.equal(result.length, 3 + 2 + 1 + 4);
+});
+
+test('vier-topic regressie: de daadwerkelijk in sources.config.mjs geconfigureerde topics worden elk onafhankelijk bevraagd', async () => {
+  const configuredTopics = sources.find((s) => s.id === 'rijksoverheid-topic-api').topics;
+  const seenTopics = [];
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    const topic = body.requestState.filters[0].values[0];
+    if (body.requestState.current === 1) {
+      seenTopics.push(topic);
+      return apiSearchResponse([apiSearchResult({ url: `/actueel/nieuws/${encodeURIComponent(topic)}` })]);
+    }
+    return apiSearchResponse([]);
+  }, () => fetchRijksoverheidTopicApiUrls(configuredTopics, { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 10 }));
+
+  assert.deepEqual(seenTopics, configuredTopics);
+  assert.equal(result.length, 4);
 });
