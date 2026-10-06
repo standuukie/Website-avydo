@@ -172,6 +172,13 @@ async function main() {
   } else {
     topics.push({ key: 'werkgevers', label: 'Werkgevers/arbeidsmarkt (SZW, GEEN URL GEVONDEN)', url: null });
   }
+  // Deel 11 van de opdracht vraagt expliciet om ziekte/re-integratie en
+  // arbeidsbeperking apart te controleren (de vorige audit vond hier
+  // concrete BEHOUDEN-artikelen). Beide URL's komen rechtstreeks uit de
+  // zojuist echt opgehaalde /themas/werk-sublinkenlijst hierboven, niet
+  // gegokt.
+  topics.push({ key: 'ziekte-reintegratie', label: 'Ziekteverzuim en herstel naar werk (SZW, uit sublinkenlijst)', url: 'https://www.rijksoverheid.nl/themas/werk/ziekteverzuim-van-het-werk' });
+  topics.push({ key: 'arbeidsbeperking', label: 'Werken met arbeidsbeperking (SZW, uit sublinkenlijst)', url: 'https://www.rijksoverheid.nl/themas/werk/werken-met-arbeidsbeperking' });
 
   console.log('\n=== STAP 1: sitemap.xml volledige sub-sitemap-lijst (voor topic-sitemap-check) ===');
   const sitemapRes = await fetchPage('https://www.rijksoverheid.nl/sitemap.xml');
