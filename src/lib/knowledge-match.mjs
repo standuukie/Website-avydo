@@ -48,14 +48,37 @@ export function tokenize(text) {
   return (normalized.match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > MIN_TOKEN_LENGTH && !STOPWORDS.has(w));
 }
 
+// Kleine, expliciete en handmatig beheerde aliaslijst voor Nederlandse
+// samenstellingen (2026-10-07). Bewust GEEN generieke samenstellingssplitser:
+// een read-only simulatie tegen de echte kennisbank liet zien dat generiek
+// splitsen tientallen bestaande vragen andere bronnen geeft. Een vraagwoord
+// dat hier als sleutel staat en NIET letterlijk in de tekst staat, telt
+// alsnog 1 punt als ALLE vereiste termen er wél (als losse tokens) in staan.
+// - arbeidsongeschiktheidsverzekering: de Rijksoverheid-artikelen over dit
+//   dossier schrijven "basisverzekering" + "arbeidsongeschiktheid", nooit het
+//   samengestelde woord. Bewust "basisverzekering" en niet alleen
+//   "verzekering", zodat algemene verzekeringsteksten niet meeliften.
+const QUERY_ALIASES = new Map([['arbeidsongeschiktheidsverzekering', ['arbeidsongeschiktheid', 'basisverzekering']]]);
+
 /**
+ * @param {string} queryToken
+ * @param {Set<string>} tokens
+ */
+function aliasMatches(queryToken, tokens) {
+  const required = QUERY_ALIASES.get(queryToken);
+  return required !== undefined && required.every((t) => tokens.has(t));
+}
+
+/**
+ * Telt per vraagwoord maximaal 1 punt: een exacte tokentreffer, of anders
+ * (alleen voor de sleutels in QUERY_ALIASES) een volledige aliastreffer.
  * @param {string[]} queryTokens
  * @param {string} text
  */
 export function overlapScore(queryTokens, text) {
   const tokens = new Set(tokenize(text));
   let score = 0;
-  for (const q of queryTokens) if (tokens.has(q)) score += 1;
+  for (const q of queryTokens) if (tokens.has(q) || aliasMatches(q, tokens)) score += 1;
   return score;
 }
 
