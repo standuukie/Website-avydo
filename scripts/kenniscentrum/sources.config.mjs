@@ -155,12 +155,16 @@ export const rijksoverheidAudienceSignals = audienceKeywords.zzp;
 //  - uitleenmarkt (Wtta, zelfstandig signaal) en boetes voor illegale arbeid
 //    of overtreding van arbeidswetten — twee aparte regels, omdat een regel
 //    maar één `all` en één `any` kent.
+// Optioneel `category`: categorie voor een artikel dat via déze regel
+// relevant werd en geen categoryKeywords-treffer heeft (anders zou het op
+// defaultCategory 'Fiscale actualiteit' terugvallen). Een categoryKeywords-
+// treffer gaat altijd voor; de crypto-regel heeft bewust geen hint.
 export const rijksoverheidTopicRelevanceSignals = [
   { all: ['crypto'], any: ['rapportageverplicht', 'delen met de belastingdienst'] },
-  { all: ['arbeidsbeperking'], any: ['subsidie'] },
-  { all: ['zelfstandigen', 'arbeidsongeschikt'], any: ['verzekering'] },
-  { any: ['wtta', 'terbeschikkingstelling van arbeidskrachten'] },
-  { all: ['boete'], any: ['illegale arbeid', 'illegaal in dienst', 'arbeidswetten'] },
+  { all: ['arbeidsbeperking'], any: ['subsidie'], category: 'Personeel & loonheffingen' },
+  { all: ['zelfstandigen', 'arbeidsongeschikt'], any: ['verzekering'], category: 'Ondernemen & rechtsvormen' },
+  { any: ['wtta', 'terbeschikkingstelling van arbeidskrachten'], category: 'Personeel & loonheffingen' },
+  { all: ['boete'], any: ['illegale arbeid', 'illegaal in dienst', 'arbeidswetten'], category: 'Personeel & loonheffingen' },
 ];
 
 // Uitsluitingen, gelden ook als een ander signaal het artikel relevant
@@ -230,6 +234,10 @@ export const sources = [
     requireKeywordMatch: true,
     ministryBypass: 'Ministerie van Financiën',
     audienceSignals: rijksoverheidAudienceSignals,
+    // Categorie voor een artikel dat via audienceSignals (zzp) relevant werd
+    // zonder categoryKeywords-treffer — zie de category-hints bij
+    // rijksoverheidTopicRelevanceSignals. Raakt de matching niet.
+    audienceSignalsCategory: 'Ondernemen & rechtsvormen',
     corroborationRequiredKeywords: ['prinsjesdag'],
     relevanceSignals: rijksoverheidTopicRelevanceSignals,
     exclusionRules: rijksoverheidTopicExclusionRules,

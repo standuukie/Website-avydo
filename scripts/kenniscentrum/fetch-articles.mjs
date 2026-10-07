@@ -355,6 +355,14 @@ export function matchesRelevanceSignal(text, rules = []) {
   return rules.some((rule) => matchesTermRule(normalized, rule));
 }
 
+// De `category`-hint van de eerste relevanceSignals-regel mét hint die op
+// deze tekst matcht (zelfde matcher als matchesRelevanceSignal), of
+// undefined. Zie publishItem: alleen gebruikt zonder categoryKeywords-treffer.
+export function findRelevanceSignalCategory(text, rules = []) {
+  const normalized = normalizeForTermRules(text);
+  return rules.find((rule) => rule.category && matchesTermRule(normalized, rule))?.category;
+}
+
 export function matchesExclusionRule(title, text, rules = []) {
   const normalizedTitle = normalizeForTermRules(title);
   const normalizedText = normalizeForTermRules(text);
@@ -495,12 +503,15 @@ function writeArticle({ title, category, priority, publishedAt, sourceName, sour
 // Verwerkt één ruw item (na parsing, vóór relevantie/schrijven) dat al een
 // niet-lege description heeft. Gedeeld door de RSS- en sitemap-paden zodat
 // categorisering/samenvatting/schrijven identiek verloopt, ongeacht bron-type.
-async function publishItem(item, source) {
+// `categoryHint` (optioneel, alleen vanuit de relevantiepoort van
+// processSitemapSource): categorie van het signaal dat het artikel relevant
+// maakte. Volgorde: categoryKeywords-treffer → categoryHint → defaultCategory.
+async function publishItem(item, source, categoryHint) {
   const combinedText = `${item.title} ${item.description}`;
   const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date();
   if (Number.isNaN(publishedAt.getTime())) return null;
 
-  const category = pickCategory(combinedText, source.defaultCategory) ?? 'Fiscale actualiteit';
+  const category = pickCategory(combinedText, categoryHint ?? source.defaultCategory) ?? 'Fiscale actualiteit';
   const priority = pickPriority(combinedText, publishedAt);
   const audiences = pickAudiences(combinedText);
 
@@ -982,6 +993,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     const enrichedItem = { ...item, title, description };
     stages.parsed += 1;
 
+    let categoryHint;
     if (source.requireKeywordMatch) {
       const combinedText = `${enrichedItem.title} ${enrichedItem.description}`;
       const scores = scoreCategories(combinedText);
@@ -1042,10 +1054,16 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
         addRejectionSample(samples, 'irrelevant', title);
         continue;
       }
+      // Categorie-hint uitsluitend van een signaal dat dit artikel
+      // daadwerkelijk relevant maakte; wint nooit van een
+      // categoryKeywords-treffer (zie publishItem).
+      categoryHint =
+        (signalMatch ? findRelevanceSignalCategory(combinedText, source.relevanceSignals) : undefined) ??
+        (audienceMatch ? source.audienceSignalsCategory : undefined);
     }
     stages.relevant += 1;
 
-    const filename = await publishItem(enrichedItem, source);
+    const filename = await publishItem(enrichedItem, source, categoryHint);
     if (!filename) continue;
 
     existingUrls.add(item.link);

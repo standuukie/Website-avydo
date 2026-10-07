@@ -44,6 +44,7 @@ import {
   matchesRelevanceSignal,
   matchesExclusionRule,
   isOutsideMaxAge,
+  findRelevanceSignalCategory,
 } from './fetch-articles.mjs';
 import {
   rijksoverheidAudienceSignals,
@@ -2547,3 +2548,94 @@ for (const key of ['sowisRonde', 'sowisVoorbereiding', 'uitkeringsbedragenIoaz',
     assert.equal(result.stages.reasons.irrelevant, 1);
   });
 }
+
+// --- Rijksoverheid: categorie van signaal-gematchte artikelen ---
+//
+// Volgorde in publishItem: categoryKeywords-treffer → categorie-hint van het
+// signaal dat het artikel relevant maakte → defaultCategory. Draait de
+// echte bronconfiguratie en leest de categorie uit het weggeschreven
+// artikel (geïsoleerde CONTENT_DIR).
+
+async function publishedCategoryFor({ title, description, financien = false }) {
+  return withIsolatedKvkModule([], async (mod) => {
+    await withMockedFetchAndBody((_url, opts) => {
+      if (opts?.method === 'POST') {
+        const body = JSON.parse(opts.body);
+        const isFirst = body.requestState.current === 1 && body.requestState.filters[0].values[0] === realTopicApiSource.topics[0];
+        return apiSearchResponse(isFirst ? [apiSearchResult({ url: '/actueel/nieuws/categoriecase', date: '2026-09-01T00:00:00.000Z' })] : []);
+      }
+      const crumb = financien ? '<a href="/ministeries/ministerie-van-financien">Ministerie van Financiën</a>' : '';
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head><body>${crumb}</body></html>`);
+    }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW));
+    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
+    const files = readdirSync(dir).filter((f) => f.endsWith('.md'));
+    assert.equal(files.length, 1, `verwacht één gepubliceerd artikel voor "${title}"`);
+    return readFileSync(path.join(dir, files[0]), 'utf8').match(/^category: "(.*)"$/m)?.[1];
+  });
+}
+
+test('sources.config.mjs: categorie-hints staan alleen op de werkgevers-/zzp-signalen; de crypto-regel heeft geen hint', () => {
+  const hints = rijksoverheidTopicRelevanceSignals.map((r) => r.category);
+  assert.deepEqual(hints, [undefined, 'Personeel & loonheffingen', 'Ondernemen & rechtsvormen', 'Personeel & loonheffingen', 'Personeel & loonheffingen']);
+  assert.equal(realTopicApiSource.audienceSignalsCategory, 'Ondernemen & rechtsvormen');
+  for (const category of [...hints.filter(Boolean), realTopicApiSource.audienceSignalsCategory]) {
+    assert.ok(category in categoryKeywords, `${category} moet een bestaande categorie zijn`);
+  }
+});
+
+test('findRelevanceSignalCategory: geeft de hint van de matchende regel, en niets bij crypto of zonder match', () => {
+  const rules = rijksoverheidTopicRelevanceSignals;
+  assert.equal(findRelevanceSignalCategory('Subsidie voor werknemer met arbeidsbeperking', rules), 'Personeel & loonheffingen');
+  assert.equal(findRelevanceSignalCategory('Verzekering voor zelfstandigen die arbeidsongeschikt raken', rules), 'Ondernemen & rechtsvormen');
+  assert.equal(findRelevanceSignalCategory('De Wtta is aangenomen', rules), 'Personeel & loonheffingen');
+  assert.equal(findRelevanceSignalCategory('Hogere boete bij illegale arbeid', rules), 'Personeel & loonheffingen');
+  assert.equal(findRelevanceSignalCategory(`${TOPIC_CASES.cryptoTransacties.title} ${TOPIC_CASES.cryptoTransacties.description}`, rules), undefined);
+  assert.equal(findRelevanceSignalCategory('Algemeen overheidsnieuws', rules), undefined);
+});
+
+for (const [key, expected] of [
+  ['subsidieMkbArbeidsbeperking', 'Personeel & loonheffingen'],
+  ['vasteLoonkostensubsidie', 'Personeel & loonheffingen'],
+  ['basisverzekeringZelfstandigen', 'Ondernemen & rechtsvormen'],
+  ['basisverzekeringRaadVanState', 'Ondernemen & rechtsvormen'],
+  ['wtta', 'Personeel & loonheffingen'],
+  ['boetesIllegaleArbeid', 'Personeel & loonheffingen'],
+  ['boetesUitbuiting', 'Personeel & loonheffingen'],
+]) {
+  test(`Rijksoverheid-categorie: "${EMPLOYER_CASES[key].title}" krijgt de signaalcategorie ${expected} (geen categoryKeywords-treffer)`, async () => {
+    const { title, description } = EMPLOYER_CASES[key];
+    assert.deepEqual(scoreCategories(`${title} ${description}`), {});
+    assert.equal(await publishedCategoryFor({ title, description }), expected);
+  });
+}
+
+test('Rijksoverheid-categorie: een categoryKeywords-treffer wint altijd van de signaalcategorie', async () => {
+  const title = 'Subsidie voor werknemer met arbeidsbeperking: verantwoording in de jaarrekening';
+  const description = 'Werkgevers die subsidie ontvangen voor een werknemer met een arbeidsbeperking verwerken deze in hun jaarrekening.';
+  assert.equal(findRelevanceSignalCategory(`${title} ${description}`, rijksoverheidTopicRelevanceSignals), 'Personeel & loonheffingen');
+  assert.deepEqual(Object.keys(scoreCategories(`${title} ${description}`)), ['Administratie & jaarrekening']);
+  assert.equal(await publishedCategoryFor({ title, description }), 'Administratie & jaarrekening');
+});
+
+test('Rijksoverheid-categorie: zonder categoryKeywords-treffer én zonder signaalcategorie blijft defaultCategory gelden (ministryBypass)', async () => {
+  const { title, description } = TOPIC_CASES.lijfrentes;
+  assert.deepEqual(scoreCategories(`${title} ${description}`), {});
+  assert.equal(findRelevanceSignalCategory(`${title} ${description}`, rijksoverheidTopicRelevanceSignals), undefined);
+  assert.equal(await publishedCategoryFor({ title, description, financien: true }), realTopicApiSource.defaultCategory);
+  assert.equal(realTopicApiSource.defaultCategory, 'Fiscale actualiteit');
+});
+
+test('Rijksoverheid-categorie: de crypto-regel krijgt geen hint en behoudt de bestaande categorie (defaultCategory)', async () => {
+  const { title, description } = TOPIC_CASES.cryptoTransacties;
+  assert.deepEqual(scoreCategories(`${title} ${description}`), {});
+  assert.equal(await publishedCategoryFor({ title, description }), 'Fiscale actualiteit');
+});
+
+test('Rijksoverheid-categorie: een artikel dat via het zzp-audiencesignaal relevant werd krijgt Ondernemen & rechtsvormen', async () => {
+  const title = 'Zelfstandigenwet biedt meer duidelijkheid en erkenning voor zzp’ers';
+  const description = 'Voor zzp’ers en opdrachtgevers komen duidelijke spelregels vooraf over hoe ze met elkaar kunnen werken. De wet gaat uit van zelfstandig ondernemerschap en heeft als doel een veilige haven te creëren voor zelfstandigen. Dat staat in de...';
+  assert.deepEqual(scoreCategories(`${title} ${description}`), {});
+  assert.equal(findRelevanceSignalCategory(`${title} ${description}`, rijksoverheidTopicRelevanceSignals), undefined);
+  assert.ok(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)));
+  assert.equal(await publishedCategoryFor({ title, description }), 'Ondernemen & rechtsvormen');
+});
