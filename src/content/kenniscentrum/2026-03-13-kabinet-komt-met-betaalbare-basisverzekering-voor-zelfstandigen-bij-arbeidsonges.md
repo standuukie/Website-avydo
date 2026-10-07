@@ -11,6 +11,7 @@ tags: []
 audiences: []
 featured: false
 hidden: false
+status: "voornemen"
 aiAssisted: true
 fetchedAt: 2026-10-07T13:10:12.990Z
 ---

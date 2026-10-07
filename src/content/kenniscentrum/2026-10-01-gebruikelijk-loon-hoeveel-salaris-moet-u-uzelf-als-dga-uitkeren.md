@@ -11,6 +11,7 @@ tags: ["gebruikelijk loon", "dga", "bv", "loonheffingen", "box 1"]
 audiences: ["bv-dga"]
 featured: true
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

@@ -11,6 +11,7 @@ tags: ["eenmanszaak", "bv oprichten", "rechtsvorm", "ondernemingsvorm", "omzetti
 audiences: ["zzp", "mkb-ondernemer", "starter"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

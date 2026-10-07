@@ -11,6 +11,7 @@ tags: ["werkkostenregeling", "wkr", "vrije ruimte", "loonheffingen", "werkgever"
 audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

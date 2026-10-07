@@ -11,6 +11,7 @@ tags: []
 audiences: ["zzp", "mkb-ondernemer"]
 featured: false
 hidden: false
+status: "consultatie"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:31.547Z
 ---

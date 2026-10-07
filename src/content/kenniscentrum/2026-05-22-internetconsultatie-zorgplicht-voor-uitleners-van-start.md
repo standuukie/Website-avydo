@@ -11,6 +11,7 @@ tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
+status: "voorstel"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:43.008Z
 ---

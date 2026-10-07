@@ -11,6 +11,7 @@ tags: ["kor", "kleineondernemersregeling", "btw-vrijstelling", "btw", "zzp"]
 audiences: ["zzp", "starter", "mkb-ondernemer"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

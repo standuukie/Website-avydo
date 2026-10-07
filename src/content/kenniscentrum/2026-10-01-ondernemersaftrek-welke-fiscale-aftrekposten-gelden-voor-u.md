@@ -11,6 +11,7 @@ tags: ["ondernemersaftrek", "zelfstandigenaftrek", "startersaftrek", "mkb-winstv
 audiences: ["zzp", "starter", "mkb-ondernemer"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

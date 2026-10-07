@@ -163,7 +163,12 @@ test('behoud: historische artikelen blijven gewoon in de contentcollectie (niet 
 
 test('behoud: pagina-/overzichtscode filtert niet op supersededBy (historische pagina\'s blijven bestaan)', () => {
   for (const file of ['../../src/pages/kenniscentrum/[...slug].astro', '../../src/pages/kenniscentrum/index.astro', '../../src/lib/kenniscentrum.ts']) {
-    assert.equal(readFileSync(path.resolve(__dirname, file), 'utf8').includes('supersededBy'), false, file);
+    // supersededBy mag wel gebruikt worden voor weergave (de historische
+    // melding op de artikelpagina), maar nooit om artikelen weg te filteren.
+    const filterLines = readFileSync(path.resolve(__dirname, file), 'utf8')
+      .split('\n')
+      .filter((line) => /getCollection|\.filter\(/.test(line));
+    assert.ok(!filterLines.some((line) => line.includes('supersededBy')), file);
   }
 });
 

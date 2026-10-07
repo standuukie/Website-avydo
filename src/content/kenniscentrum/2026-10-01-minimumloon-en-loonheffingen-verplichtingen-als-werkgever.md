@@ -11,6 +11,7 @@ tags: ["loonheffingen", "minimumloon", "werkgever", "loonaangifte", "personeel a
 audiences: ["werkgever", "starter", "mkb-ondernemer"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

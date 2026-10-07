@@ -12,6 +12,7 @@ tags: []
 audiences: ["zzp", "werkgever"]
 featured: false
 hidden: false
+status: "deels-geschrapt"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:35:27.114Z
 ---

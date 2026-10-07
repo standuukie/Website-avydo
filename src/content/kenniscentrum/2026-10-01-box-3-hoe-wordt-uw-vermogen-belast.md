@@ -11,6 +11,7 @@ tags: ["box 3", "vermogen", "inkomstenbelasting", "sparen en beleggen"]
 audiences: ["mkb-ondernemer", "bv-dga"]
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: true
 ---
 

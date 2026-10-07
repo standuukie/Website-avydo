@@ -11,6 +11,7 @@ tags: ["e-facturatie", "verplicht"]
 audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
+status: "voornemen"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:36.093Z
 ---

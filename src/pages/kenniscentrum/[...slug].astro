@@ -5,6 +5,7 @@ import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
 import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
 import { safeJsonLd } from '@/lib/seo';
+import { hasOwnRelevance, isReferenceArticle, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
 
 export async function getStaticPaths() {
   const articles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
@@ -15,7 +16,7 @@ export async function getStaticPaths() {
 }
 
 const { article, allArticles } = Astro.props;
-const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences } = article.data;
+const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences, status, supersededBy } = article.data;
 
 // De meeste (automatisch opgehaalde) artikelen hebben een body die
 // vrijwel gelijk is aan summary — dan voegt een apart "volledige
@@ -25,6 +26,18 @@ const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl
 // te voorkomen.
 const { Content } = await render(article);
 const hasExtendedBody = article.body != null && article.body.trim().length > summary.length * 1.3;
+
+// Rijksoverheid-artikelen bevatten de volledige brontekst, die begint met de
+// samenvatting. Dan tonen we geen aparte Samenvatting (dubbel), maar de
+// brontekst zelf met de tussenkoppen uit de bron.
+const showSourceText = sourceName === 'Rijksoverheid' && hasExtendedBody;
+const sourceBlocks = showSourceText ? sourceBodyBlocks(article.body) : [];
+// Sjabloonteksten van de nieuwsengine zijn geen eigen uitleg: niet tonen.
+const showRelevance = hasOwnRelevance(relevance);
+const statusLabel = status ? STATUS_LABELS[status] : undefined;
+const isOutdated = Boolean(supersededBy) || (status != null && OUTDATED_STATUSES.has(status));
+const successor = supersededBy ? allArticles.find((a) => a.data.sourceUrl === supersededBy) : undefined;
+const isReference = isReferenceArticle(article.data);
 
 const related = allArticles
   .filter((a) => a.slug !== article.slug && a.data.category === category)
@@ -62,7 +75,10 @@ const structuredData = {
         </ol>
       </nav>
       <div class="flex items-center gap-2 flex-wrap">
-        {priority === 'belangrijk' && (
+        {statusLabel && (
+          <span class="inline-flex items-center rounded-full border border-white/25 px-2.5 py-0.5 text-xs font-semibold text-white" data-status={status}>{statusLabel}</span>
+        )}
+        {priority === 'belangrijk' && !isOutdated && (
           <span class="inline-flex items-center rounded-full bg-brand-500/20 px-2.5 py-0.5 text-xs font-semibold text-brand-300">Belangrijk</span>
         )}
         <span class="text-xs font-medium text-ink-300">{category}</span>
@@ -87,15 +103,44 @@ const structuredData = {
   <section class="section">
     <div class="container max-w-content grid lg:grid-cols-3 gap-12">
       <div class="lg:col-span-2 max-w-2xl">
-        <h2 class="text-lg font-display font-semibold text-ink-900">Samenvatting</h2>
-        <p class="mt-3 text-ink-700 leading-relaxed text-lg">{summary}</p>
+        {!showSourceText && (
+          <>
+            <h2 class="text-lg font-display font-semibold text-ink-900">Samenvatting</h2>
+            <p class="mt-3 text-ink-700 leading-relaxed text-lg">{summary}</p>
+          </>
+        )}
 
-        <div class="mt-8 rounded-md border border-ink-100 bg-ink-50/60 p-6">
-          <h2 class="font-display text-lg font-semibold text-ink-900">Wat betekent dit voor uw onderneming?</h2>
-          <p class="mt-2 text-ink-700 leading-relaxed">{relevance}</p>
-        </div>
+        {showRelevance && (
+          <div class:list={['rounded-md border border-ink-100 bg-ink-50/60 p-6', !showSourceText && 'mt-8']}>
+            <h2 class="font-display text-lg font-semibold text-ink-900">Wat betekent dit voor uw onderneming?</h2>
+            <p class="mt-2 text-ink-700 leading-relaxed">{relevance}</p>
+          </div>
+        )}
 
-        {hasExtendedBody && (
+        {showSourceText && (
+          <div class:list={[showRelevance && 'mt-10']}>
+            <h2 class="text-lg font-display font-semibold text-ink-900">Brontekst</h2>
+            {isOutdated && (
+              <div class="mt-4 rounded-md border-l-4 border-ink-400 bg-ink-50 px-4 py-3 text-sm text-ink-700 leading-relaxed" role="note" data-outdated-notice>
+                <strong class="text-ink-900">{statusLabel ?? 'Historisch'} bericht.</strong> De tekst hieronder is de oorspronkelijke publicatie van {formatDate(publishedAt)} en beschrijft de situatie van dat moment; die is inmiddels niet meer (volledig) actueel.
+                {successor ? (
+                  <> Lees ook het latere bericht: <a href={`/kenniscentrum/${successor.slug}`} class="font-semibold text-brand-600 hover:underline">{successor.data.title}</a>.</>
+                ) : supersededBy ? (
+                  <> Lees ook het <a href={supersededBy} target="_blank" rel="noopener noreferrer" class="font-semibold text-brand-600 hover:underline">latere bericht bij de bron</a>.</>
+                ) : null}
+              </div>
+            )}
+            <div class="prose prose-slate mt-4 max-w-none prose-headings:font-display prose-headings:text-ink-900 prose-h3:text-lg prose-h3:mt-8 prose-a:text-brand-600 prose-strong:text-ink-900">
+              {sourceBlocks.map((block) =>
+                block.type === 'heading' ? <h3>{block.text}</h3>
+                : block.type === 'list' ? <ul>{block.items.map((item) => <li>{item}</li>)}</ul>
+                : <p>{block.text}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {hasExtendedBody && !showSourceText && (
           <div class="prose prose-slate mt-10 max-w-none prose-headings:font-display prose-headings:text-ink-900 prose-h2:text-xl prose-h2:mt-8 prose-a:text-brand-600 prose-strong:text-ink-900">
             <Content />
           </div>
@@ -103,9 +148,15 @@ const structuredData = {
 
         <div class="mt-8 rounded-md border border-ink-100 p-6">
           <h2 class="font-display text-base font-semibold text-ink-900">Bron</h2>
-          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-            Dit bericht is een samenvatting door Avydo op basis van een publicatie van <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
-          </p>
+          {showSourceText ? (
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+              Brontekst: <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. De tekst hierboven is overgenomen uit deze publicatie{showRelevance ? '; de toelichting "Wat betekent dit voor uw onderneming?" is van Avydo' : ''}. De oorspronkelijke publicatie is leidend.
+            </p>
+          ) : (
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+              Dit bericht is een samenvatting door Avydo op basis van een publicatie van <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
+            </p>
+          )}
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
             Lees de volledige publicatie bij de bron
             <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
@@ -121,6 +172,10 @@ const structuredData = {
         <div class="card p-6">
           <h2 class="font-display text-lg font-semibold text-ink-900">In het kort</h2>
           <dl class="mt-4 space-y-3 text-sm">
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Soort</dt><dd class="font-semibold text-ink-900">{isReference ? 'Naslag' : 'Nieuws'}</dd></div>
+            {statusLabel && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">Status</dt><dd class="font-semibold text-ink-900">{statusLabel}</dd></div>
+            )}
             <div class="flex justify-between gap-4"><dt class="text-ink-600">Categorie</dt><dd class="font-semibold text-ink-900">{category}</dd></div>
             <div class="flex justify-between gap-4"><dt class="text-ink-600">Gepubliceerd</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
             {updatedAt && (
@@ -132,8 +187,8 @@ const structuredData = {
         </div>
 
         <div class="card p-6 mt-6 bg-ink-900 border-ink-800">
-          <h2 class="font-display text-base font-semibold text-white">Heb je hier nog een vraag over?</h2>
-          <p class="mt-2 text-sm text-ink-300 leading-relaxed">Onze AI-assistent gebruikt dit artikel als context voor je vraag.</p>
+          <h2 class="font-display text-base font-semibold text-white">Heeft u hier nog een vraag over?</h2>
+          <p class="mt-2 text-sm text-ink-300 leading-relaxed">Onze AI-assistent gebruikt dit artikel als context voor uw vraag.</p>
           <a href={`/kenniscentrum/ai-assistent?artikel=${article.slug}`} class="btn-ghost-light mt-4 w-full">Vraag het aan onze AI-assistent</a>
         </div>
       </aside>

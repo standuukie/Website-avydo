@@ -11,6 +11,7 @@ tags: []
 audiences: []
 featured: false
 hidden: false
+status: "voorstel"
 aiAssisted: true
 fetchedAt: 2026-10-06T23:55:08.777Z
 ---

@@ -12,6 +12,7 @@ tags: []
 audiences: []
 featured: false
 hidden: false
+status: "historisch"
 aiAssisted: true
 fetchedAt: 2026-10-07T13:10:14.877Z
 ---
