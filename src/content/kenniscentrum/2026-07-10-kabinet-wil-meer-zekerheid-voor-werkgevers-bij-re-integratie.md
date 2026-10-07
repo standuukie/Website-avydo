@@ -15,4 +15,16 @@ aiAssisted: false
 fetchedAt: 2026-10-07T12:24:37.878Z
 ---
 
-Het kabinet wil de onzekerheid bij werkgevers wegnemen over de vraag of zij genoeg hebben gedaan voor hun zieke werknemer. In een nieuw wetsvoorstel van de ministers Aartsen (Werk en Participatie) en Vijlbrief (Sociale Zaken en Werkgelegenheid)...
+Het kabinet wil de onzekerheid bij werkgevers wegnemen over de vraag of zij genoeg hebben gedaan voor hun zieke werknemer. In een nieuw wetsvoorstel van de ministers Aartsen (Werk en Participatie) en Vijlbrief (Sociale Zaken en Werkgelegenheid) wordt het advies van de bedrijfsarts leidend bij de UWV-toets na 2 jaar ziekte. De ministerraad heeft ermee ingestemd om het wetsvoorstel naar de Tweede Kamer te sturen. Het wetsvoorstel wordt zo snel als mogelijk via de Koning bij de Tweede Kamer ingediend.
+
+RIV-toets
+
+Bij ziekte moet een werkgever nu 2 jaar het loon doorbetalen en helpen bij de re-integratie van de zieke werknemer. Na deze periode beoordeelt UWV met de re-integratieverslagtoets (RIV-toets) of de inspanningen voldoende waren. Is dat niet zo, dan kan de werkgever een loonsanctie van maximaal een jaar krijgen. In de nieuwe situatie biedt het advies van de bedrijfsarts werkgevers vooraf zekerheid: als zij dit advies opvolgen, voldoen ze aan hun verplichtingen. Dit bespaart bovendien werk voor UWV-verzekeringsartsen. Zij houden meer tijd over voor het beoordelen van uitkeringsaanvragen.
+
+Kwijtschelding voorschotten
+
+Na 2 jaar ziekte kunnen werknemers een WIA-uitkering aanvragen. Door lange wachttijden bij UWV zitten zij echter vaak lang in onzekerheid. De (ex-)werknemer kan dan een voorschot op de uitkering krijgen. In het wetsvoorstel is opgenomen dat dit voorschot niet hoeft te worden terugbetaald als na de beoordeling blijkt dat degene geen of een lager recht heeft op een WIA-uitkering. Ook verandert de manier waarop WIA-voorschotten worden gefinancierd.
+
+Wijzigingen Wajong
+
+Het wetsvoorstel bevat ook enkele verduidelijkingen voor de Wajong. Jonggehandicapten die 5 jaar onafgebroken werken en genoeg verdienen, behouden hun recht op een uitkering als zij werken via een beschutte werkplek, met loondispensatie, loonkostensubsidie of een interne jobcoach . UWV voert dit op verzoek van het kabinet al uit sinds 1 januari 2026. Daarnaast vervalt het garantiebedrag als de Wajong-uitkering langer dan 12 maanden is stopgezet.

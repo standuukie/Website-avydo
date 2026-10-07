@@ -15,4 +15,34 @@ aiAssisted: false
 fetchedAt: 2026-10-06T23:55:08.777Z
 ---
 
-Het kabinet dient het wetsvoorstel tegenbewijsregeling box 3 in bij de Tweede Kamer. Met de tegenbewijsregeling biedt het kabinet aanvullend rechtsherstel in box 3, zoals geoordeeld door de Hoge Raad. Belastingplichtigen krijgen de mogelijkheid om...
+Het kabinet dient het wetsvoorstel tegenbewijsregeling box 3 in bij de Tweede Kamer. Met de tegenbewijsregeling biedt het kabinet aanvullend rechtsherstel in box 3, zoals geoordeeld door de Hoge Raad. Belastingplichtigen krijgen de mogelijkheid om het werkelijk behaalde rendement aan te tonen. Als dit bedrag lager is dan het eerder aangeslagen verwachte rendement, krijgen zij de teveel betaalde belasting terug. Zij kunnen hierbij gebruik maken van het formulier Opgaaf werkelijk rendement, dat vanaf de zomer beschikbaar komt. De Wet tegenbewijsregeling is een tijdelijke oplossing tot de in 2028 verwachte Wet werkelijk rendement box 3.
+
+Actuele informatie over box 3, rechtsherstel, overbruggingswetgeving en nieuw stelsel .
+
+Volg de stand van zaken van het wetsvoorstel tegenbewijsregeling box 3 op de site van de Eerste Kamer.
+
+Staatssecretaris Van Oostenbruggen (Fiscaliteit, Belastingdienst en Douane): “Met dit wetsvoorstel zetten we de volgende stap in de hersteloperatie voor box 3. Duidelijk is dat de tegenbewijsregeling veel vraagt van zowel belastingplichtigen als de Belastingdienst. Belastingplichtigen kunnen vanaf de zomer 2025 het werkelijk behaalde rendement opgeven via een formulier op de website van de Belastingdienst. We weten dat dit voor veel belastingplichtigen niet makkelijk gaat zijn, vooral omdat het formulier voor eerst wordt gebruikt. De Belastingdienst zal mensen daarom zo goed mogelijk informeren, bijvoorbeeld door het versturen van brieven en via informatie op de website. Mensen die extra hulp nodig hebben bij het invullen van het formulier kunnen ook persoonlijke hulp krijgen van de Belastingdienst.”
+
+Uit het zogenoemde Kerstarrest van de Hoge Raad bleek in 2021 dat de belastingheffing in box 3 vanaf 2017 in strijd is met het Europees Verdrag voor de Rechten van de Mens. Hiervoor is de Wet rechtsherstel ingevoerd. De Hoge Raad heeft in juni 2024 geoordeeld dat dit rechtsherstel niet in alle gevallen voldoende is. Belastingplichtigen hebben het recht om aan te tonen welk rendement zij werkelijk hebben behaald. De Hoge Raad heeft uitgangspunten gegeven voor het bepalen van het werkelijke rendement. Met dit wetsvoorstel wil het kabinet deze uitgangspunten van de Hoge Raad omzetten in wetgeving. De voortgang van dit wetsvoorstel staat los van de weging bij de voorjaarsbesluitvorming over de definitieve dekking veroorzaakt door uitstel van de Wet werkelijk rendement box 3.
+
+Formulier Opgaaf werkelijk rendement
+
+Belastingplichtigen hoeven nu nog niets te doen. In de zomer wordt het formulier Opgaaf werkelijk rendement beschikbaar via Mijn Belastingdienst, waarmee het werkelijk rendement vanaf 2017 kan worden aangetoond. De Belastingdienst heeft deze gegevens niet.
+
+De Belastingdienst gaat mensen zo goed mogelijk ondersteunen via brieven en informatie op de website. Mensen die extra hulp nodig hebben bij het invullen van het formulier, kunnen straks ook op verschillende manieren persoonlijke hulp krijgen. Zo kunnen zij bellen met de Belastingtelefoon en als meer ondersteuning nodig is een afspraak maken bij een belastingkantoor of een steunpunt in de buurt. De Belastingdienst zet hier ook extra medewerkers voor in. Vanaf de aangifte over 2025 wordt de mogelijkheid van tegenbewijs opgenomen in de normale aangifte inkomstenbelasting.
+
+Bepalen van werkelijk rendement
+
+In het huidige box 3-stelsel wordt gerekend met een forfaitair rendement. Dit is een vast percentage dat uitgaat van het verwachte rendement over het vermogen in box 3. Deze rendementspercentages worden jaarlijks bijgewerkt, zodat het zo goed mogelijk aansluit bij het werkelijk rendement. Met de tegenbewijsregeling krijgen belastingplichtigen de mogelijkheid om per jaar het werkelijke rendement aan te tonen. Als dit lager is dan het forfait, dan krijgen zij de teveel betaalde belasting terug. Wanneer het rendement hoger is dan het forfait, hoeven zij niets bij te betalen.
+
+De Hoge Raad heeft in de arresten duidelijke regels opgesteld wat werkelijk rendement precies betekent. Het kabinet houdt zich hieraan. Het rendement op het gehele box 3-vermogen moet meegenomen worden voor het bepalen van het werkelijke rendement. Dit is bijvoorbeeld ontvangen en verschuldigde rente, ontvangen dividend op aandelen en huurinkomsten van een verhuurde vakantiewoning. Ook de waardestijging of -daling van het vermogen wordt meegenomen.
+
+Voor het bepalen van het werkelijk rendement voor het aanvullend herstel geeft de Hoge Raad aan dat verliezen niet verrekend kunnen worden met andere kalenderjaren. Ook wordt er geen rekening gehouden met kosten, zoals advieskosten voor de aankoop van beleggingen of onderhoudskosten voor een vakantiewoning. Een waardestijging van een bezitting als gevolg van investeringen, zoals de verbetering of uitbreiding van een vakantiewoning, is geen onderdeel van het rendement.
+
+Eigen gebruik onroerende zaak
+
+De Hoge Raad heeft aangegeven dat het eigen gebruik van onroerende zaken, zoals een vakantiehuis, in principe tot het rendement behoort dat wordt belast in box 3. Maar hoe dit rendement bepaald moet worden is ingewikkeld en vereist keuzes van de wetgever. Het kabinet heeft besloten dat dit rendement voor de jaren in het verleden niet hoeft worden opgegeven. Dit gaat over 2017 tot en met 2025. Voor de jaren 2026 en 2027 moet dit wel worden opgegeven bij het leveren van tegenbewijs.
+
+Wet werkelijk rendement box 3
+
+Het kabinet vindt een vast stelsel op basis van forfaits en een tegenbewijsregeling niet wenselijk en werkt daarom aan een stelsel waarbij het werkelijke rendement wordt belast. De invoering van het nieuwe stelsel per 2028 is uitvoerig verkend en haalbaar. Het streven is om de Wet werkelijk rendement box 3 binnen enkele weken in te dienen bij de Kamer.

@@ -15,4 +15,38 @@ aiAssisted: false
 fetchedAt: 2026-10-07T00:44:17.613Z
 ---
 
-Op 19 december heeft de Eerste Kamer ingestemd met het pakket Belastingplan 2024. Het pakket bevat maatregelen voor de samenleving en het belastingstelsel, die de koopkracht ondersteunen en het belastingstelsel eenvoudiger maken. Het overzicht van...
+Op 19 december heeft de Eerste Kamer ingestemd met het pakket Belastingplan 2024. Het pakket bevat maatregelen voor de samenleving en het belastingstelsel, die de koopkracht ondersteunen en het belastingstelsel eenvoudiger maken. Het overzicht van de belangrijkste wijzigingen vindt u hieronder. Precies weten wat er voor uw persoonlijke situatie wijzigt per 2024? Ga dan naar de ‘wat betekent dit voor mij’-tool van Wijzer in Geldzaken.
+
+Inkomen
+
+Het kabinet heeft in het pakket Belastingplan 2024 een serie maatregelen opgenomen waardoor werkenden, gepensioneerden en de meeste zzp’ers en ondernemers netto meer overhouden. De eerste belastingschijf van de inkomstenbelasting gaat weliswaar met 0,04% omhoog, maar de arbeidskorting wordt met € 115 verhoogd en de algemene heffingskorting wordt geïndexeerd. Ondernemers met een hoger inkomen gaan wel meer belasting betalen. Deze ib-ondernemers hebben te maken met de verdere verlaging van de zelfstandigenaftrek uit het vorige Belastingplan van € 5030 naar € 3750 en de verlaging van de mkb-winstvrijstelling van 14% naar 13,31%. Zij betalen hierdoor over een groter deel van hun winst of inkomen belasting. Met het verlagen van de mkb-winstvrijstelling verkleinen we het verschil in fiscale behandeling van werknemers en ondernemers in de inkomstenbelasting.
+
+Ook worden de onbelaste reiskostenvergoeding en de onbelaste vrijwilligersvergoeding verhoogd. De onbelaste reiskostenvergoeding gaat van € 0,21 naar € 0,23 per kilometer. De maximale onbelaste uurvergoeding voor vrijwilligers van 21 jaar en ouder wordt per 1 januari verhoogd naar € 5,50 per uur. Voor vrijwilligers jonger dan 21 jaar wordt het bedrag verhoogd naar € 3,25 per uur. De totale maximale vrijwilligersvergoeding in 2024 is € 2100 per jaar en € 210 per maand.
+
+Ondernemen
+
+Per 1 januari treedt de tweede schijf in box 2 in werking. Deze maatregel is in het Belastingplan 2023 aangekondigd. Hierdoor wordt vanaf 2024 24,5% belasting betaald over de eerste € 67.000 aan inkomsten per persoon in box 2. Over al het inkomen boven € 67.000 betalen mensen 33% belasting.
+
+Daarnaast zijn er bij de behandeling van het Belastingplan in de Tweede Kamer nog 2 aanvullende maatregelen genomen. Zo wordt per 2024 de 30%-regeling beperkt tot de Balkenende-norm (€ 233.000 in 2024) en daarnaast wordt de hoogte van de vrijstelling stapsgewijs afgebouwd. De eerste 20 maanden geldt een vrijstelling van 30% van het loon, voor de daarop volgende 20 maanden geldt een vrijstelling van 20% en de daaropvolgende 20 maanden geldt een vrijstelling van 10%. Daarnaast wordt het lenen bij eigen bv verder gemaximeerd door het bedrag te verlagen van € 700.000 naar € 500.000.
+
+Vermogen en wonen
+
+Het kabinet heeft besloten om met terugwerkende kracht tot 1 januari 2023 twee verfijningen door te voeren in de overbruggingswet box 3. Deze maatregelen zijn daarmee al van toepassing op uw aangifte Inkomstenbelasting 2023. Zo valt het vermogen van een reservefonds van een vereniging van eigenaren (vve) en het geld op een derdenrekening van een notaris vanaf dat moment in de categorie banktegoeden. Daarnaast worden onderlinge vorderingen en schulden tussen fiscale partners en tussen ouders en minderjarige kinderen niet meer belast in box 3. Deze schulden hoeven mensen niet meer op te geven aan de belasting. Zo wordt de belasting op vermogen beter verdeeld. Tijdens de behandeling van het Belastingplan heeft de Tweede Kamer besloten het belastingtarief in box 3 na amendering te verhogen van 32% naar 36% per 1 januari 2024. Het heffingvrije vermogen wordt niet aangepast. Dat blijft € 57.000 (€ 114.000 bij fiscaal partnerschap).
+
+De woningwaardegrens voor de startersvrijstelling is voor 2024 verhoogd naar € 510.000 (€ 440.000 in 2023). Verder is het vanaf 1 januari 2024 niet meer mogelijk om een belastingvrije schenking te doen voor de aankoop van een woning.
+
+Om de druk op de fiscale wetgeving en de rechtspraak in te perken en te voorkomen dat rechtsbescherming misbruikt wordt voor een verdienmodel, wordt vanaf 2024 de proceskostenvergoeding direct overgemaakt aan de burger of het bedrijf namens wie bezwaar is gemaakt. Deze vergoeding wordt ook verlaagd tot 25% van de huidige vergoeding als de burger of het bedrijf inhoudelijk gelijk krijgt bij een bezwaar of beroep over de WOZ of bpm.
+
+Klimaat
+
+De vermindering energiebelasting, het vaste bedrag dat per aansluiting van de energierekening afgaat, wordt per 1 januari verhoogd naar € 631,39 inclusief btw per jaar. De korting geldt onder andere voor woningen en kantoorgebouwen. Daarnaast gaan per 1 juli passagiers van de meeste privévliegtuigen vliegbelasting betalen, door een aanpassing van de gewichtsgrens van vliegtuigen. Deze wordt verlaagd van 8.616 kilogram naar 4.000 kilogram.
+
+Brandstofaccijns
+
+Om de koopkracht verder te ondersteunen heeft de Tweede Kamer daarnaast besloten om de tarieven van de brandstofaccijns in 2024 gelijk te houden aan de tarieven die gelden per 1 juli 2023. De accijns voor een liter benzine blijft daardoor € 0,79, een liter diesel € 0,52 en een liter LPG € 0,19.
+
+Gezondheid
+
+Per 2024 wordt de verbruiksbelasting op alcoholvrije dranken verhoogd van € 8,83 naar € 26,13 per 100 liter. Mineraalwater wordt vanaf datzelfde moment uitgezonderd van de verbruiksbelasting.
+
+Om een gezonde levensstijl te stimuleren en ongezonde keuzes te ontmoedigen verhoogt het kabinet daarnaast de accijns op alcohol en tabak. Het accijnstarief voor alcohol wordt per 2024 verhoogd met 8,4%. Vanaf 1 april bedraagt de accijns op sigaretten € 7,81 per pakje van 20 sigaretten en de accijns op shag € 17,35 per pakje van 50 gram. Een pakje sigaretten (20 stuks) kost dan vanaf 1 april 2024 gemiddeld € 11,10 en een pakje shag (50 gram) € 24,62 inclusief btw.

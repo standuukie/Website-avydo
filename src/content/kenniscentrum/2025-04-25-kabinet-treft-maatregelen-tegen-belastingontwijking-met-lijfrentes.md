@@ -15,4 +15,14 @@ aiAssisted: false
 fetchedAt: 2026-10-06T23:55:08.158Z
 ---
 
-Het kabinet treft maatregelen om te voorkomen dat over de uitbetaling van een lijfrente geen belasting wordt betaald, waarmee belasting wordt ontweken. Bijvoorbeeld door te beginnen met uitkeren van de lijfrente na de uiterste wettelijke...
+Het kabinet treft maatregelen om te voorkomen dat over de uitbetaling van een lijfrente geen belasting wordt betaald, waarmee belasting wordt ontweken. Bijvoorbeeld door te beginnen met uitkeren van de lijfrente na de uiterste wettelijke ingangsdatum. Door de maatregelen moet ook hierover belasting worden betaald. De maatregelen gaan in per 1 januari 2026 en gelden met terugwerkende kracht vanaf 25 april 2025.
+
+Met een lijfrente kan naast een AOW en pensioen extra inkomen worden opgebouwd voor later. In de opbouwfase wordt telkens premie ingelegd, die kan worden afgetrokken van de inkomstenbelasting. Vanaf een afgesproken moment wordt in termijnen de lijfrente uitbetaald, waarover wel belasting betaald moet worden. Voor de opbouw en uitbetaling zijn voorwaarden gesteld. Zo kan het volledige bedrag bijvoorbeeld niet in één keer worden opgenomen en moet de eerste uitbetaling zijn gedaan voor de uiterste wettelijke ingangsdatum.
+
+Maatregelen
+
+Wanneer de lijfrente niet aan deze voorwaarden voldoet, kan de lijfrente niet meer in de belastingheffing worden betrokken. Er wordt dan geen belasting betaald over de uitbetaling van de lijfrente terwijl in de opbouwfase wel premies zijn afgetrokken. Met de maatregelen uit de Fiscale verzamelwet 2026 wordt lijfrente altijd in de belastingheffing betrokken, ook als deze niet meer aan de voorwaarden voldoet. Hiermee wordt het ontwijken van belasting voorkomen.
+
+Terugwerkende kracht
+
+Het wetsvoorstel is vandaag ingediend bij de Tweede Kamer en moet in werking treden per 1 januari 2026. Om te voorkomen dat tussen nu en 1 januari 2026 de lijfrente nog belastingvrij wordt opgenomen, gaan de maatregelen in met terugwerkende kracht. Over uitbetalingen die worden gedaan na 25 april 2025 moet dan altijd belasting worden betaald.

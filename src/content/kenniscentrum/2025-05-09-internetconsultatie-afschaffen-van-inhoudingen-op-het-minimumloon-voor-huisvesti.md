@@ -16,4 +16,14 @@ aiAssisted: false
 fetchedAt: 2026-10-07T12:35:29.031Z
 ---
 
-Werkgevers mogen per 1 januari 2030 geen salaris meer inhouden op het minimumloon van werkenden ten aanzien van huisvestingskosten. Dat staat in een besluit dat minister Eddy van Hijum van Sociale Zaken en Werkgelegenheid vandaag online heeft...
+Werkgevers mogen per 1 januari 2030 geen salaris meer inhouden op het minimumloon van werkenden ten aanzien van huisvestingskosten. Dat staat in een besluit dat minister Eddy van Hijum van Sociale Zaken en Werkgelegenheid vandaag online heeft gezet. Mensen kunnen tot 6 juni inhoudelijk reageren.
+
+Op dit moment mogen werkgevers maximaal 25% van het salaris inhouden op het minimumloon. Vanaf 1 januari 2026 wordt dit percentage ieder jaar 5 procentpunt minder waardoor in 2030 een einde komt aan deze regeling. Deze regeling wordt veelal gebruikt bij huisvesting van arbeidsmigranten. De inhoudingsmogelijkheid voor huisvesting kan een verdienmodel in de hand werken waarbij arbeidsmigranten worden uitgebuit. Daarom wordt deze regeling stapsgewijs afgebouwd en op termijn afgeschaft.
+
+Wilt u reageren?
+
+U kunt reageren tot en met 6 juni 2025 via https://www.internetconsultatie.nl/wijzigingbesluitminimumloonenminimumvakantiebijslag .
+
+Let op
+
+Er is meer recente informatie beschikbaar over deze voorgenomen aanpassing.

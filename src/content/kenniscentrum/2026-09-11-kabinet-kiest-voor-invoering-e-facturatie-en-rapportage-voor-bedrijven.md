@@ -15,4 +15,20 @@ aiAssisted: false
 fetchedAt: 2026-10-07T12:24:36.093Z
 ---
 
-Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven. Verplichte e-facturatie en rapportage helpen ondernemers om hun...
+Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven. Verplichte e-facturatie en rapportage helpen ondernemers om hun processen te automatiseren, dragen bij aan het concurrentievermogen van de Nederlandse en Europese economie en zorgen voor een effectievere handhaving door de Belastingdienst. De aanleiding hiervan is de EU-richtlijn ‘Btw in het digitale tijdperk’. Het nationale wetsvoorstel hiervoor wordt de komende tijd verder uitgewerkt en wordt naar verwachting voor de zomer van 2027 ingediend bij de Tweede Kamer.
+
+Op dit moment gelden voor ondernemers in de verschillende lidstaten van de Europese Unie verschillende rapportageverplichtingen voor de btw. Dit heeft een remmend effect op de handel binnen Europa, terwijl deze handel juist goed is voor de Nederlandse economie. Ook leiden deze nationale verschillen voor ondernemers tot onnodige regeldruk zoals extra administratieve lasten. Door de Europese richtlijn gaan alle ondernemers grensoverschrijdende zakelijke transacties (zogeheten business-to-business) per juli 2030 op dezelfde manier rapporteren, namelijk digitaal en per transactie. Daarmee kan ook op een effectievere manier fraude worden bestreden. Om dit mogelijk te maken zijn elektronische facturen noodzakelijk.
+
+Binnen Nederland
+
+Lidstaten hebben de keuze om deze richtlijn ook toe te passen voor binnenlandse zakelijke transacties. Het kabinet kiest er net als bijvoorbeeld Frankrijk, Duitsland, België, Polen en Italië voor om hier gebruik van te maken en elektronisch factureren (per 1 juli 2030) en rapportage (per 1 juli 2031) ook verplicht te stellen voor deze binnenlandse transacties. Nederlandse bedrijven binnen de kleineondernemersregeling (KOR), met een omzet van maximaal € 20.000,- per kalenderjaar, zijn vrijgesteld van e-facturatie en -rapportage. De uitzondering voor deze groep blijft ook na juli 2030 gelden.
+
+Voor ondernemers die de eenmalige investering in verdere digitalisering toch al voor hun buitenlandse zaken moeten doen, betekent dit uiteindelijk een verdere administratieve vereenvoudiging en wordt het makkelijker aan hun fiscale verplichtingen te voldoen. Voor een deel van de ondernemers betekent dit dat zij hun factureringsprocessen moeten aanpassen, bijvoorbeeld door over te stappen op een digitaal boekhoudpakket. Onderzoek laat al zien dat e-facturatie zorgt voor een forse kostenbesparing voor ondernemers per verzonden en ontvangen factuur. Tegelijkertijd biedt het voor de Belastingdienst de mogelijkheid om toezicht en dienstverlening gerichter en efficiënter te maken.
+
+Veiligheid bedrijfsgevoelige gegevens harde randvoorwaarde
+
+Het kabinet vindt het essentieel dat het ontvangen en verwerken van bedrijfsgevoelige gegevens op een veilige en verantwoorde manier gebeurt en dat dit gewaarborgd wordt. Dit is een harde randvoorwaarde bij de implementatie van het voorstel. Niet iedereen kan zomaar bij de gegevens die een ondernemer aanlevert. Zo wordt er gewerkt met autorisatie en rolgebaseerde toegang: medewerkers hebben uitsluitend toegang tot gegevens die noodzakelijk zijn voor de uitvoering van hun taak (“ need to know ”). Daarnaast wordt de toegang tot en het gebruik van gegevens gelogd, inclusief wie, wanneer en met welk doel gegevens worden geraadpleegd of verwerkt. Ook is het kabinet voornemens de Belastingdienst een beperkte bewaartermijn van tien jaar te laten hanteren.
+
+Vervolg
+
+De komende periode wordt op een aantal punten nog nader onderzoek gedaan, zoals hoe veilige en betrouwbare data-uitwisseling worden ingericht en wat de bredere impact (waaronder op het aanpakken van administratieve lasten) voor ondernemers is. Het conceptwetsvoorstel wordt dit najaar in internetconsultatie gebracht. Het kabinet wil het wetsvoorstel vervolgens voor de zomer van 2027 aanbieden aan de Tweede Kamer.
