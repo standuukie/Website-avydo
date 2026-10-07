@@ -232,4 +232,22 @@ export const personeelItems: KnowledgeItem[] = [
     tags: ['werkgeversverplichtingen', 'verplichtingen werkgever', 'personeel in dienst'],
     priority: 3,
   },
+  // Bundelt de Rijksoverheid-nieuwsberichten in het Kenniscentrum over dit
+  // onderwerp (29-01-2025 boetes illegale arbeid, 09-07-2025 boetes
+  // uitbuiting, 30-10-2025 huisvestingsregeling, 11-11-2025 Wtta,
+  // 22-05-2026 zorgplicht uitleners, 10-09-2026 voornemen huisvesting),
+  // elk met de status zoals de bron die noemt.
+  {
+    id: 'arbeidsmigranten-buitenlandse-werknemers',
+    title: 'Arbeidsmigranten en buitenlandse werknemers',
+    category: 'Personeel',
+    content:
+      'Overzicht voor werkgevers die arbeidsmigranten of andere buitenlandse werknemers inzetten, met per onderwerp de status volgens de Rijksoverheid. Vergunning (geldend): wie zonder vergunning werknemers van buiten de Europese Unie laat werken, overtreedt de Wet arbeid vreemdelingen (Wav); sinds 1 februari 2025 kan de Nederlandse Arbeidsinspectie hiervoor hogere boetes per arbeidskracht opleggen, extra hoog bij opzet of misstanden zoals het innemen van paspoorten of slechte huisvesting. Huisvesting (geldend): de werkgever mag huisvestingskosten tot een wettelijk maximum inhouden op het minimumloon, alleen voor een gecertificeerde woning; de geplande afbouw per 1 januari 2026 gaat niet door (kabinetsbesluit van 30-10-2025). Voornemen, nog geen geldend recht: de minister wil die inhouding afschaffen, met als streefdatum 1 juli 2028, gelijk met de beoogde Wet passende huur (brief van 10-09-2026). Uitlenen (aangenomen wet): de Wtta gaat op 1 januari 2027 in; uitzendbureaus en andere uitleners hebben dan een toelating nodig en melden zich vóór die datum bij de Nederlandse Autoriteit Uitleenmarkt (NAU). Vanaf 1 januari 2028 handhaaft de Arbeidsinspectie; ook inleners die een uitlener zonder toelating inschakelen riskeren een boete. Boetes (kabinetsbesluit 09-07-2025): de boetes onder onder meer de Wav, de Wet minimumloon en de Waadi worden verhoogd via indexatie. Zorgplicht (voorstel, internetconsultatie tot 19 juni 2026): uitleners moeten arbeidsmigranten informeren over inschrijving in de BRP en die inschrijving controleren. Actuele bedragen en percentages staan in de bronnen.',
+    targetAudience: ['werkgever', 'mkb-ondernemer', 'bv-dga'],
+    sourceName: 'Rijksoverheid',
+    sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2025/11/11/eerste-kamer-stemt-in-met-strengere-regels-voor-de-uitleenmarkt',
+    lastVerified: '2026-10-07',
+    tags: ['arbeidsmigranten', 'arbeidsmigrant', 'buitenlandse werknemers', 'buitenlandse werknemer', 'werkvergunning', 'illegale tewerkstelling'],
+    priority: 1,
+  },
 ];

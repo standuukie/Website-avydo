@@ -63,8 +63,8 @@ function topId(prev, msg) {
   return top?.id;
 }
 
-test('sanity: kennisbank correct geladen (68 items) in de productievolgorde', () => {
-  assert.equal(KB.length, 68);
+test('sanity: kennisbank correct geladen (69 items) in de productievolgorde', () => {
+  assert.equal(KB.length, 69);
   assert.equal(KB[0].id, 'onderneming-starten'); // eerste item van ondernemingsvormen.ts
 });
 

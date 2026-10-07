@@ -88,7 +88,7 @@ test('extractie vindt alle 19 nieuwe kennisitems uit deze uitbreidingsronde', ()
   for (const id of expectedNewIds) {
     assert.ok(ids.has(id), `nieuw kennisitem "${id}" niet gevonden door de extractie — extractie of item mogelijk kapot`);
   }
-  assert.equal(KB.length, 68, `verwacht 68 kennisitems totaal (49 bestaand + 19 nieuw), telde ${KB.length}`);
+  assert.equal(KB.length, 69, `verwacht 69 kennisitems totaal (49 bestaand + 19 nieuw uit deze ronde + 1 later: arbeidsmigranten-buitenlandse-werknemers), telde ${KB.length}`);
 });
 
 // ---------------------------------------------------------------------
@@ -279,4 +279,41 @@ test('elk nieuw kennisitem heeft minimaal 4 tags (voldoende trefwoordvarianten v
     assert.ok(item, `item "${id}" niet gevonden`);
     assert.ok(item.tags.length >= 4, `item "${id}" heeft maar ${item.tags.length} tags, verwacht minimaal 4`);
   }
+});
+
+// ---------------------------------------------------------------------
+// Kennisitem arbeidsmigranten (2026-10-07): anker voor vragen die na
+// tokenisatie maar één inhoudelijk token hebben ("arbeidsmigranten"), zodat
+// geen Kenniscentrum-artikel de drempel haalt.
+
+const MIGRANTEN_ID = 'arbeidsmigranten-buitenlandse-werknemers';
+
+for (const query of [
+  'Wat verandert er voor arbeidsmigranten?',
+  'Welke regels gelden voor arbeidsmigranten?',
+  'Wat moet ik als werkgever regelen voor arbeidsmigranten?',
+  'Wat zijn de regels voor buitenlandse werknemers?',
+]) {
+  test(`arbeidsmigranten — "${query}" vindt het kennisitem als eerste bron`, () => {
+    assert.equal(retrieveKnowledgeItems(query, KB, { maxItems: 2 })[0]?.id, MIGRANTEN_ID);
+  });
+}
+
+test('arbeidsmigranten — brede werkgevers-/personeelsvragen worden niet gekaapt', () => {
+  for (const query of [
+    'Welke verplichtingen heb ik als werkgever?',
+    'Ik wil personeel aannemen, wat moet ik regelen?',
+    'Wat verandert er met de re-integratie van zieke werknemers?',
+    'Welke regels gelden voor uitzendbureaus?',
+  ]) {
+    assert.equal(retrieveKnowledgeItems(query, KB, { maxItems: 2 }).some((i) => i.id === MIGRANTEN_ID), false, query);
+  }
+});
+
+test('arbeidsmigranten — content benoemt de status: geldende huisvestingsregel, voornemen apart, Wtta als aangenomen wet', () => {
+  const { content } = KB.find((i) => i.id === MIGRANTEN_ID);
+  assert.match(content, /Huisvesting \(geldend\)/);
+  assert.match(content, /Voornemen, nog geen geldend recht/);
+  assert.match(content, /Uitlenen \(aangenomen wet\): de Wtta gaat op 1 januari 2027 in/);
+  assert.match(content, /Zorgplicht \(voorstel/);
 });
