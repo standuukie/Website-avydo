@@ -5,13 +5,13 @@ priority: "praktisch"
 publishedAt: 2025-07-07T10:02:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/07/07/transacties-met-crypto-straks-meer-in-beeld-bij-belastingdienst"
-summary: "Transacties met crypto zijn straks meer in beeld bij de Belastingdienst. Vanaf 1 januari 2026 worden crypto-aanbieders verplicht om gegevens van hun gebruikers te verzamelen, controleren en delen met de Belastingdienst. De informatie kan worden..."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Transacties met crypto zijn straks meer in beeld bij de Belastingdienst. Vanaf 1 januari 2026 worden crypto-aanbieders verplicht om gegevens van hun gebruikers te verzamelen, controleren en delen met de Belastingdienst."
+relevance: "Relevant voor iedereen met crypto: crypto hoort al bij het vermogen dat u in de aangifte inkomstenbelasting opgeeft, maar de Belastingdienst krijgt via crypto-aanbieders straks ook transactiegegevens om die aangifte te controleren. Volgens dit wetsvoorstel rapporteren aanbieders voor het eerst uiterlijk 31 januari 2027; de gegevens worden niet vooraf ingevuld."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T00:44:12.371Z
 ---
 

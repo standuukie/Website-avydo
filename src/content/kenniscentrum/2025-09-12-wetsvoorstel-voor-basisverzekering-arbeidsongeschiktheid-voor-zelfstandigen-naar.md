@@ -1,18 +1,18 @@
 ---
-title: "Wetsvoorstel voor basisverzekering arbeidsongeschiktheid voor zelfstandigen naar de Raad van State"
+title: "Wetsvoorstel voor basisverzekering arbeidsongeschiktheid voor zelfstandigen naar de Raad van State (eerdere fase)"
 category: "Ondernemen & rechtsvormen"
-priority: "belangrijk"
+priority: "praktisch"
 publishedAt: 2025-09-12T13:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/09/12/wetsvoorstel-voor-basisverzekering-arbeidsongeschiktheid-voor-zelfstandigen-naar-de-raad-van-state"
 supersededBy: "https://www.rijksoverheid.nl/actueel/nieuws/2026/03/13/kabinet-komt-met-betaalbare-basisverzekering-voor-zelfstandigen-bij-arbeidsongeschiktheid"
-summary: "Het kabinet stuurt het wetsvoorstel voor een verplichte basisverzekering die zelfstandigen beschermt tegen de risico’s van arbeidsongeschiktheid naar de Raad van State. Het wetsvoorstel is na kritiek van onder andere uitvoeringsorganisaties..."
-relevance: "Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de volledige publicatie om te bepalen of actie nodig is."
+summary: "Het kabinet stuurt het wetsvoorstel voor een verplichte basisverzekering die zelfstandigen beschermt tegen de risico’s van arbeidsongeschiktheid naar de Raad van State."
+relevance: "Let op: dit is een eerdere fase. In maart 2026 kwam het kabinet met de basisverzekering in de huidige vorm: maximaal € 171 bruto per maand, een wachttijd van 2 jaar en niet voor zelfstandigen die zich privaat verzekeren of een bv hebben. Zie het bericht van 13 maart 2026."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T13:10:14.877Z
 ---
 

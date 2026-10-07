@@ -1,17 +1,17 @@
 ---
-title: "Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen"
+title: "Voorstel: aandelenopties bij startups en scale-ups pas belast bij verkoop van de aandelen"
 category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-04-01T15:33:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/04/01/start-internetconsultatie-belastingmaatregelen-om-startups-en-scale-ups-te-ondersteunen"
-summary: "Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen. Er komt een nieuwe regeling die het aantrekkelijker maakt om medewerkers te belonen met opties op aandelen in het bedrijf...."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen."
+relevance: "Relevant voor startups en scale-ups die medewerkers (willen) belonen met aandelenopties, en voor die medewerkers. Volgens het voorstel betalen zij pas belasting bij verkoop van de aandelen, en wordt het voordeel voor 65% belast zolang de werkgever als startup of scale-up geldt. Het voorstel was in april 2026 in internetconsultatie; het streven is invoering per 1 januari 2027."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-06T23:55:06.434Z
 ---
 

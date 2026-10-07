@@ -5,13 +5,13 @@ priority: "belangrijk"
 publishedAt: 2026-07-10T11:30:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/07/10/kabinet-wil-meer-zekerheid-voor-werkgevers-bij-re-integratie"
-summary: "Het kabinet wil de onzekerheid bij werkgevers wegnemen over de vraag of zij genoeg hebben gedaan voor hun zieke werknemer. In een nieuw wetsvoorstel van de ministers Aartsen (Werk en Participatie) en Vijlbrief (Sociale Zaken en Werkgelegenheid)..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Het kabinet wil de onzekerheid bij werkgevers wegnemen over de vraag of zij genoeg hebben gedaan voor hun zieke werknemer. In een nieuw wetsvoorstel wordt het advies van de bedrijfsarts leidend bij de re-integratietoets van UWV."
+relevance: "Relevant voor elke werkgever met een langdurig zieke werknemer. Nu kan UWV na 2 jaar ziekte een loonsanctie opleggen als de re-integratie-inspanningen onvoldoende waren; volgens dit wetsvoorstel voldoet u aan uw verplichtingen als u het advies van de bedrijfsarts opvolgt. Ook hoeft een voorschot op een WIA-uitkering niet terugbetaald te worden als het recht later lager blijkt. Het voorstel gaat naar de Tweede Kamer en is nog niet ingevoerd."
 tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:37.878Z
 ---
 

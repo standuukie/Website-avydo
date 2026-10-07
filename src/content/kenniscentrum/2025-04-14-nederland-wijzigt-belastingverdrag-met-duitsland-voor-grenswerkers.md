@@ -1,17 +1,17 @@
 ---
-title: "Nederland wijzigt belastingverdrag met Duitsland voor grenswerkers"
+title: "Belastingverdrag met Duitsland wordt gewijzigd: 34 thuiswerkdagen per jaar voor grenswerkers"
 category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2025-04-14T09:45:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/04/14/nederland-wijzigt-belastingverdrag-met-duitsland-voor-grenswerkers"
-summary: "Het belastingverdrag tussen Nederland en Duitsland wordt gewijzigd zodat grenswerkers jaarlijks maximaal 34 dagen kunnen thuiswerken zonder dat zij over hun inkomen belasting hoeven te betalen in beide landen. Dit hebben de landen vandaag..."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Het belastingverdrag tussen Nederland en Duitsland wordt gewijzigd zodat grenswerkers jaarlijks maximaal 34 dagen kunnen thuiswerken zonder dat zij over hun inkomen belasting hoeven te betalen in beide landen."
+relevance: "Vooral relevant voor werkgevers in de grensregio met werknemers die in Duitsland wonen, en voor grenswerkers zelf. Na de wijziging kunnen grenswerkers maximaal 34 dagen per jaar thuiswerken terwijl de belasting over hun loon volledig in het land van de werkgever blijft. Let op: de wijziging geldt pas nadat de Raad van State en de parlementen van beide landen ermee hebben ingestemd."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-06T23:55:08.472Z
 ---
 

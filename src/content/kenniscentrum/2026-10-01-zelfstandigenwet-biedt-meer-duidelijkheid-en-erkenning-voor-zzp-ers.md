@@ -1,17 +1,17 @@
 ---
-title: "Zelfstandigenwet biedt meer duidelijkheid en erkenning voor zzp’ers"
+title: "Zelfstandigenwet in consultatie: meer duidelijkheid en erkenning voor zzp’ers"
 category: "Ondernemen & rechtsvormen"
 priority: "actueel"
 publishedAt: 2026-10-01T06:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zelfstandigenwet-biedt-meer-duidelijkheid-en-erkenning-voor-zzpers"
-summary: "Voor zzp’ers en opdrachtgevers komen duidelijke spelregels vooraf over hoe ze met elkaar kunnen werken. De wet gaat uit van zelfstandig ondernemerschap en heeft als doel een veilige haven te creëren voor zelfstandigen. Dat staat in de..."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Voor zzp’ers en opdrachtgevers komen duidelijke spelregels vooraf over hoe ze met elkaar kunnen werken. De wet gaat uit van zelfstandig ondernemerschap en heeft als doel een veilige haven te creëren voor zelfstandigen."
+relevance: "Belangrijk voor zzp'ers en opdrachtgevers: met een zelfstandigentoets (onder meer zelf factureren, KVK-inschrijving, het aantal opdrachtgevers en voorzieningen tegen ondernemersrisico's) en een werkrelatietoets moet vooraf duidelijk worden of iemand als zelfstandige kan werken. Het gaat om een wetsvoorstel in internetconsultatie (reageren kon tot en met 29 oktober); de beoogde invoering is januari 2028."
 tags: []
 audiences: ["zzp", "mkb-ondernemer"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:31.547Z
 ---
 

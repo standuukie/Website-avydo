@@ -10,7 +10,7 @@ relevance: "Als DGA of BV kan dit gevolgen hebben voor uw fiscale positie. Bespr
 tags: []
 audiences: ["bv-dga"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-06T23:55:07.786Z
 ---

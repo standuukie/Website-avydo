@@ -1,17 +1,17 @@
 ---
-title: "Kabinet kiest voor meer rust en duidelijkheid voor zzp’ers en opdrachtgevers"
+title: "Kabinet schrapt deel zzp-wetsvoorstel Vbar: meer rust en duidelijkheid voor zzp’ers en opdrachtgevers"
 category: "Ondernemen & rechtsvormen"
 priority: "belangrijk"
 publishedAt: 2026-03-06T15:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/03/06/kabinet-kiest-voor-meer-rust-en-duidelijkheid-voor-zzpers-en-opdrachtgevers"
-summary: "Het kabinet schrapt een deel van (nieuwe) zzp-wetgeving die al in de Tweede Kamer lag. Het gaat om het verduidelijkingsdeel van het wetsvoorstel Verduidelijking beoordeling arbeidsrelaties en rechtsvermoeden (Vbar). Dat deel van de wetgeving..."
-relevance: "Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de volledige publicatie om te bepalen of actie nodig is."
+summary: "Het kabinet schrapt een deel van (nieuwe) zzp-wetgeving die al in de Tweede Kamer lag. Het gaat om het verduidelijkingsdeel van het wetsvoorstel Verduidelijking beoordeling arbeidsrelaties en rechtsvermoeden (Vbar)."
+relevance: "Belangrijk voor zzp'ers en hun opdrachtgevers: de handhaving op schijnzelfstandigheid gaat gewoon door. Blijkt er toch sprake van een arbeidsovereenkomst, dan moet de opdrachtgever alsnog loonheffingen afdragen. Het kabinet werkt aan de Zelfstandigenwet en wil zzp'ers met een uurtarief tot 38 euro sneller een sterkere rechtspositie geven."
 tags: []
 audiences: ["zzp"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:46.614Z
 ---
 

@@ -1,17 +1,17 @@
 ---
-title: "Subsidie voor mbk’er die technologie inzet voor werknemer met arbeidsbeperking"
+title: "Subsidie voor mkb’er die technologie inzet voor werknemer met arbeidsbeperking"
 category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2025-09-29T06:05:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/09/29/subsidie-voor-mbker-die-technologie-inzet-voor-werknemer-met-arbeidsbeperking"
-summary: "Technologie helpt om mensen met een arbeidsbeperking te laten meedoen op de arbeidsmarkt. Staatssecretaris Jurgen Nobel (Participatie en Integratie) stelt, mede op verzoek van de Tweede Kamer, subsidie beschikbaar aan mkb-bedrijven die hier werk..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Technologie helpt om mensen met een arbeidsbeperking te laten meedoen op de arbeidsmarkt. Staatssecretaris Jurgen Nobel (Participatie en Integratie) stelt, mede op verzoek van de Tweede Kamer, subsidie beschikbaar aan mkb-bedrijven die hier werk van willen maken."
+relevance: "Concreet voor mkb-werkgevers: de regeling vergoedt de helft van de investering in inclusieve technologie voor medewerkers met een arbeidsbeperking, zoals een voorleesbril of een exoskelet, tot maximaal € 25.000 per bedrijf. Het totale budget is beperkt (€ 2 miljoen); controleer bij de subsidie Inclusieve Technologie of aanvragen nog mogelijk is."
 tags: []
 audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T13:10:14.436Z
 ---
 

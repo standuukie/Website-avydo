@@ -1,17 +1,17 @@
 ---
-title: "Belastingplan 2027: voorstellen voor beter werkend belastingstelsel en gezonde overheidsfinanciën"
+title: "Belastingplan 2027: kabinet stelt ruimere innovatiebox voor en wil startersaftrek afschaffen"
 category: "Fiscale actualiteit"
 priority: "belangrijk"
 publishedAt: 2026-09-15T13:35:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/15/belastingplan-2027-voorstellen-voor-beter-werkend-belastingstelsel-en-gezonde-overheidsfinancien"
-summary: "Het pakket Belastingplan 2027 is vandaag door staatssecretaris Eerenberg (Financiën) aangeboden aan de Tweede Kamer. In het Belastingplan zitten dit jaar voorstellen om het belastingstelsel beter te laten werken en die bijdragen aan gezonde..."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Het pakket Belastingplan 2027 is vandaag door staatssecretaris Eerenberg (Financiën) aangeboden aan de Tweede Kamer."
+relevance: "Voor ondernemers springen onder meer deze voorstellen eruit: de innovatiebox voor het mkb wordt per 2027 verruimd van € 25.000 naar € 100.000, de energie-investeringsaftrek stijgt van 40% naar 45%, en de startersaftrek en de willekeurige afschrijving voor starters verdwijnen per 2028. Het zijn voorstellen: pas na akkoord van de Tweede en de Eerste Kamer zijn ze definitief."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:33.230Z
 ---
 

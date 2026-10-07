@@ -5,13 +5,13 @@ priority: "belangrijk"
 publishedAt: 2026-09-11T12:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven"
-summary: "Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven. Verplichte e-facturatie en rapportage helpen ondernemers om hun..."
-relevance: "Dit kan relevant zijn voor uw jaarrekening of financiële administratie. Bespreek met uw accountant of dit gevolgen heeft voor uw onderneming."
+summary: "Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven."
+relevance: "Relevant voor vrijwel alle ondernemers die aan andere bedrijven factureren. Het kabinet wil e-facturatie per 1 juli 2030 en digitale rapportage per transactie per 1 juli 2031 ook voor binnenlandse zakelijke transacties verplicht stellen; ondernemers die de kleineondernemersregeling (KOR) toepassen, zijn vrijgesteld. Het is nog geen wet: het wetsvoorstel volgt naar verwachting voor de zomer van 2027. Voor een deel van de ondernemers betekent dit dat het factuurproces moet worden aangepast, bijvoorbeeld met een digitaal boekhoudpakket."
 tags: ["e-facturatie", "verplicht"]
 audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:36.093Z
 ---
 

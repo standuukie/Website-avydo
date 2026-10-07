@@ -1,4 +1,4 @@
-// Opschoning Rijksoverheid-nieuws (2026-10-07): 16 artikelen zonder directe
+// Opschoning Rijksoverheid-nieuws (2026-10-07), twee rondes. Ronde 1: 16 artikelen zonder directe
 // waarde voor de Avydo-doelgroep (belastingverdragen, een verlopen webinar,
 // achterhaalde box 3-tussenfases en oude belastingjaren) staan op
 // `hidden: true`. Ze verdwijnen daarmee van de nieuwspagina, de
@@ -24,6 +24,10 @@ const ARTICLES = readdirSync(CONTENT_DIR)
     const get = (key) => text.match(new RegExp(`^${key}: "?(.*?)"?$`, 'm'))?.[1];
     return {
       file,
+      title: get('title'),
+      summary: get('summary'),
+      relevance: get('relevance'),
+      priority: get('priority'),
       category: get('category'),
       sourceName: get('sourceName'),
       sourceUrl: get('sourceUrl'),
@@ -58,14 +62,27 @@ const VEROUDERD = [
   '2024-12-18-in-2025-geen-boetes-bij-handhaving-schijnzelfstandigheid.md',
   '2024-12-18-kabinet-houdt-met-belastingwijzigingen-voor-2025-oog-voor-portemonnee-van-werken.md',
 ];
-const VERBORGEN = [...VERDRAGEN, WEBINAR, ...VEROUDERD];
+// Ronde 2 (redactionele audit): beperkte waarde voor de Avydo-doelgroep.
+const VERBORGEN_RONDE_2 = [
+  // Consultatiefase uit 2024; dezelfde wet staat in het bericht van 07-07-2025.
+  '2024-10-24-internetconsultatie-voor-wetsvoorstel-rapportageverplichting-crypto-aanbieders.md',
+  // Beleidsverkenning met een keuzemoment in 2025; de uitkomst staat niet in de bronselectie.
+  '2025-02-07-mogelijke-alternatieven-voor-verhoging-btw-in-kaart-gebracht.md',
+  // Beurshandel en pensioenfondsen; geen praktische gevolgen voor een DGA met eigen bv.
+  '2025-06-27-kabinet-kijkt-naar-aanvullende-mogelijkheden-dividendstripping-aan-te-pakken.md',
+  // Technische antimisbruikmaatregel voor beleggers in obligaties.
+  '2025-08-25-kabinet-dicht-belastinglek-in-box-3-bij-obligaties.md',
+  // Algemeen begrotingsnieuws; de ondernemersmaatregelen staan in het Belastingplan 2027-bericht.
+  '2026-09-15-prinsjesdag-2026-welvaart-opnieuw-verdienen.md',
+  // Fusietoezicht voor bedrijven met tientallen miljoenen omzet.
+  '2026-09-22-aanpassing-mededingingswet-beter-en-gerichter-toezicht-fusies-en-overnames.md',
+];
+const VERBORGEN = [...VERDRAGEN, WEBINAR, ...VEROUDERD, ...VERBORGEN_RONDE_2];
 
 const ACTUEEL_SEP_OKT_2026 = [
   '2026-09-10-werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant.md',
   '2026-09-11-kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven.md',
   '2026-09-15-belastingplan-2027-voorstellen-voor-beter-werkend-belastingstelsel-en-gezonde-ov.md',
-  '2026-09-15-prinsjesdag-2026-welvaart-opnieuw-verdienen.md',
-  '2026-09-22-aanpassing-mededingingswet-beter-en-gerichter-toezicht-fusies-en-overnames.md',
   '2026-10-01-zelfstandigenwet-biedt-meer-duidelijkheid-en-erkenning-voor-zzp-ers.md',
 ];
 const EXPLICIET_BEHOUDEN = [
@@ -105,6 +122,10 @@ test('opschoning: de achterhaalde box 3-tussenfases en oude belastingjaren (2024
   for (const file of VEROUDERD) assert.equal(isActive(file), false, file);
 });
 
+test('opschoning ronde 2: crypto-consultatie 2024, btw-alternatieven, dividendstripping, box 3-obligatielek, Prinsjesdag-macronieuws en Mededingingswet zijn niet actief', () => {
+  for (const file of VERBORGEN_RONDE_2) assert.equal(isActive(file), false, file);
+});
+
 test('opschoning: verborgen artikelen blijven als Rijksoverheid-bestand met sourceUrl bestaan (de fetcher importeert ze dus niet opnieuw)', () => {
   for (const file of VERBORGEN) {
     const article = byFile(file);
@@ -113,10 +134,10 @@ test('opschoning: verborgen artikelen blijven als Rijksoverheid-bestand met sour
   }
 });
 
-test('opschoning: precies deze 16 Rijksoverheid-artikelen zijn verborgen; 32 blijven actief', () => {
+test('opschoning: precies deze 22 Rijksoverheid-artikelen zijn verborgen; 26 blijven actief', () => {
   const rijksoverheid = ARTICLES.filter((a) => a.sourceName === 'Rijksoverheid');
   assert.deepEqual(rijksoverheid.filter((a) => a.hidden).map((a) => a.file).sort(), [...VERBORGEN].sort());
-  assert.equal(rijksoverheid.filter((a) => !a.hidden).length, 32);
+  assert.equal(rijksoverheid.filter((a) => !a.hidden).length, 26);
 });
 
 test('behoud: de actuele artikelen uit september/oktober 2026 blijven actief', () => {
@@ -149,4 +170,67 @@ test('historisch: het Vbar-wetsvoorstel van 07-07-2025 is opgevolgd door 06-03-2
   assert.equal(zzpRust.supersededBy, undefined);
   const active = ARTICLES.filter((a) => !a.hidden);
   assert.deepEqual(substituteExplicitSuccessors([vbar], active).map((a) => a.file), [ZZP_RUST]);
+});
+
+// --- Redactionele audit (2026-10-07) ---
+
+const ACTIEF_RO = ARTICLES.filter((a) => a.sourceName === 'Rijksoverheid' && !a.hidden);
+// Vaste sjabloonzinnen van de fetcher (RELEVANCE_TEMPLATES in fetch-articles.mjs).
+const SJABLOONZINNEN = [
+  'Controleer of deze wijziging van toepassing is op uw situatie',
+  'Controleer wat dit concreet voor uw organisatie betekent',
+  'Bekijk de volledige publicatie om te bepalen of actie nodig is',
+  'Bespreek met uw accountant of dit gevolgen heeft',
+  'Bespreek met uw adviseur of dit voor uw situatie relevant is',
+];
+
+test('redactie: elk actief Rijksoverheid-artikel heeft een eigen, onderwerpspecifieke duiding (geen sjabloonzin, geen duplicaat)', () => {
+  for (const a of ACTIEF_RO) {
+    for (const zin of SJABLOONZINNEN) assert.equal(a.relevance.includes(zin), false, `${a.file}: ${zin}`);
+  }
+  assert.equal(new Set(ACTIEF_RO.map((a) => a.relevance)).size, ACTIEF_RO.length);
+});
+
+test('redactie: geen actieve Rijksoverheid-samenvatting eindigt afgekapt op "..."', () => {
+  for (const a of ACTIEF_RO) {
+    assert.equal(/(\.\.\.|…)$/.test(a.summary), false, a.file);
+    assert.match(a.summary, /[.!?]$/, a.file);
+  }
+});
+
+test('redactie: opgevolgde artikelen zijn in titel en duiding herkenbaar als achterhaald en worden niet als "belangrijk" uitgelicht', () => {
+  for (const a of ACTIEF_RO.filter((x) => x.supersededBy)) {
+    assert.match(a.title, /\((inmiddels herzien|deels geschrapt|eerdere fase)\)/, a.file);
+    assert.match(a.relevance, /^Let op:/, a.file);
+    assert.notEqual(a.priority, 'belangrijk', a.file);
+  }
+});
+
+test('redactie: voorstellen en voornemens worden niet als geldende regel gepresenteerd', () => {
+  const statusInTitel = {
+    '2026-09-10-werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant.md': /^Voornemen:/,
+    '2026-04-08-vaste-loonkostensubsidie-voor-werknemer-in-beschutte-werkomgeving.md': /^Voorstel:/,
+    '2026-04-01-start-internetconsultatie-belastingmaatregelen-om-startups-en-scale-ups-te-onder.md': /^Voorstel:/,
+    '2026-05-22-internetconsultatie-zorgplicht-voor-uitleners-van-start.md': /^Voorstel zorgplicht:/,
+    '2026-10-01-zelfstandigenwet-biedt-meer-duidelijkheid-en-erkenning-voor-zzp-ers.md': /in consultatie/,
+  };
+  for (const [file, re] of Object.entries(statusInTitel)) assert.match(byFile(file).title, re, file);
+  const statusInDuiding = {
+    '2026-09-10-werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant.md': /voornemen, nog geen geldende regel/,
+    '2026-03-13-kabinet-komt-met-betaalbare-basisverzekering-voor-zelfstandigen-bij-arbeidsonges.md': /kabinetsplan, nog geen geldende wet/,
+    '2026-09-11-kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven.md': /nog geen wet/,
+    '2026-09-15-belastingplan-2027-voorstellen-voor-beter-werkend-belastingstelsel-en-gezonde-ov.md': /Het zijn voorstellen/,
+    '2026-04-02-sneller-duidelijkheid-voor-werkgevers-over-re-integratie-zieke-werknemer.md': /nog niet ingevoerd/,
+    '2026-07-10-kabinet-wil-meer-zekerheid-voor-werkgevers-bij-re-integratie.md': /nog niet ingevoerd/,
+    '2025-04-14-nederland-wijzigt-belastingverdrag-met-duitsland-voor-grenswerkers.md': /geldt pas nadat/,
+  };
+  for (const [file, re] of Object.entries(statusInDuiding)) assert.match(byFile(file).relevance, re, file);
+  // De geldende huisvestingsregel blijft als geldend benoemd.
+  assert.match(byFile('2025-10-30-regeling-voor-huisvestingskosten-arbeidsmigranten-blijft-bestaan.md').relevance, /^Dit is de geldende regel/);
+});
+
+test('redactie: gecorrigeerde categorieën (lijfrente, Vbar) en titel zonder typefout (mkb)', () => {
+  assert.equal(byFile('2025-04-25-kabinet-treft-maatregelen-tegen-belastingontwijking-met-lijfrentes.md').category, 'Inkomstenbelasting');
+  assert.equal(byFile(VBAR).category, 'Ondernemen & rechtsvormen');
+  assert.match(byFile('2025-09-29-subsidie-voor-mbk-er-die-technologie-inzet-voor-werknemer-met-arbeidsbeperking.md').title, /^Subsidie voor mkb’er/);
 });

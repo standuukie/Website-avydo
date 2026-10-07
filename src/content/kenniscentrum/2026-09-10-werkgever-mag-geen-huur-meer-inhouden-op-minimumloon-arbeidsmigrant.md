@@ -1,17 +1,17 @@
 ---
-title: "Werkgever mag geen huur meer inhouden op minimumloon arbeidsmigrant"
+title: "Voornemen: werkgever mag vanaf juli 2028 geen huur meer inhouden op minimumloon arbeidsmigrant"
 category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2026-09-10T13:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/10/werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant"
-summary: "Minister Vijlbrief van Sociale Zaken en Werkgelegenheid wil dat werkgevers geen huur meer op het minimumloon van werkenden mogen inhouden. Dit schrijft de minister in een brief aan de Tweede Kamer. Op dit moment geldt nog een maximumpercentage van..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Minister Vijlbrief van Sociale Zaken en Werkgelegenheid wil dat werkgevers geen huur meer op het minimumloon van werkenden mogen inhouden. Dit schrijft de minister in een brief aan de Tweede Kamer."
+relevance: "Let op: dit is een voornemen, nog geen geldende regel. Nu mogen werkgevers nog maximaal 25% van het brutominimumloon inhouden voor huisvesting van een arbeidsmigrant, en alleen bij een gecertificeerde woning. De minister wil die mogelijkheid per 1 juli 2028 afschaffen, tegelijk met de beoogde inwerkingtreding van de Wet passende huur."
 tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:36.384Z
 ---
 

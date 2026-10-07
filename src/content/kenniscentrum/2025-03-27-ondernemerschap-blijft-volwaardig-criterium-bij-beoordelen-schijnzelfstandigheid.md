@@ -5,13 +5,13 @@ priority: "praktisch"
 publishedAt: 2025-03-27T14:55:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/03/27/ondernemerschap-blijft-volwaardig-criterium-bij-beoordelen-schijnzelfstandigheid"
-summary: "Bij het beoordelen of iemand werknemer of zelfstandige is blijft ondernemerschap een volwaardig criterium, naast de vraag of iemand wordt aangestuurd in het werk en voor eigen risico werkt. Kenmerken daarvan zijn bijvoorbeeld of iemand btw..."
-relevance: "Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+summary: "Bij het beoordelen of iemand werknemer of zelfstandige is blijft ondernemerschap een volwaardig criterium, naast de vraag of iemand wordt aangestuurd in het werk en voor eigen risico werkt."
+relevance: "Achtergrond voor zzp'ers en opdrachtgevers: de Belastingdienst weegt bij de beoordeling van schijnzelfstandigheid al mee of iemand zich als ondernemer gedraagt, bijvoorbeeld door btw af te dragen, te investeren of klanten te werven. Let op: de aanpassing van het wetsvoorstel Vbar waarover dit bericht gaat, is achterhaald. In maart 2026 schrapte het kabinet het verduidelijkingsdeel van de Vbar; daarvoor in de plaats komt de Zelfstandigenwet."
 tags: []
 audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:35:30.222Z
 ---
 

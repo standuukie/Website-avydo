@@ -5,13 +5,13 @@ priority: "belangrijk"
 publishedAt: 2026-04-02T12:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/04/02/sneller-duidelijkheid-voor-werkgevers-over-re-integratie-zieke-werknemer"
-summary: "Als zieke werknemers niet binnen 1 jaar kunnen terugkeren op het werk, kan vanaf de start van het 2e ziektejaar uitsluitend een plek bij een ander bedrijf worden gezocht. Zo wil het kabinet kleine en middelgrote werkgevers sneller duidelijkheid..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Volgens een wetsvoorstel van minister Aartsen wordt voor zieke werknemers die niet binnen 1 jaar kunnen terugkeren, vanaf het 2e ziektejaar uitsluitend een plek bij een ander bedrijf gezocht. Het voorstel ligt bij de Tweede Kamer."
+relevance: "Relevant voor mkb-werkgevers met een langdurig zieke werknemer. Volgens dit wetsvoorstel richt de re-integratie zich in het tweede ziektejaar op werk bij een andere werkgever, met instemming van de werknemer of toestemming van UWV; zo weet u eerder of u iemand nieuw mag aannemen. Het voorstel is naar de Tweede Kamer gestuurd en is nog niet ingevoerd."
 tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:45.080Z
 ---
 

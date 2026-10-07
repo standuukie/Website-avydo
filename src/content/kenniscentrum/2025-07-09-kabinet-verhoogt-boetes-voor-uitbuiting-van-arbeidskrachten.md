@@ -6,12 +6,12 @@ publishedAt: 2025-07-09T10:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/07/09/kabinet-verhoogt-boetes-voor-uitbuiting-van-arbeidskrachten"
 summary: "Het kabinet heeft besloten om de boetes voor bedrijven die arbeidswetten overtreden fors te verhogen. Deze maatregel is genomen om de uitbuiting van met name arbeidsmigranten tegen te gaan en eerlijke arbeidsvoorwaarden te bevorderen."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+relevance: "Relevant voor elke werkgever: de hogere boetes gelden onder meer voor overtredingen van de Wet minimumloon en minimumvakantiebijslag, de Wet arbeid vreemdelingen en de regels voor het uitlenen van arbeidskrachten (Waadi). Volgens het kabinet stijgen de boetes met ongeveer 18% per overtreding en worden ze voortaan jaarlijks geïndexeerd."
 tags: []
 audiences: []
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T13:10:16.603Z
 ---
 

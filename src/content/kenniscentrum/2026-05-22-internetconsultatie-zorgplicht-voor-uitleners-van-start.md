@@ -1,17 +1,17 @@
 ---
-title: "Internetconsultatie zorgplicht voor uitleners van start"
+title: "Voorstel zorgplicht: uitleners moeten BRP-inschrijving van arbeidsmigranten controleren"
 category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2026-05-22T08:18:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/05/22/internetconsultatie-zorgplicht-voor-uitleners-van-start"
-summary: "Vanaf 22 mei start de internetconsultatie van de zorgplicht rondom de registratie van arbeidsmigranten. Deze plicht geldt voor uitleners, zoals uitzendbureaus, detacheerders en payrollbedrijven. Een internetconsultatie is een periode waarbij het..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Vanaf 22 mei start de internetconsultatie van de zorgplicht rondom de registratie van arbeidsmigranten. Deze plicht geldt voor uitleners, zoals uitzendbureaus, detacheerders en payrollbedrijven."
+relevance: "Vooral relevant voor uitzendbureaus, detacheerders en payrollbedrijven; voor andere werkgevers geldt deze plicht niet. Volgens het voorstel moeten uitleners arbeidskrachten die minder dan 150% van het minimumloon verdienen informeren over inschrijving in de Basisregistratie Personen (BRP), en controleren of zij als ingezetene zijn ingeschreven. Het voorstel was tot 19 juni 2026 in internetconsultatie."
 tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:24:43.008Z
 ---
 

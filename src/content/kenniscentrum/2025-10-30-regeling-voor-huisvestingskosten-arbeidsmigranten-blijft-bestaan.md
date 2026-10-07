@@ -5,13 +5,13 @@ priority: "belangrijk"
 publishedAt: 2025-10-30T13:01:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/10/30/regeling-voor-huisvestingskosten-arbeidsmigranten-blijft-bestaan"
-summary: "Het kabinet heeft besloten dat werkgevers maximaal 25% van het minimumloon in rekening mogen brengen voor huisvestingskosten. De geplande afbouw van deze regeling per 1 januari 2026 gaat niet door. Het risico bestaat dat de afbouw van de inhouding..."
-relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
+summary: "Het kabinet heeft besloten dat werkgevers maximaal 25% van het minimumloon in rekening mogen brengen voor huisvestingskosten. De geplande afbouw van deze regeling per 1 januari 2026 gaat niet door."
+relevance: "Dit is de geldende regel voor werkgevers die arbeidsmigranten huisvesten: u mag maximaal 25% van het minimumloon inhouden voor huisvestingskosten, en alleen als de woning gecertificeerd is. Let op: in september 2026 kondigde de minister aan deze inhouding per 1 juli 2028 te willen afschaffen; dat is nog een voornemen."
 tags: ["huur", "inhouden", "werkgever", "huisvesting"]
 audiences: ["werkgever"]
 featured: false
 hidden: false
-aiAssisted: false
+aiAssisted: true
 fetchedAt: 2026-10-07T12:35:24.110Z
 ---
 
