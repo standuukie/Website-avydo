@@ -1716,12 +1716,16 @@ test('sources.config.mjs: de rijksoverheid-topic-api-bron bevat exact de vier be
   assert.equal(source.enabled, true);
 });
 
-test('sources.config.mjs: de algemene Rijksoverheid-sitemapbron blijft ongewijzigd naast de nieuwe topic-API-bron bestaan', () => {
-  const generalSource = sources.find((s) => s.id === 'rijksoverheid-nieuws');
-  assert.ok(generalSource, 'de bestaande algemene sitemapbron mag niet verwijderd zijn');
-  assert.equal(generalSource.type, 'sitemap');
-  assert.equal(generalSource.sitemapIndexUrl, 'https://www.rijksoverheid.nl/sitemap.xml');
-  assert.equal(generalSource.enabled, true);
+test('sources.config.mjs: de legacy-bronnen rijksoverheid-nieuws en mkb-nederland-nieuws zijn uitgeschakeld; topic-API, Belastingdienst en KVK blijven actief', () => {
+  const enabledById = Object.fromEntries(sources.map((s) => [s.id, s.enabled]));
+  assert.equal(enabledById['rijksoverheid-nieuws'], false);
+  assert.equal(enabledById['mkb-nederland-nieuws'], false);
+  assert.equal(enabledById['rijksoverheid-topic-api'], true);
+  assert.equal(enabledById['belastingdienst-zakelijk'], true);
+  assert.equal(enabledById['kvk-kennisartikelen'], true);
+  // De enige actieve Rijksoverheid-bron is de fiscale topic-API.
+  const activeRijksoverheid = sources.filter((s) => s.enabled && s.id.startsWith('rijksoverheid'));
+  assert.deepEqual(activeRijksoverheid.map((s) => s.id), ['rijksoverheid-topic-api']);
 });
 
 // --- API-request ---

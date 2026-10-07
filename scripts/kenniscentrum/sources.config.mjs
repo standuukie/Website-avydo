@@ -173,7 +173,14 @@ export const sources = [
     sitemapIndexUrl: 'https://www.rijksoverheid.nl/sitemap.xml',
     articleUrlPattern: '/actueel/nieuws/',
     defaultCategory: 'Fiscale actualiteit',
-    enabled: true,
+    // Uitgeschakeld (legacy): vervangen door de gerichte topic-API-bron
+    // hieronder. De eerste productierun met beide bronnen (2026-10-06)
+    // leverde via deze sitewide sitemap 0 relevante artikelen op uit 100
+    // beoordeelde pagina's; de bestaande content van deze bron is
+    // verwijderd. Configuratie bewust bewaard (niet verwijderd) omdat
+    // rijksoverheidAudienceSignals en de toelichting hierboven nog door de
+    // topic-API-bron worden gebruikt.
+    enabled: false,
     urlConfidence: 'confirmed',
     // Sitewide nieuws-discovery van de hele Rijksoverheid (alle ministeries):
     // strikt filteren is hier essentieel. Sinds de redactionele aanscherping
@@ -247,7 +254,9 @@ export const sources = [
     type: 'rss',
     feedUrl: 'https://www.mkb.nl/rss/nieuws-mkb-nederland',
     defaultCategory: 'Fiscale actualiteit',
-    enabled: true,
+    // Uitgeschakeld (legacy): bron niet langer gewenst voor het
+    // Kenniscentrum; de bestaande content van deze bron is verwijderd.
+    enabled: false,
     urlConfidence: 'confirmed',
     // Aangescherpt op 2026-10-01: deze feed bevat overwegend politieke
     // lobby-standpunten en algemeen ondernemersnieuws (stikstof, cao-
