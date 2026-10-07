@@ -15,6 +15,7 @@ import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
 import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, retrieveKnowledgeItemsWithContext, tokenize } from './knowledge-match.mjs';
 import { formatSourcesForPrompt as formatSourcesWithFreshness, rankScoredArticles } from './source-freshness.mjs';
+import { articleContextSnippet } from './article-context.mjs';
 
 export interface RetrievedSource {
   id: number;
@@ -139,7 +140,15 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
       name: `Kenniscentrum Avydo (bron: ${article.data.sourceName})`,
       title: article.data.title,
       url: article.data.sourceUrl,
-      snippet: `${article.data.summary} ${article.data.relevance}`.slice(0, 500),
+      // Pas NA de selectie hierboven: welke tekst van dit gekozen artikel
+      // het model ziet (Rijksoverheid: hoofdtekst, max. 1.200 tekens;
+      // anders ongewijzigd summary + relevance). Zie article-context.mjs.
+      snippet: articleContextSnippet({
+        sourceName: article.data.sourceName,
+        summary: article.data.summary,
+        relevance: article.data.relevance,
+        body: article.body,
+      }),
       publishedAt: article.data.publishedAt,
       superseded: Boolean(article.data.supersededBy),
     });

@@ -23,6 +23,7 @@ import {
   findDeterministicFallbackItem,
 } from '../../src/lib/knowledge-match.mjs';
 import { formatSourcesForPrompt, rankScoredArticles } from '../../src/lib/source-freshness.mjs';
+import { articleContextSnippet } from '../../src/lib/article-context.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -75,6 +76,7 @@ const ARTICLES = readdirSync(CONTENT_DIR)
       sourceUrl: get('sourceUrl') ?? '',
       supersededBy: get('supersededBy'),
       hidden: get('hidden') === 'true',
+      body: text.replace(/^---\n[\s\S]*?\n---\n/, ''),
     };
   });
 const articleText = (a) => `${a.title} ${a.summary} ${a.category} ${a.tags.join(' ')}`;
@@ -97,7 +99,7 @@ function retrieveArticleSources(query, max = 2) {
     name: `Kenniscentrum Avydo (bron: ${article.sourceName})`,
     title: article.title,
     url: article.sourceUrl,
-    snippet: `${article.summary} ${article.relevance}`.slice(0, 500),
+    snippet: articleContextSnippet(article),
     publishedAt: article.publishedAt,
     superseded: Boolean(article.supersededBy),
     score,

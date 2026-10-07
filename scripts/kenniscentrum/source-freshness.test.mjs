@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { MIN_RELEVANCE_SCORE, overlapScore, tokenize } from '../../src/lib/knowledge-match.mjs';
 import { formatSourceDate, formatSourceName, formatSourcesForPrompt, rankScoredArticles } from '../../src/lib/source-freshness.mjs';
 import { buildSourceFallbackAnswer } from '../../src/lib/fallback-answer.mjs';
+import { articleContextSnippet } from '../../src/lib/article-context.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = path.resolve(__dirname, '../../src/content/kenniscentrum');
@@ -48,6 +49,7 @@ function loadArticles() {
         sourceUrl: get('sourceUrl') ?? '',
         supersededBy: get('supersededBy'),
         hidden: get('hidden') === 'true',
+        body: text.replace(/^---\n[\s\S]*?\n---\n/, ''),
       };
     });
 }
@@ -75,7 +77,7 @@ function retrieveArticleSources(query, articles = ARTICLES, max = 2) {
     name: `Kenniscentrum Avydo (bron: ${article.sourceName})`,
     title: article.title,
     url: article.sourceUrl,
-    snippet: `${article.summary} ${article.relevance}`.slice(0, 500),
+    snippet: articleContextSnippet(article),
     publishedAt: article.publishedAt,
     superseded: Boolean(article.supersededBy),
   }));
@@ -94,6 +96,11 @@ test('ai-assistent.ts gebruikt ongewijzigde score + rankScoredArticles + de form
   assert.match(text, /return formatSourcesWithFreshness\(sources\);/);
   // Geen recentheidsbonus in de score zelf.
   assert.equal(/overlapScore\([^)]*publishedAt/.test(text), false);
+  // De body telt nooit mee voor de score; hij wordt pas ná de top-N-selectie
+  // gebruikt, uitsluitend als bronfragment (zie article-context.mjs).
+  assert.equal((text.match(/article\.body/g) ?? []).length, 1);
+  assert.match(text, /snippet: articleContextSnippet\(\{\s*sourceName: article\.data\.sourceName,\s*summary: article\.data\.summary,\s*relevance: article\.data\.relevance,\s*body: article\.body,\s*\}\)/);
+  assert.ok(text.indexOf('article.body') > text.indexOf('.slice(0, MAX_ARTICLE_SOURCES)'));
 });
 
 // --- Integriteit van supersededBy ---
