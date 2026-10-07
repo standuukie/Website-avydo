@@ -905,11 +905,40 @@ export async function fetchRijksoverheidTopicApiUrls(topics, options = {}) {
 // onnodig veel pagina's kunnen opvragen vóór het budget/limiet stopt.
 const RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN = 100;
 
-export async function processSitemapSource(source, existingUrls, remainingBudget) {
+// Trekt kalendermaanden af in UTC, met clamping op de laatste dag van de
+// doelmaand (31 maart − 1 maand = 28/29 februari, niet 3 maart).
+function subtractMonthsUtc(date, months) {
+  const monthIndex = date.getUTCMonth() - months;
+  const year = date.getUTCFullYear() + Math.floor(monthIndex / 12);
+  const month = ((monthIndex % 12) + 12) % 12;
+  const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(
+    year, month, Math.min(date.getUTCDate(), lastDayOfMonth),
+    date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds(),
+  ));
+}
+
+// Leeftijdsgrens voor bronnen met `maxAgeMonths` (zie sources.config.mjs).
+// true = kandidaat valt buiten de grens. Grensgedrag:
+//  - precies op de grens (exact maxAgeMonths oud) telt als binnen de grens:
+//    alleen strikt ouder wordt afgewezen;
+//  - ontbrekende/ongeldige datum telt als buiten de grens — zelfde conventie
+//    als publishItem, dat nooit publiceert zonder geldige datum;
+//  - een toekomstige datum is niet "ouder dan" de grens en telt als binnen.
+export function isOutsideMaxAge(pubDate, maxAgeMonths, now) {
+  if (!pubDate) return true;
+  const published = new Date(pubDate);
+  if (Number.isNaN(published.getTime())) return true;
+  return published.getTime() < subtractMonthsUtc(now, maxAgeMonths).getTime();
+}
+
+// `now` is alleen injecteerbaar voor deterministische tests; productie
+// gebruikt de standaardwaarde (moment van de run).
+export async function processSitemapSource(source, existingUrls, remainingBudget, now = new Date()) {
   const stages = newStageCounters();
   // Zelfde principe als processRssSource: dekt exact de bestaande
   // skip-punten hieronder, geen nieuw skip-criterium.
-  stages.reasons = { missingFields: 0, duplicate: 0, metadataRejected: 0, irrelevant: 0, notEvaluated: 0 };
+  stages.reasons = { missingFields: 0, duplicate: 0, tooOld: 0, metadataRejected: 0, irrelevant: 0, notEvaluated: 0 };
   const samples = {};
 
   let items;
@@ -991,6 +1020,14 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     }
     if (existingUrls.has(item.link)) {
       stages.reasons.duplicate += 1;
+      continue;
+    }
+    // Alleen voor bronnen met `maxAgeMonths` (momenteel uitsluitend
+    // rijksoverheid-topic-api): vóór de paginafetch, zodat een te oude
+    // kandidaat niet verder wordt geëvalueerd.
+    if (source.maxAgeMonths && isOutsideMaxAge(item.pubDate, source.maxAgeMonths, now)) {
+      stages.reasons.tooOld += 1;
+      addRejectionSample(samples, 'tooOld', item.link);
       continue;
     }
 

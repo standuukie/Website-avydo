@@ -286,6 +286,14 @@ export const sources = [
     // het onderzoek.
     maxPagesPerTopic: 5,
     maxArticlesPerTopicPerRun: 20,
+    // Leeftijdsgrens (2026-10-07): kandidaten met een sort_date die meer dan
+    // 24 kalendermaanden vóór de run ligt, worden niet verder geëvalueerd.
+    // De derde productierun liet zien dat de resterende topic-wachtrij
+    // vrijwel uitsluitend uit verouderde berichten bestaat (2018–2022), die
+    // deels via bestaande trefwoorden als 'box 3'/'dividend' zouden worden
+    // gepubliceerd. Zie isOutsideMaxAge in fetch-articles.mjs voor het
+    // exacte grensgedrag.
+    maxAgeMonths: 24,
   },
   {
     id: 'mkb-nederland-nieuws',

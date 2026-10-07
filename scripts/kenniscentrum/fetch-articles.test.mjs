@@ -43,6 +43,7 @@ import {
   buildRijksoverheidTopicSearchBody,
   matchesRelevanceSignal,
   matchesExclusionRule,
+  isOutsideMaxAge,
 } from './fetch-articles.mjs';
 import {
   rijksoverheidAudienceSignals,
@@ -2050,17 +2051,22 @@ test('vier-topic regressie: de daadwerkelijk in sources.config.mjs geconfigureer
 // Teksten zijn letterlijk de meta-descriptions van de echte artikelpagina's
 // (geverifieerd: identiek aan de gepubliceerde samenvattingen). Deze tests
 // draaien de ECHTE rijksoverheid-topic-api-configuratie uit
-// sources.config.mjs door de volledige processSitemapSource-pijplijn.
-// `financien` bepaalt of de pagina de Financiën-breadcrumb heeft
-// (ministryBypass); ongeldige datum voorkomt een echte schrijfactie.
+// sources.config.mjs door de volledige processSitemapSource-pijplijn,
+// inclusief de leeftijdsgrens (maxAgeMonths). `financien` bepaalt of de
+// pagina de Financiën-breadcrumb heeft (ministryBypass). Omdat een
+// ongeldige datum nu door de leeftijdsgrens wordt afgewezen, draait dit met
+// een geldige, recente datum, een vaste run-datum en een geïsoleerde
+// tijdelijke CONTENT_DIR (withIsolatedKvkModule is generiek bruikbaar), zodat
+// er nooit in de echte src/content/kenniscentrum/ wordt geschreven.
 const realTopicApiSource = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+const TOPIC_TEST_NOW = new Date('2026-10-07T00:00:00.000Z');
 
-async function runRealTopicSourceCase({ title, description, financien }) {
+async function runRealTopicSourceCase({ title, description, financien, date = '2026-09-01T00:00:00.000Z' }) {
   const slug = '/actueel/nieuws/regressiecase';
-  return withMockedFetchAndBody((url, opts) => {
+  return withIsolatedKvkModule([], (mod) => withMockedFetchAndBody((url, opts) => {
     if (opts?.method === 'POST') {
       const body = JSON.parse(opts.body);
-      const rawResults = body.requestState.current === 1 ? [apiSearchResult({ url: slug, date: 'niet-een-geldige-datum' })] : [];
+      const rawResults = body.requestState.current === 1 ? [apiSearchResult({ url: slug, date })] : [];
       return apiSearchResponse(rawResults);
     }
     if (url === `https://www.rijksoverheid.nl${slug}`) {
@@ -2068,7 +2074,7 @@ async function runRealTopicSourceCase({ title, description, financien }) {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head><body>${crumb}</body></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(realTopicApiSource, new Set(), { count: 50 }));
+  }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW)));
 }
 
 const TOPIC_CASES = {
@@ -2163,4 +2169,109 @@ test('rijksoverheid-topic-api: de nieuwe signalen zijn bron-gescoped — niet in
     'Belastingverdragen',
     'Aanpak belastingontwijking en belastingontduiking',
   ]);
+});
+
+// --- rijksoverheid-topic-api: leeftijdsgrens (maxAgeMonths: 24) ---
+//
+// Vaste run-datum (geen hardcoded "vandaag" in de code zelf): de grens ligt
+// precies 24 kalendermaanden vóór TOPIC_TEST_NOW, dus op 2024-10-07T00:00Z.
+
+test('isOutsideMaxAge: binnen 24 maanden → niet afgewezen; ouder → afgewezen', () => {
+  assert.equal(isOutsideMaxAge('2025-07-07T00:00:00+00:00', 24, TOPIC_TEST_NOW), false);
+  assert.equal(isOutsideMaxAge('2024-12-11T10:00:00+00:00', 24, TOPIC_TEST_NOW), false);
+  assert.equal(isOutsideMaxAge('2024-10-06T23:59:59.999Z', 24, TOPIC_TEST_NOW), true);
+  assert.equal(isOutsideMaxAge('2019-09-06T00:00:00+00:00', 24, TOPIC_TEST_NOW), true);
+});
+
+test('isOutsideMaxAge: precies op de grens (exact 24 maanden oud) telt als binnen de grens; 1 ms ouder niet', () => {
+  assert.equal(isOutsideMaxAge('2024-10-07T00:00:00.000Z', 24, TOPIC_TEST_NOW), false);
+  assert.equal(isOutsideMaxAge('2024-10-06T23:59:59.999Z', 24, TOPIC_TEST_NOW), true);
+});
+
+test('isOutsideMaxAge: een toekomstige datum is niet "ouder dan" de grens en telt als binnen', () => {
+  assert.equal(isOutsideMaxAge('2027-01-01T00:00:00.000Z', 24, TOPIC_TEST_NOW), false);
+});
+
+test('isOutsideMaxAge: ontbrekende of ongeldige datum telt als buiten de grens (nooit stilzwijgend "recent"; zelfde conventie als publishItem)', () => {
+  for (const missing of [null, undefined, '']) assert.equal(isOutsideMaxAge(missing, 24, TOPIC_TEST_NOW), true);
+  assert.equal(isOutsideMaxAge('niet-een-geldige-datum', 24, TOPIC_TEST_NOW), true);
+});
+
+test('isOutsideMaxAge: maandverschillen worden in kalendermaanden gerekend, met clamping op de laatste dag van de maand', () => {
+  // 31 maart − 1 maand → grens 28 februari (2026 is geen schrikkeljaar).
+  const endOfMarch = new Date('2026-03-31T00:00:00.000Z');
+  assert.equal(isOutsideMaxAge('2026-02-28T00:00:00.000Z', 1, endOfMarch), false);
+  assert.equal(isOutsideMaxAge('2026-02-27T23:59:59.999Z', 1, endOfMarch), true);
+  // 29 februari 2028 − 24 maanden → grens 28 februari 2026.
+  const leapDay = new Date('2028-02-29T00:00:00.000Z');
+  assert.equal(isOutsideMaxAge('2026-02-28T00:00:00.000Z', 24, leapDay), false);
+  assert.equal(isOutsideMaxAge('2026-02-27T23:59:59.999Z', 24, leapDay), true);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: alleen de topic-API-bron heeft maxAgeMonths (24); KVK, Belastingdienst en de uitgeschakelde bronnen niet', () => {
+  assert.equal(realTopicApiSource.maxAgeMonths, 24);
+  const withMaxAge = sources.filter((s) => s.maxAgeMonths !== undefined).map((s) => s.id);
+  assert.deepEqual(withMaxAge, ['rijksoverheid-topic-api']);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: een relevant artikel binnen 24 maanden wordt niet door de leeftijdsgrens afgewezen', async () => {
+  const result = await runRealTopicSourceCase({ ...TOPIC_CASES.box3Obligaties, financien: true, date: '2025-08-25T13:53:00+00:00' });
+  assert.equal(result.stages.reasons.tooOld, 0);
+  assert.equal(result.stages.relevant, 1);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: een relevant ogend backlog-artikel ouder dan 24 maanden wordt afgewezen vóór de paginafetch', async () => {
+  // Echt backlog-voorbeeld (2019) dat via 'box 3' de relevantiepoort zou passeren.
+  const title = '1,35 miljoen spaarders betalen door nieuw voorstel straks geen belasting meer in box 3';
+  const description = 'Het kabinet wil de belasting in box 3 beter laten aansluiten bij het werkelijke rendement van spaarders en beleggers.';
+  const result = await runRealTopicSourceCase({ title, description, financien: true, date: '2019-09-06T00:00:00+00:00' });
+  assert.equal(result.stages.fetched, 1);
+  assert.equal(result.stages.reasons.tooOld, 1);
+  assert.equal(result.stages.parsed, 0); // nooit verder geëvalueerd
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.published, 0);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: precies op de grens wordt doorgelaten naar de bestaande relevantiepoort', async () => {
+  const result = await runRealTopicSourceCase({ ...TOPIC_CASES.box3Obligaties, financien: true, date: '2024-10-07T00:00:00.000Z' });
+  assert.equal(result.stages.reasons.tooOld, 0);
+  assert.equal(result.stages.relevant, 1);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: een toekomstige datum wordt niet door de leeftijdsgrens afgewezen', async () => {
+  const result = await runRealTopicSourceCase({ ...TOPIC_CASES.box3Obligaties, financien: true, date: '2027-01-01T00:00:00.000Z' });
+  assert.equal(result.stages.reasons.tooOld, 0);
+  assert.equal(result.stages.relevant, 1);
+});
+
+test('rijksoverheid-topic-api leeftijdsgrens: ontbrekende en ongeldige sort_date worden afgewezen, niet als recent behandeld', async () => {
+  for (const date of [null, 'niet-een-geldige-datum']) {
+    const result = await runRealTopicSourceCase({ ...TOPIC_CASES.box3Obligaties, financien: true, date });
+    assert.equal(result.stages.reasons.tooOld, 1, String(date));
+    assert.equal(result.stages.relevant, 0, String(date));
+  }
+});
+
+test('leeftijdsgrens geldt niet voor KVK: een KVK-kandidaat met lastmod uit 2018 wordt gewoon opgehaald en beoordeeld', async () => {
+  const kvkSource = sources.find((s) => s.id === 'kvk-kennisartikelen');
+  assert.equal(kvkSource.maxAgeMonths, undefined);
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-doen/';
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    withKvkSitemapRouting(candidateLoc, '2018-01-01T10:00:00.000Z', () => htmlResponse('<html><body><p>Geen h1 hier.</p></body></html>')),
+    () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+  ));
+  assert.equal(result.stages.reasons.pageFetches, 1); // opgehaald ondanks 2018
+  assert.equal(result.stages.reasons.tooOld, undefined);
+});
+
+test('leeftijdsgrens geldt niet voor Belastingdienst: een feed-item uit 2018 wordt gewoon gepubliceerd (in een geïsoleerde CONTENT_DIR)', async () => {
+  const belastingdienst = sources.find((s) => s.id === 'belastingdienst-zakelijk');
+  assert.equal(belastingdienst.maxAgeMonths, undefined);
+  const feed = `<?xml version="1.0"?><rss><channel><item><title>Btw-tarieven oud bericht</title><link>https://www.belastingdienst.nl/oud-bericht-2018</link><description>Een oud bericht uit 2018 over de btw-aangifte voor ondernemers.</description><pubDate>Mon, 01 Jan 2018 00:00:00 GMT</pubDate></item></channel></rss>`;
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+    (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse('', 404)),
+    () => mod.processRssSource(belastingdienst, new Set(), { count: 50 }),
+  ));
+  assert.equal(result.stages.published, 1);
+  assert.equal(result.stages.reasons.tooOld, undefined);
 });
