@@ -10,7 +10,7 @@ relevance: "Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Cont
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T15:27:33.728Z
 ---

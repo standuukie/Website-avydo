@@ -10,7 +10,7 @@ relevance: "Dit kan gevolgen hebben voor de vennootschapsbelasting van uw BV. Co
 tags: []
 audiences: ["bv-dga", "mkb-ondernemer"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T15:37:08.335Z
 ---

@@ -10,7 +10,7 @@ relevance: "Dit kan relevant zijn voor uw jaarrekening of financiële administra
 tags: []
 audiences: ["starter", "mkb-ondernemer"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T19:43:23.333Z
 ---

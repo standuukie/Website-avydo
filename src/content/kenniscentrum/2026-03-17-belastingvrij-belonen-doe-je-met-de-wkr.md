@@ -10,7 +10,7 @@ relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonad
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T19:26:31.737Z
 ---

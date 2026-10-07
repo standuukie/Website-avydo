@@ -101,7 +101,8 @@ test('nieuws en naslag: gidsen en KVK-kennisartikelen zijn naslag, nieuwsbericht
   ]) {
     assert.equal(isReferenceArticle(byFile(file)), true, file);
   }
-  assert.equal(ACTIVE.filter((a) => a.contentType === 'naslag').length, 17);
+  // #25 (Wat betekent Prinsjesdag) is sinds de KVK-opschoning verborgen: 16 zichtbaar.
+  assert.equal(ACTIVE.filter((a) => a.contentType === 'naslag').length, 16);
   assert.equal(isReferenceArticle(byFile('2025-03-31-kvk-opstelportaal-voor-middelgroot-verdwijnt.md')), false);
   const kvkNews = ACTIVE.filter((a) => a.sourceName === 'KVK' && a.contentType === 'nieuws');
   assert.equal(kvkNews.length, 3);
@@ -149,6 +150,43 @@ test('statuswaarden zijn geldig en staan op de bedoelde artikelen', () => {
   // Subsidie gesloten; Vbar-aanpassing ingehaald door het schrappen in maart 2026.
   assert.equal(statusOf('2025-09-29-subsidie-voor-mbk'), 'historisch');
   assert.equal(statusOf('2025-03-27-ondernemerschap-blijft'), 'historisch');
+});
+
+test('KVK-naslag ontdubbeld: doublures, video’s en tool-/dienstpagina’s verborgen, niet verwijderd', () => {
+  const hiddenKvk = [
+    '2026-09-29-ontdek-hoe-je-de-eu-kor-voor-je-webshop-gebruikt.md', // EU-KOR: gedekt door #17 en #16
+    '2026-09-24-kleineondernemersregeling-kor-interessant-voor-jouw-bedrijf.md', // KOR: Avydo-gids
+    '2026-09-15-wat-betekent-prinsjesdag-voor-jouw-bedrijf.md', // overzichtspagina; uitleg in #50
+    '2026-08-28-hoe-werkt-btw-aangifte-omzetbelasting-voor-ondernemers.md', // btw-aangifte: Avydo-gids
+    '2026-08-27-hoe-kies-ik-een-boekhoudpakket.md', // video; artikel #54 blijft
+    '2026-03-17-belastingvrij-belonen-doe-je-met-de-wkr.md', // WKR: Avydo-gids
+    '2026-03-03-hoe-zit-het-met-mijn-btw-nummer-als-ik-een-bedrijf-start.md', // video; #38 en #45 blijven
+    '2026-02-19-welke-rechtsvorm-past-bij-jou.md', // keuzehulp (tool); #19 en gids blijven
+    '2026-02-19-boekhouder-of-niet.md', // videoreeks; #33 blijft
+    '2026-02-06-wat-je-moet-weten-over-vennootschapsbelasting.md', // Vpb: Avydo-gids
+    '2025-11-26-controleer-je-jaarrekening.md', // dienstpagina deponeringscontrole
+  ];
+  for (const file of hiddenKvk) {
+    const a = byFile(file);
+    assert.equal(a.hidden, true, file);
+    assert.match(a.sourceUrl ?? '', /^https:\/\/www\.kvk\.nl\//, file);
+  }
+  // Behouden: verschillende vragen binnen hetzelfde onderwerp.
+  for (const file of [
+    '2026-08-26-wat-is-een-omzetbelastingnummer-ob-nummer.md',
+    '2026-07-21-het-btw-nummer-btw-id-dit-moet-je-weten.md',
+    '2026-07-22-een-btw-nummer-opzoeken-hoe-doe-ik-dat.md',
+    '2026-03-10-waarom-is-mijn-btw-id-volgens-vies-ongeldig.md',
+    '2026-09-25-eenmanszaak-of-bv-zo-kies-je-je-rechtsvorm.md',
+    '2026-10-01-wet-dba-voorkom-schijnzelfstandigheid.md',
+    '2026-04-24-zzp-er-inhuren-binnen-de-wet-dba.md',
+    '2025-03-31-kvk-opstelportaal-voor-middelgroot-verdwijnt.md',
+  ]) {
+    assert.equal(byFile(file).hidden, false, file);
+  }
+  // Eigen Avydo-gidsen blijven allemaal zichtbaar.
+  assert.equal(ACTIVE.filter((a) => a.avydoContent === 'gids').length, 12);
+  assert.equal(ACTIVE.filter((a) => a.sourceName === 'KVK').length, 33);
 });
 
 test('ongeschikte artikelen zijn verborgen, niet verwijderd (sourceUrl blijft voor deduplicatie)', () => {
