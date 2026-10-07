@@ -1,12 +1,12 @@
 ---
 title: "Hogere boetes bij illegale arbeid"
-category: "Fiscale actualiteit"
+category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2025-01-29T07:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/01/29/hogere-boetes-bij-illegale-arbeid"
 summary: "De Nederlandse Arbeidsinspectie kan vanaf 1 februari 2025 hogere boetes opleggen aan werkgevers die arbeidsmigranten illegaal in dienst nemen. Bedrijven die zonder vergunning werknemers van buiten de Europese Unie aan het werk zetten, riskeren een..."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+relevance: "Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent."
 tags: []
 audiences: ["werkgever"]
 featured: false
