@@ -335,6 +335,35 @@ function hasMinistryBypassRequiredTerm(lowerText) {
   return MINISTRY_BYPASS_REQUIRED_TERMS.some((term) => keywordMatches(withoutMinistryOrganizationNames, term));
 }
 
+// Bron-gescopete term-regels (zie relevanceSignals/exclusionRules in
+// sources.config.mjs). Witruimte wordt genormaliseerd zodat meerwoordige
+// termen ook matchen bij dubbele spaties in de brontekst.
+function normalizeForTermRules(text) {
+  return text.toLowerCase().replace(/\s+/g, ' ');
+}
+
+function matchesTermRule(normalizedText, rule) {
+  const all = rule.all ?? [];
+  const any = rule.any ?? [];
+  if (all.length === 0 && any.length === 0) return false;
+  if (!all.every((term) => normalizedText.includes(term))) return false;
+  return any.length === 0 || any.some((term) => normalizedText.includes(term));
+}
+
+export function matchesRelevanceSignal(text, rules = []) {
+  const normalized = normalizeForTermRules(text);
+  return rules.some((rule) => matchesTermRule(normalized, rule));
+}
+
+export function matchesExclusionRule(title, text, rules = []) {
+  const normalizedTitle = normalizeForTermRules(title);
+  const normalizedText = normalizeForTermRules(text);
+  return rules.some((rule) => {
+    if (!matchesTermRule(rule.scope === 'title' ? normalizedTitle : normalizedText, rule)) return false;
+    return !(rule.unlessAny ?? []).some((term) => normalizedText.includes(term));
+  });
+}
+
 export function pickCategory(text, defaultCategory) {
   const scores = scoreCategories(text);
   const entries = Object.entries(scores);
@@ -1007,7 +1036,11 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       // als ministryBypass hierboven; de categorie zelf blijft uitsluitend
       // via categoryKeywords/pickCategory in publishItem bepaald.
       const audienceMatch = source.audienceSignals?.some((kw) => combinedText.toLowerCase().includes(kw));
-      let relevant = Object.keys(scores).length > 0 || ministryMatch || audienceMatch;
+      // Smal, bron-gescoped positief signaal (zie relevanceSignals in
+      // sources.config.mjs, momenteel alleen rijksoverheid-topic-api) —
+      // los van categoryKeywords en zonder de ministryBypass te versoepelen.
+      const signalMatch = matchesRelevanceSignal(combinedText, source.relevanceSignals);
+      let relevant = Object.keys(scores).length > 0 || ministryMatch || audienceMatch || signalMatch;
       // Sommige trefwoorden (zie corroborationRequiredKeywords in
       // sources.config.mjs — momenteel 'prinsjesdag' voor Rijksoverheid)
       // zijn op zichzelf te breed om als enig relevantiesignaal te gelden:
@@ -1026,9 +1059,14 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
           new Set(source.corroborationRequiredKeywords),
         );
         const hasOtherSignal =
-          Object.keys(scoresWithoutCorroborationKeywords).length > 0 || ministryMatch || audienceMatch;
+          Object.keys(scoresWithoutCorroborationKeywords).length > 0 || ministryMatch || audienceMatch || signalMatch;
         if (!hasOtherSignal) relevant = false;
       }
+      // Bron-gescopete uitsluitingen (zie exclusionRules in
+      // sources.config.mjs): gaan vóór elk positief signaal, omdat de audit
+      // liet zien dat deze false positives zowel via categoryKeywords
+      // ('box 3' in een IT-bericht) als via ministryBypass binnenkwamen.
+      if (relevant && matchesExclusionRule(enrichedItem.title, combinedText, source.exclusionRules)) relevant = false;
       if (!relevant) {
         stages.reasons.irrelevant += 1;
         addRejectionSample(samples, 'irrelevant', title);

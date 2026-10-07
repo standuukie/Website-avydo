@@ -151,6 +151,42 @@ export const audienceKeywords = {
 // uitsluitend op categoryKeywords (+ ministryBypass waar van toepassing).
 export const rijksoverheidAudienceSignals = audienceKeywords.zzp;
 
+// Rijksoverheid-topic-specifieke aanvullingen op de relevantiepoort, na de
+// inhoudelijke audit van de eerste twee productieruns van
+// rijksoverheid-topic-api (2026-10-07). Bewust NIET in categoryKeywords:
+// die lijst wordt gedeeld met o.a. KVK, en deze signalen zijn uitsluitend
+// voor deze bron bedoeld (zie processSitemapSource in fetch-articles.mjs).
+// Regelvorm: alle termen in `all` én (indien opgegeven) minstens één term in
+// `any` moeten voorkomen; `scope: 'title'` beperkt de toets tot de titel;
+// `unlessAny` heft een uitsluiting op als de tekst één van die termen bevat.
+//
+// Positief signaal: crypto + een concrete meld-/rapportageplicht richting de
+// Belastingdienst. Nodig omdat zulke artikelen geen categoryKeyword bevatten
+// en hun enige 'belasting' binnen 'Belastingdienst' valt, wat de
+// ministryBypass bewust negeert (zie hasMinistryBypassRequiredTerm). Kaal
+// 'crypto' is bewust niet voldoende.
+export const rijksoverheidTopicRelevanceSignals = [
+  { all: ['crypto'], any: ['rapportageverplicht', 'delen met de belastingdienst'] },
+];
+
+// Uitsluitingen, gelden ook als een ander signaal het artikel relevant
+// maakte (bewezen false positives uit de audit):
+//  - BES/Caribisch Nederland: alleen op de titel, zodat een terloopse
+//    vermelding in een Nederlands artikel niet tot uitsluiting leidt.
+//  - interne Belastingdienst-organisatie/IT: vereist de organisatie én een
+//    specifieke organisatie-/IT-term; een gewone vermelding van de
+//    Belastingdienst blijft dus toegestaan.
+//  - consumentgerichte vliegbelasting, tenzij de tekst een ondernemers- of
+//    werkgeverscomponent noemt.
+export const rijksoverheidTopicExclusionRules = [
+  { scope: 'title', any: ['caribisch nederland', 'bonaire', 'sint eustatius', 'sint-eustatius', 'bes-eilanden'] },
+  {
+    all: ['belastingdienst'],
+    any: ['it-modernisering', 'modernisering belastingdienst', 'modernisering van de belastingdienst', 'capaciteitstekort', 'jaarplan belastingdienst'],
+  },
+  { any: ['vliegbelasting'], unlessAny: ['ondernemer', 'werkgever', 'bedrijven', 'mkb', 'zzp'] },
+];
+
 export const sources = [
   {
     id: 'belastingdienst-zakelijk',
@@ -239,6 +275,8 @@ export const sources = [
     ministryBypass: 'Ministerie van Financiën',
     audienceSignals: rijksoverheidAudienceSignals,
     corroborationRequiredKeywords: ['prinsjesdag'],
+    relevanceSignals: rijksoverheidTopicRelevanceSignals,
+    exclusionRules: rijksoverheidTopicExclusionRules,
     // Eigen, conservatieve discovery-grenzen voor de topic-API — los van
     // (en zonder wijziging aan) de bestaande RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN
     // in fetch-articles.mjs. 5 pagina's × 10 resultaten = maximaal 50

@@ -41,8 +41,16 @@ import {
   fetchRijksoverheidGeneralSitemapUrls,
   fetchRijksoverheidTopicApiUrls,
   buildRijksoverheidTopicSearchBody,
+  matchesRelevanceSignal,
+  matchesExclusionRule,
 } from './fetch-articles.mjs';
-import { rijksoverheidAudienceSignals, sources } from './sources.config.mjs';
+import {
+  rijksoverheidAudienceSignals,
+  sources,
+  categoryKeywords,
+  rijksoverheidTopicRelevanceSignals,
+  rijksoverheidTopicExclusionRules,
+} from './sources.config.mjs';
 
 // --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
 //
@@ -2035,4 +2043,124 @@ test('vier-topic regressie: de daadwerkelijk in sources.config.mjs geconfigureer
 
   assert.deepEqual(seenTopics, configuredTopics);
   assert.equal(result.length, 4);
+});
+
+// --- rijksoverheid-topic-api: gerichte relevantiefilter (audit productieruns 1+2) ---
+//
+// Teksten zijn letterlijk de meta-descriptions van de echte artikelpagina's
+// (geverifieerd: identiek aan de gepubliceerde samenvattingen). Deze tests
+// draaien de ECHTE rijksoverheid-topic-api-configuratie uit
+// sources.config.mjs door de volledige processSitemapSource-pijplijn.
+// `financien` bepaalt of de pagina de Financiën-breadcrumb heeft
+// (ministryBypass); ongeldige datum voorkomt een echte schrijfactie.
+const realTopicApiSource = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+
+async function runRealTopicSourceCase({ title, description, financien }) {
+  const slug = '/actueel/nieuws/regressiecase';
+  return withMockedFetchAndBody((url, opts) => {
+    if (opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      const rawResults = body.requestState.current === 1 ? [apiSearchResult({ url: slug, date: 'niet-een-geldige-datum' })] : [];
+      return apiSearchResponse(rawResults);
+    }
+    if (url === `https://www.rijksoverheid.nl${slug}`) {
+      const crumb = financien ? '<a href="/ministeries/ministerie-van-financien">Ministerie van Financiën</a>' : '';
+      return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head><body>${crumb}</body></html>`);
+    }
+    return htmlResponse('', 404);
+  }, () => processSitemapSource(realTopicApiSource, new Set(), { count: 50 }));
+}
+
+const TOPIC_CASES = {
+  box3Obligaties: { title: 'Kabinet dicht belastinglek in box 3 bij obligaties', description: 'In box 3 is een ongewenst belastinglek ontstaan bij de aankoop van obligaties met zogeheten aangegroeide rente. Het kabinet neemt met een wetswijziging maatregelen om dit lek van circa € 100 miljoen in 2025 te dichten. De wetswijziging gaat in per...' },
+  tegenbewijsregeling: { title: 'Kabinet stuurt wetsvoorstel tegenbewijsregeling box 3 naar Tweede Kamer', description: 'Het kabinet dient het wetsvoorstel tegenbewijsregeling box 3 in bij de Tweede Kamer. Met de tegenbewijsregeling biedt het kabinet aanvullend rechtsherstel in box 3, zoals geoordeeld door de Hoge Raad. Belastingplichtigen krijgen de mogelijkheid om...' },
+  duitslandGrenswerkers: { title: 'Nederland wijzigt belastingverdrag met Duitsland voor grenswerkers', description: 'Het belastingverdrag tussen Nederland en Duitsland wordt gewijzigd zodat grenswerkers jaarlijks maximaal 34 dagen kunnen thuiswerken zonder dat zij over hun inkomen belasting hoeven te betalen in beide landen. Dit hebben de landen vandaag...' },
+  lijfrentes: { title: 'Kabinet treft maatregelen tegen belastingontwijking met lijfrentes', description: 'Het kabinet treft maatregelen om te voorkomen dat over de uitbetaling van een lijfrente geen belasting wordt betaald, waarmee belasting wordt ontweken. Bijvoorbeeld door te beginnen met uitkeren van de lijfrente na de uiterste wettelijke...' },
+  startupsScaleups: { title: 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen', description: 'Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen. Er komt een nieuwe regeling die het aantrekkelijker maakt om medewerkers te belonen met opties op aandelen in het bedrijf....' },
+  schijnzelfstandigheid: { title: 'In 2025 geen boetes bij handhaving schijnzelfstandigheid', description: 'De Belastingdienst gaat vanaf 1 januari 2025 weer volledig handhaven bij organisaties die werken met mensen die volgens de wet eigenlijk in loondienst horen. Wel worden er over het kalenderjaar 2025 nog geen boetes opgelegd. Dit geldt voor zowel...' },
+  cryptoTransacties: { title: 'Transacties met crypto straks meer in beeld bij Belastingdienst', description: 'Transacties met crypto zijn straks meer in beeld bij de Belastingdienst. Vanaf 1 januari 2026 worden crypto-aanbieders verplicht om gegevens van hun gebruikers te verzamelen, controleren en delen met de Belastingdienst. De informatie kan worden...' },
+  cryptoConsultatie: { title: 'Internetconsultatie voor wetsvoorstel rapportageverplichting  crypto-aanbieders', description: 'Vanaf vandaag is het mogelijk om te reageren op het wetsvoorstel waarmee aanbieders van cryptodiensten per 1 januari 2026 verplicht worden om de gegevens van hun gebruikers te verzamelen, controleren en delen met de Belastingdienst. Het doel van...' },
+  caribischNederland: { title: 'Kabinet vraagt input voor wetsvoorstel met fiscale veranderingen voor Caribisch Nederland', description: 'Vanaf zaterdag 16 augustus is het mogelijk om te reageren op een wetsvoorstel waarin 16 fiscale wijzigingen zijn opgenomen voor de eilanden Bonaire, Sint-Eustatius en Saba (BES), samen het Caribisch Nederland. Bij de uitwerking van dit...' },
+  vliegbelasting: { title: 'Kabinet vraagt mening over vliegbelasting vanaf 2027', description: 'Wat vindt u van het zwaarder belasten van lange afstandsvluchten? Het kabinet wil vanaf 1 januari 2027 de opbrengst van de vliegbelasting verhogen door lange afstandsvluchten zwaarder te belasten. Het doel hiervan is de hogere uitstoot van lange...' },
+  itModernisering: { title: 'Uitwerking arresten box 3 vertraagt modernisering Belastingdienst', description: 'Als gevolg van de uitwerking van recente arresten van de Hoge Raad over box 3 loopt een deel van de IT-modernisering van de Belastingdienst ongeveer 1 jaar vertraging op. Het gaat om het IT-deel waarbinnen belastingen geheven worden over het...' },
+  capaciteitstekort: { title: 'Belastingdienst pakt capaciteitstekort inning aan', description: 'De Belastingdienst neemt maatregelen om het capaciteitstekort in de inning en invordering tegen te gaan. Daardoor wordt de afhandeling van bezwaarschriften versneld. Dit capaciteitstekort is onder andere ontstaan door de samenloop van extra...' },
+  toeslagenProef: { title: 'Dienst Toeslagen start proef met aanpassen van toeslagen', description: 'Dienst Toeslagen start deze maand een proef waarbij zij zelf de toeslag gaat aanpassen. Doel is om te voorkomen dat mensen later alsnog geconfronteerd worden met een hoge terugvordering. Een aanpassing van de toeslag vindt alleen plaats als blijkt dat de gegevens niet langer kloppen. De proef start in augustus onder ruim 12.000 toeslaggerechtigden.' },
+  belastingontwijkingDaalt: { title: 'Belastingontwijking via Nederland daalt door nieuwe maatregelen', description: 'De maatregelen die Nederland neemt in de strijd tegen belastingontwijking werpen hun vruchten af. Een set recente maatregelen, waarvan de effecten voor het eerst in kaart zijn gebracht, draagt effectief bij aan het verminderen van...' },
+};
+
+for (const key of ['box3Obligaties', 'tegenbewijsregeling', 'duitslandGrenswerkers', 'lijfrentes', 'startupsScaleups', 'schijnzelfstandigheid']) {
+  test(`rijksoverheid-topic-api regressie — blijft RELEVANT: "${TOPIC_CASES[key].title}"`, async () => {
+    // Zoals in productie: met Financiën-breadcrumb (Duitsland/lijfrentes/
+    // startups kwamen uitsluitend via ministryBypass binnen).
+    const result = await runRealTopicSourceCase({ ...TOPIC_CASES[key], financien: true });
+    assert.equal(result.stages.relevant, 1);
+    assert.equal(result.stages.reasons.irrelevant, 0);
+  });
+}
+
+for (const financien of [true, false]) {
+  test(`rijksoverheid-topic-api regressie — wordt RELEVANT (crypto-recall), ${financien ? 'met' : 'zonder'} Financiën-breadcrumb: "Transacties met crypto straks meer in beeld bij Belastingdienst"`, async () => {
+    const result = await runRealTopicSourceCase({ ...TOPIC_CASES.cryptoTransacties, financien });
+    assert.equal(result.stages.relevant, 1);
+  });
+}
+
+test('rijksoverheid-topic-api regressie — de crypto-consultatie (zelfde verplichting, consultatiefase) wordt ook toegelaten via hetzelfde smalle signaal', async () => {
+  const result = await runRealTopicSourceCase({ ...TOPIC_CASES.cryptoConsultatie, financien: true });
+  assert.equal(result.stages.relevant, 1);
+});
+
+for (const key of ['caribischNederland', 'vliegbelasting', 'itModernisering', 'capaciteitstekort', 'toeslagenProef']) {
+  test(`rijksoverheid-topic-api regressie — blijft FALSE POSITIVE (afgewezen), ook met Financiën-breadcrumb: "${TOPIC_CASES[key].title}"`, async () => {
+    const result = await runRealTopicSourceCase({ ...TOPIC_CASES[key], financien: true });
+    assert.equal(result.stages.relevant, 0);
+    assert.equal(result.stages.reasons.irrelevant, 1);
+  });
+}
+
+test('rijksoverheid-topic-api regressie — "Belastingontwijking via Nederland daalt" blijft afgewezen zoals in productie, en de nieuwe regels voegen geen route voor dit evaluatiebericht toe', async () => {
+  // In productie afgewezen ondanks de fiscale stam -> de pagina heeft geen
+  // Financiën-breadcrumb (afgeleid uit productiegedrag). Deze wijziging
+  // voegt geen positief signaal toe dat dit artikel alsnog toelaat.
+  const { title, description } = TOPIC_CASES.belastingontwijkingDaalt;
+  assert.equal(matchesRelevanceSignal(`${title} ${description}`, rijksoverheidTopicRelevanceSignals), false);
+  const result = await runRealTopicSourceCase({ title, description, financien: false });
+  assert.equal(result.stages.relevant, 0);
+  assert.equal(result.stages.reasons.irrelevant, 1);
+});
+
+test('rijksoverheid-topic-api: het crypto-signaal is smal — kaal "crypto" of kale "rapportageverplichting" is niet genoeg', () => {
+  const rules = rijksoverheidTopicRelevanceSignals;
+  assert.equal(matchesRelevanceSignal('Kabinet wil crypto-innovatie en blockchain in Nederland stimuleren', rules), false);
+  assert.equal(matchesRelevanceSignal('Nieuwe rapportageverplichting voor grote ondernemingen over duurzaamheid', rules), false);
+  assert.equal(matchesRelevanceSignal('Aanbieders moeten gegevens en informatie delen', rules), false);
+  // Witruimte-normalisatie: dubbele spaties breken een meerwoordige term niet.
+  assert.equal(matchesRelevanceSignal('Cryptobedrijven moeten gegevens delen met  de Belastingdienst', rules), true);
+});
+
+test('rijksoverheid-topic-api: uitsluitingen zijn gericht — gewone Belastingdienst-vermelding, BES alleen in de tekst, Duitsland/grenswerkers en vliegbelasting mét ondernemerscomponent worden niet uitgesloten', () => {
+  const rules = rijksoverheidTopicExclusionRules;
+  const isExcluded = (title, description) => matchesExclusionRule(title, `${title} ${description}`, rules);
+  assert.equal(isExcluded('Voorlopige aanslag inkomstenbelasting 2027', 'De Belastingdienst verstuurt de voorlopige aanslagen inkomstenbelasting.'), false);
+  assert.equal(isExcluded('Belastingplan 2027: voorstellen voor beter werkend belastingstelsel', 'Het pakket bevat maatregelen voor ondernemers en ook enkele aanpassingen voor Caribisch Nederland.'), false);
+  assert.equal(isExcluded(TOPIC_CASES.duitslandGrenswerkers.title, TOPIC_CASES.duitslandGrenswerkers.description), false);
+  assert.equal(isExcluded('Vliegbelasting: wat verandert er voor ondernemers in de luchtvaart', 'Luchtvaartmaatschappijen en andere bedrijven krijgen te maken met een hogere vliegbelasting.'), false);
+  // ...terwijl de bewezen false positives wél worden uitgesloten.
+  for (const key of ['caribischNederland', 'vliegbelasting', 'itModernisering']) {
+    const { title, description } = TOPIC_CASES[key];
+    assert.equal(isExcluded(title, description), true, key);
+  }
+});
+
+test('rijksoverheid-topic-api: de nieuwe signalen zijn bron-gescoped — niet in categoryKeywords (gedeeld met KVK) en alleen op de topic-API-bron geconfigureerd', () => {
+  assert.equal(Object.values(categoryKeywords).flat().some((kw) => kw.includes('crypto')), false);
+  assert.deepEqual(scoreCategories(`${TOPIC_CASES.cryptoTransacties.title} ${TOPIC_CASES.cryptoTransacties.description}`), {});
+  const withSignals = sources.filter((s) => s.relevanceSignals || s.exclusionRules).map((s) => s.id);
+  assert.deepEqual(withSignals, ['rijksoverheid-topic-api']);
+  assert.deepEqual(realTopicApiSource.topics, [
+    'Belasting betalen',
+    'Inkomstenbelasting',
+    'Belastingverdragen',
+    'Aanpak belastingontwijking en belastingontduiking',
+  ]);
 });
