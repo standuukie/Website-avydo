@@ -10,7 +10,7 @@ relevance: "Deze wijziging in wet- of regelgeving kan verplichtingen met zich me
 tags: []
 audiences: ["mkb-ondernemer"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-09-22T18:40:40.934Z
 ---

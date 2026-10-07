@@ -5,7 +5,7 @@ import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
 import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
 import { safeJsonLd } from '@/lib/seo';
-import { hasOwnRelevance, isReferenceArticle, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
+import { dateIsSourceLastModified, hasOwnRelevance, isReferenceArticle, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
 
 export async function getStaticPaths() {
   const articles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
@@ -16,7 +16,7 @@ export async function getStaticPaths() {
 }
 
 const { article, allArticles } = Astro.props;
-const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences, status, supersededBy } = article.data;
+const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences, status, supersededBy, avydoContent } = article.data;
 
 // De meeste (automatisch opgehaalde) artikelen hebben een body die
 // vrijwel gelijk is aan summary — dan voegt een apart "volledige
@@ -38,6 +38,10 @@ const statusLabel = status ? STATUS_LABELS[status] : undefined;
 const isOutdated = Boolean(supersededBy) || (status != null && OUTDATED_STATUSES.has(status));
 const successor = supersededBy ? allArticles.find((a) => a.data.sourceUrl === supersededBy) : undefined;
 const isReference = isReferenceArticle(article.data);
+// KVK-datum = "laatst gewijzigd" van de bronpagina, geen publicatiedatum.
+const dateIsLastModified = dateIsSourceLastModified(article.data);
+// Bronnaam in een lopende zin ("informatie van de Belastingdienst").
+const sourceInSentence = sourceName === 'Belastingdienst' || sourceName === 'Rijksoverheid' ? `de ${sourceName}` : sourceName;
 
 const related = allArticles
   .filter((a) => a.slug !== article.slug && a.data.category === category)
@@ -83,7 +87,7 @@ const structuredData = {
         )}
         <span class="text-xs font-medium text-ink-300">{category}</span>
         <span class="text-xs text-ink-500">&middot;</span>
-        <time datetime={publishedAt.toISOString()} class="text-xs text-ink-300">{formatDate(publishedAt)}</time>
+        <span class="text-xs text-ink-300">{dateIsLastModified && 'Bijgewerkt '}<time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time></span>
       </div>
       <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
         <h1 class="mask-reveal-inner max-w-3xl pb-1 font-display text-3xl font-semibold leading-[1.1] text-white md:text-4xl">{title}</h1>
@@ -148,7 +152,19 @@ const structuredData = {
 
         <div class="mt-8 rounded-md border border-ink-100 p-6">
           <h2 class="font-display text-base font-semibold text-ink-900">Bron</h2>
-          {showSourceText ? (
+          {avydoContent === 'gids' ? (
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+              Deze gids is geschreven door Avydo en gepubliceerd op {formatDate(publishedAt)}. Avydo heeft daarvoor informatie van <strong class="text-ink-800">{sourceInSentence}</strong> geraadpleegd. Voor de volledige, officiële regels verwijzen wij u naar de bron.
+            </p>
+          ) : avydoContent === 'toelichting' ? (
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+              Deze toelichting is geschreven door Avydo naar aanleiding van een bericht van <strong class="text-ink-800">{sourceInSentence}</strong> van {formatDate(publishedAt)}{updatedAt && <>, en bijgewerkt op {formatDate(updatedAt)}</>}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
+            </p>
+          ) : dateIsLastModified ? (
+            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+              Dit bericht is een samenvatting door Avydo op basis van een pagina van <strong class="text-ink-800">{sourceName}</strong>. Volgens {sourceName} is die pagina voor het laatst bijgewerkt op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
+            </p>
+          ) : showSourceText ? (
             <p class="mt-2 text-sm text-ink-600 leading-relaxed">
               Brontekst: <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. De tekst hierboven is overgenomen uit deze publicatie{showRelevance ? '; de toelichting "Wat betekent dit voor uw onderneming?" is van Avydo' : ''}. De oorspronkelijke publicatie is leidend.
             </p>
@@ -158,7 +174,7 @@ const structuredData = {
             </p>
           )}
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
-            Lees de volledige publicatie bij de bron
+            {avydoContent === 'gids' ? `Bekijk de informatie bij ${sourceInSentence}` : 'Lees de volledige publicatie bij de bron'}
             <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
           </a>
         </div>
@@ -177,11 +193,14 @@ const structuredData = {
               <div class="flex justify-between gap-4"><dt class="text-ink-600">Status</dt><dd class="font-semibold text-ink-900">{statusLabel}</dd></div>
             )}
             <div class="flex justify-between gap-4"><dt class="text-ink-600">Categorie</dt><dd class="font-semibold text-ink-900">{category}</dd></div>
-            <div class="flex justify-between gap-4"><dt class="text-ink-600">Gepubliceerd</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">{dateIsLastModified ? `Bijgewerkt bij ${sourceName}` : 'Gepubliceerd'}</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
             {updatedAt && (
               <div class="flex justify-between gap-4"><dt class="text-ink-600">Bijgewerkt</dt><dd class="font-semibold text-ink-900">{formatDate(updatedAt)}</dd></div>
             )}
-            <div class="flex justify-between gap-4"><dt class="text-ink-600">Bron</dt><dd class="font-semibold text-ink-900 text-right">{sourceName}</dd></div>
+            {avydoContent && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">Auteur</dt><dd class="font-semibold text-ink-900 text-right">Avydo</dd></div>
+            )}
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">{avydoContent ? 'Geraadpleegde bron' : 'Bron'}</dt><dd class="font-semibold text-ink-900 text-right">{sourceName}</dd></div>
           </dl>
           <a href="/kenniscentrum" class="btn-outline mt-6 w-full">Naar het kenniscentrum</a>
         </div>

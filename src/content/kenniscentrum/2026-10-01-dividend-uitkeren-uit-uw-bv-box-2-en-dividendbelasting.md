@@ -11,6 +11,7 @@ tags: ["dividend", "box 2", "dividendbelasting", "dga", "bv", "aanmerkelijk bela
 audiences: ["bv-dga"]
 featured: false
 hidden: false
+avydoContent: "gids"
 contentType: "naslag"
 aiAssisted: true
 ---

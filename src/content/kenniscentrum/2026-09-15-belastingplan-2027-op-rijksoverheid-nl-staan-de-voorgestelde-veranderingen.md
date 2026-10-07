@@ -12,6 +12,7 @@ tags: ["prinsjesdag", "belastingplan", "belastingplan 2027", "wetgevingsproces",
 audiences: ["mkb-ondernemer", "bv-dga", "werkgever"]
 featured: true
 hidden: false
+avydoContent: "toelichting"
 aiAssisted: true
 fetchedAt: 2026-09-22T18:40:40.932Z
 ---

@@ -6,12 +6,12 @@ publishedAt: 2025-04-25T13:45:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/04/25/kabinet-treft-maatregelen-tegen-belastingontwijking-met-lijfrentes"
 summary: "Het kabinet treft maatregelen om te voorkomen dat over de uitbetaling van een lijfrente geen belasting wordt betaald, waarmee belasting wordt ontweken."
-relevance: "Relevant als u een lijfrente heeft opgebouwd, bijvoorbeeld als aanvulling op AOW en pensioen. Voldoet een lijfrente niet (meer) aan de voorwaarden, bijvoorbeeld omdat de uitkering pas na de uiterste wettelijke ingangsdatum start, dan moet volgens dit wetsvoorstel toch belasting worden betaald. De beoogde ingangsdatum is 1 januari 2026, met terugwerkende kracht tot 25 april 2025."
+relevance: "Relevant als u een lijfrente heeft opgebouwd, bijvoorbeeld als aanvulling op AOW en pensioen. Voldoet een lijfrente niet (meer) aan de voorwaarden, bijvoorbeeld omdat de uitkering pas na de uiterste wettelijke ingangsdatum start, dan moet toch belasting worden betaald. Dit bericht gaat over het wetsvoorstel; de maatregelen zijn opgenomen in de Fiscale verzamelwet 2026, die in december 2025 is aangenomen en per 1 januari 2026 geldt."
 tags: []
 audiences: []
 featured: false
 hidden: false
-status: "voorstel"
+status: "van-kracht"
 aiAssisted: true
 fetchedAt: 2026-10-06T23:55:08.158Z
 ---

@@ -11,6 +11,7 @@ tags: ["vennootschapsbelasting", "vpb", "bv", "fiscale winst", "schijven"]
 audiences: ["bv-dga", "mkb-ondernemer"]
 featured: false
 hidden: false
+avydoContent: "gids"
 contentType: "naslag"
 aiAssisted: true
 ---

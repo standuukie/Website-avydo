@@ -11,6 +11,7 @@ tags: ["btw-aangifte", "btw", "aangiftetijdvak", "deadline", "naheffing"]
 audiences: ["zzp", "mkb-ondernemer", "starter"]
 featured: false
 hidden: false
+avydoContent: "gids"
 contentType: "naslag"
 aiAssisted: true
 ---

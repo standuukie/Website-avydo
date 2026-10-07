@@ -11,6 +11,7 @@ tags: []
 audiences: []
 featured: false
 hidden: false
+contentType: "naslag"
 aiAssisted: false
 fetchedAt: 2026-09-22T18:40:40.938Z
 ---

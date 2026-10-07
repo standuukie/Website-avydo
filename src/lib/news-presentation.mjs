@@ -45,10 +45,21 @@ export const STATUS_LABELS = {
   voorstel: 'Voorstel',
   consultatie: 'Consultatie',
   voornemen: 'Voornemen',
+  'van-kracht': 'Van kracht',
   historisch: 'Historisch',
   herzien: 'Herzien',
   'deels-geschrapt': 'Deels geschrapt',
 };
+
+/**
+ * True als de datum de "laatst gewijzigd"-datum van de bronpagina is en geen
+ * publicatiedatum: de nieuwsengine neemt voor KVK-pagina's de sitemap-lastmod
+ * over (zie processKvkSource in scripts/kenniscentrum/fetch-articles.mjs).
+ * @param {{ sourceName: string, fetchedAt?: Date | string, avydoContent?: string }} data
+ */
+export function dateIsSourceLastModified(data) {
+  return data.sourceName === 'KVK' && data.fetchedAt != null && !data.avydoContent;
+}
 
 /** Statussen die betekenen dat de brontekst niet (meer) de actuele situatie beschrijft. */
 export const OUTDATED_STATUSES = new Set(['historisch', 'herzien', 'deels-geschrapt']);

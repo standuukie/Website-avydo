@@ -10,7 +10,7 @@ relevance: "Dit kan relevant zijn voor uw jaarrekening of financiële administra
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T15:37:06.430Z
 ---

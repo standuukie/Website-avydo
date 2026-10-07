@@ -10,7 +10,7 @@ relevance: "Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Cont
 tags: []
 audiences: ["mkb-ondernemer"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-01T19:43:23.857Z
 ---

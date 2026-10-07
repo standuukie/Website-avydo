@@ -11,6 +11,7 @@ tags: ["huur", "inhouden", "werkgever", "huisvesting"]
 audiences: ["werkgever"]
 featured: false
 hidden: false
+status: "van-kracht"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:35:24.110Z
 ---

@@ -11,6 +11,7 @@ tags: []
 audiences: ["werkgever", "mkb-ondernemer"]
 featured: false
 hidden: false
+status: "historisch"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:35:30.222Z
 ---

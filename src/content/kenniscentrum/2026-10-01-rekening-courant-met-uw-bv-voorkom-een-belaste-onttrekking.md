@@ -11,6 +11,7 @@ tags: ["rekening-courant", "dga", "bv", "box 2", "excessief lenen"]
 audiences: ["bv-dga"]
 featured: false
 hidden: false
+avydoContent: "gids"
 contentType: "naslag"
 aiAssisted: true
 ---

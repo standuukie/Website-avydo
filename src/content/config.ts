@@ -53,7 +53,13 @@ const kenniscentrum = defineCollection({
     contentType: z.enum(['nieuws', 'naslag']).optional(),
     // Optioneel, redactioneel: de fase van het bericht, als badge getoond
     // (STATUS_LABELS in src/lib/news-presentation.mjs). Afwezig = geen badge.
-    status: z.enum(['voorstel', 'consultatie', 'voornemen', 'historisch', 'herzien', 'deels-geschrapt']).optional(),
+    // 'van-kracht' = het voorstel uit het bericht is inmiddels geldende regel.
+    status: z.enum(['voorstel', 'consultatie', 'voornemen', 'van-kracht', 'historisch', 'herzien', 'deels-geschrapt']).optional(),
+    // Optioneel, redactioneel: eigen Avydo-content. 'gids' = door Avydo
+    // geschreven uitleg op basis van de bron; 'toelichting' = eigen analyse
+    // van Avydo naar aanleiding van een bronbericht. sourceName/sourceUrl
+    // blijven de geraadpleegde bron. Alleen weergave.
+    avydoContent: z.enum(['gids', 'toelichting']).optional(),
   }),
 });
 
