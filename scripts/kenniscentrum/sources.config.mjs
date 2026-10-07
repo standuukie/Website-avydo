@@ -141,8 +141,26 @@ export const rijksoverheidAudienceSignals = audienceKeywords.zzp;
 // en hun enige 'belasting' binnen 'Belastingdienst' valt, wat de
 // ministryBypass bewust negeert (zie hasMinistryBypassRequiredTerm). Kaal
 // 'crypto' is bewust niet voldoende.
+//
+// Werkgevers-/zzp-signalen (2026-10-07, offline audit "A″" over runs #32/#33
+// en 329 Rijksoverheid-artikelen): werkgevers- en zzp-artikelen in SZW-taal
+// bevatten geen fiscaal categoryKeyword en werden daardoor altijd afgewezen.
+// Bewust alleen smalle combinaties — losse 'subsidie', 'boete', 'werkgever',
+// 'arbeidsinspectie' of 'arbeidsmigrant' lieten in de audit verlopen
+// subsidierondes (SOWIS) en politiek nieuws door.
+//  - werkgeverssubsidie arbeidsbeperking;
+//  - arbeidsongeschiktheidsverzekering zelfstandigen ('zelfstandigen' wordt
+//    niet door audienceSignals gedekt; 'verzekering' houdt IOAZ-/
+//    uitkeringsberichten buiten);
+//  - uitleenmarkt (Wtta, zelfstandig signaal) en boetes voor illegale arbeid
+//    of overtreding van arbeidswetten — twee aparte regels, omdat een regel
+//    maar één `all` en één `any` kent.
 export const rijksoverheidTopicRelevanceSignals = [
   { all: ['crypto'], any: ['rapportageverplicht', 'delen met de belastingdienst'] },
+  { all: ['arbeidsbeperking'], any: ['subsidie'] },
+  { all: ['zelfstandigen', 'arbeidsongeschikt'], any: ['verzekering'] },
+  { any: ['wtta', 'terbeschikkingstelling van arbeidskrachten'] },
+  { all: ['boete'], any: ['illegale arbeid', 'illegaal in dienst', 'arbeidswetten'] },
 ];
 
 // Uitsluitingen, gelden ook als een ander signaal het artikel relevant

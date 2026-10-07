@@ -2458,3 +2458,92 @@ test('KVK-limiet: blijft 10 per run, ook als een bronobject zelf een hogere maxA
     assert.equal(result.stages.published, 10);
   }
 });
+
+// --- Rijksoverheid: werkgevers-/zzp-signalen (offline audit A″, runs #32/#33) ---
+//
+// Echte titels + meta-descriptions uit de topic-API. De MOET-DOOR-gevallen
+// hadden geen enkel bestaand signaal en werden in productie afgewezen; de
+// MOET-NIET-DOOR-gevallen zijn de bekende ruis uit dezelfde audit.
+
+const EMPLOYER_CASES = {
+  subsidieMkbArbeidsbeperking: { title: 'Subsidie voor mbk’er die technologie inzet voor werknemer met arbeidsbeperking', description: 'Technologie helpt om mensen met een arbeidsbeperking te laten meedoen op de arbeidsmarkt. Staatssecretaris Jurgen Nobel (Participatie en Integratie) stelt, mede op verzoek van de Tweede Kamer, subsidie beschikbaar aan mkb-bedrijven die hier werk...' },
+  vasteLoonkostensubsidie: { title: 'Vaste loonkostensubsidie voor werknemer in beschutte werkomgeving', description: 'Werkgevers krijgen voortaan een vaste loonkostensubsidie als zij iemand op een beschutte werkplek aannemen. Het kabinet maakt het zo eenvoudiger en aantrekkelijker voor werkgevers om mensen met een arbeidsbeperking in dienst te nemen. Minister...' },
+  basisverzekeringZelfstandigen: { title: 'Kabinet komt met betaalbare basisverzekering voor zelfstandigen bij arbeidsongeschiktheid', description: 'Het kabinet komt met een basisverzekering die zelfstandigen bij arbeidsongeschiktheid een minimuminkomen garandeert. Zo krijgen zelfstandigen die zich door hun leeftijd of gezondheid niet kunnen verzekeren, ook een betaalbaar sociaal vangnet...' },
+  basisverzekeringRaadVanState: { title: 'Wetsvoorstel voor basisverzekering arbeidsongeschiktheid voor zelfstandigen naar de Raad van State', description: 'Het kabinet stuurt het wetsvoorstel voor een verplichte basisverzekering die zelfstandigen beschermt tegen de risico’s van arbeidsongeschiktheid naar de Raad van State. Het wetsvoorstel is na kritiek van onder andere uitvoeringsorganisaties...' },
+  wtta: { title: 'Eerste Kamer stemt in met strengere regels voor de uitleenmarkt', description: 'De Eerste Kamer heeft de Wet toelating terbeschikkingstelling van arbeidskrachten (Wtta) aangenomen. Uitzendbureaus en andere bedrijven die werknemers uitlenen mogen dit alleen als ze daarvoor een toelating (vergunning) hebben. De wet moet zorgen...' },
+  boetesIllegaleArbeid: { title: 'Hogere boetes bij illegale arbeid', description: 'De Nederlandse Arbeidsinspectie kan vanaf 1 februari 2025 hogere boetes opleggen aan werkgevers die arbeidsmigranten illegaal in dienst nemen. Bedrijven die zonder vergunning werknemers van buiten de Europese Unie aan het werk zetten, riskeren een...' },
+  boetesUitbuiting: { title: 'Kabinet verhoogt boetes voor uitbuiting van arbeidskrachten', description: 'Het kabinet heeft besloten om de boetes voor bedrijven die arbeidswetten overtreden fors te verhogen. Deze maatregel is genomen om de uitbuiting van met name arbeidsmigranten tegen te gaan en eerlijke arbeidsvoorwaarden te bevorderen.' },
+};
+
+const EMPLOYER_NON_HITS = {
+  sowisRonde: { title: 'Nieuwe aanvraagronde werkgeverssubsidie statushouders van start', description: 'Van 2 juni tot en met 30 september is de subsidieregeling Ondersteuning Werkgevers Inzet Statushouders (SOWIS) opnieuw geopend. Deze regeling biedt werkgevers financiële ondersteuning bij de begeleiding van statushouders op de werkvloer, gericht...' },
+  sowisVoorbereiding: { title: 'Nieuwe aanvraagronde in voorbereiding voor subsidieregeling statushouders aan het werk', description: "Om werkgevers aan te moedigen meer statushouders in dienst te nemen, is vorig jaar de subsidieregeling 'Ondersteuning Werkgevers inzet Statushouders' (SOWIS) geopend. Voor 2025 wordt een nieuwe aanvraagronde voorbereid die op 2 juni 2025..." },
+  uitkeringsbedragenIoaz: { title: 'Uitkeringsbedragen per 1 januari 2020', description: 'Per 1 januari 2020 worden de Participatiewet, Wet inkomensvoorziening oudere en gedeeltelijk arbeidsongeschikte werkloze werknemers (IOAW) en Wet inkomensvoorziening oudere en gedeeltelijk arbeidsongeschikte gewezen zelfstandigen (IOAZ), Algemene...' },
+  banenafspraak: { title: 'Bijna 92.000 extra banen voor mensen met een arbeidsbeperking', description: 'Werkgevers hebben sinds de start van de banenafspraak in 2013 91.800 extra banen gerealiseerd voor mensen met een beperking, blijkt uit cijfers over 2025. Dat zijn er 2.200 meer dan het jaar ervoor. Minister Aartsen wil in gesprek met werkgevers...' },
+  douane: { title: 'Douane verwerkte ruim 1 miljard aangiften in 2023: beter passende Europese douaneregels nodig', description: 'De Nederlandse douane heeft afgelopen jaar voor het eerst meer dan 1 miljard douaneaangiften verwerkt. Dat zijn er ruim 200 miljoen meer dan het jaar ervoor. Dat blijkt uit de jaarrapportage van de Douane, die staatssecretaris Aukje de Vries van...' },
+  steunpunten: { title: 'Uitbreiding aantal steunpunten Toeslagen en Belastingdienst', description: 'Dienst Toeslagen en de Belastingdienst breiden het aantal locaties uit waarbij mensen terecht kunnen met vragen over toeslagen en belastingen.' },
+  jaarplan: { title: 'Jaarplan Belastingdienst 2024: organisatie op koers', description: 'De Belastingdienst zet de huidige koers voort waarbij continu wordt gewerkt aan het verbeteren van de dienstverlening. Ook in 2024 blijft de dienst met deskundige en betrokken medewerkers burgers helpen met het doen van hun belastingaangifte....' },
+};
+
+const matchesEmployerSignal = (text) => matchesRelevanceSignal(text, rijksoverheidTopicRelevanceSignals);
+
+test('rijksoverheid werkgeverssignalen: elke regel matcht afzonderlijk op de bedoelde termcombinatie', () => {
+  // 1. arbeidsbeperking + subsidie
+  assert.equal(matchesEmployerSignal('Subsidie voor werkgevers met een werknemer met arbeidsbeperking'), true);
+  // 2. zelfstandigen + arbeidsongeschikt + verzekering
+  assert.equal(matchesEmployerSignal('Verzekering voor zelfstandigen die arbeidsongeschikt raken'), true);
+  // 3. Wtta en 4. terbeschikkingstelling van arbeidskrachten — elk zelfstandig, zonder 'boete'
+  assert.equal(matchesEmployerSignal('De Wtta is aangenomen'), true);
+  assert.equal(matchesEmployerSignal('Wet toelating terbeschikkingstelling van arbeidskrachten aangenomen'), true);
+  // 5–7. boete + illegale arbeid / illegaal in dienst / arbeidswetten
+  assert.equal(matchesEmployerSignal('Hogere boete bij illegale arbeid'), true);
+  assert.equal(matchesEmployerSignal('Een boete voor wie arbeidsmigranten illegaal in dienst neemt'), true);
+  assert.equal(matchesEmployerSignal('Een hogere boete voor bedrijven die arbeidswetten overtreden'), true);
+});
+
+test('rijksoverheid werkgeverssignalen: de combinaties zijn smal — losse termen zijn niet genoeg', () => {
+  for (const text of [
+    'Nieuwe subsidie voor werkgevers en het mkb',
+    'Werknemer met een arbeidsbeperking aan het werk',
+    'Zelfstandigen en arbeidsongeschiktheid: de cijfers',
+    'Nieuwe verzekering voor zelfstandigen',
+    'Hogere boetes voor werkgevers',
+    'Arbeidsinspectie controleert werkgevers van arbeidsmigranten',
+    'Illegale arbeid neemt toe',
+  ]) {
+    assert.equal(matchesEmployerSignal(text), false, text);
+  }
+});
+
+test('rijksoverheid werkgeverssignalen: de Wtta-regel hangt niet af van "boete"', () => {
+  const { title, description } = EMPLOYER_CASES.wtta;
+  assert.equal(`${title} ${description}`.toLowerCase().includes('boete'), false);
+  assert.equal(matchesEmployerSignal(`${title} ${description}`), true);
+});
+
+for (const key of Object.keys(EMPLOYER_CASES)) {
+  test(`rijksoverheid-topic-api regressie — wordt RELEVANT via werkgeverssignaal (echte configuratie, zonder Financiën-breadcrumb): "${EMPLOYER_CASES[key].title}"`, async () => {
+    const { title, description } = EMPLOYER_CASES[key];
+    // Zekerstellen dat het artikel echt via het nieuwe signaal binnenkomt.
+    assert.deepEqual(scoreCategories(`${title} ${description}`), {});
+    assert.equal(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)), false);
+    const result = await runRealTopicSourceCase({ title, description, financien: false });
+    assert.equal(result.stages.relevant, 1);
+    assert.equal(result.stages.reasons.irrelevant, 0);
+  });
+}
+
+for (const key of Object.keys(EMPLOYER_NON_HITS)) {
+  test(`rijksoverheid werkgeverssignalen: geen nieuwe route voor bekende ruis — "${EMPLOYER_NON_HITS[key].title}"`, () => {
+    const { title, description } = EMPLOYER_NON_HITS[key];
+    assert.equal(matchesEmployerSignal(`${title} ${description}`), false);
+  });
+}
+
+for (const key of ['sowisRonde', 'sowisVoorbereiding', 'uitkeringsbedragenIoaz', 'banenafspraak']) {
+  test(`rijksoverheid-topic-api regressie — blijft AFGEWEZEN met de werkgeverssignalen (echte configuratie): "${EMPLOYER_NON_HITS[key].title}"`, async () => {
+    const result = await runRealTopicSourceCase({ ...EMPLOYER_NON_HITS[key], financien: false });
+    assert.equal(result.stages.relevant, 0);
+    assert.equal(result.stages.reasons.irrelevant, 1);
+  });
+}
