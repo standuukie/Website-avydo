@@ -12,10 +12,12 @@
 // `npm run kenniscentrum:test`, geen live Groq-aanroep nodig.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { retrieveKnowledgeItems, buildRetrievalQuery } from '../../src/lib/knowledge-match.mjs';
+import { formatSourcesForPrompt } from '../../src/lib/source-freshness.mjs';
+import { articleContextSnippet } from '../../src/lib/article-context.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KB_DIR = path.resolve(__dirname, '../../src/data/ai-knowledge');
@@ -527,4 +529,85 @@ test('REGRESSIE (ronde 10, zakelijke kosten): is verder ingekort (kort antwoord 
   assert.ok(wordCount <= 95, `het item moet verder ingekort zijn (≤95 woorden, was ~140), telde ${wordCount} woorden`);
   assert.match(kostenContent, /aftrekbaarheid voor de winstberekening/, 'het IB/vpb-vs-btw-onderscheid moet behouden blijven');
   assert.match(kostenContent, /Btw bij zakelijke kosten en diensten/, 'de korte verwijzing naar het btw-item moet behouden blijven');
+});
+
+// ---------------------------------------------------------------------
+// Bronstatus (2026-10-07): de systeemprompt verplicht het model de status van
+// informatie correct weer te geven (voorstel/voornemen/consultatie/
+// toekomstige wijziging ≠ geldende regel; "historisch" alleen als
+// achtergrond). Geen live modelaanroep: getest wordt de instructie zelf én
+// de context waarin het model de status kan herkennen (echte artikelen,
+// echte fragmenten via articleContextSnippet, echte bronnaam met datum en
+// "historisch" via formatSourcesForPrompt).
+
+const CONTENT_DIR = path.resolve(__dirname, '../../src/content/kenniscentrum');
+const STATUS_RULE = '- Status: (wets)voorstel, voornemen, consultatie of toekomstige wijziging nooit als geldende regel; noem de fase uit de bron. "historisch" = achtergrond, actuele bron leidend. Verzin geen status.';
+
+function loadArticle(fileStart) {
+  const file = readdirSync(CONTENT_DIR).find((f) => f.startsWith(fileStart));
+  const text = readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+  const get = (key) => text.match(new RegExp(`^${key}: "?(.*?)"?$`, 'm'))?.[1];
+  return {
+    title: get('title'), summary: get('summary') ?? '', relevance: get('relevance') ?? '', sourceName: get('sourceName'),
+    sourceUrl: get('sourceUrl'), supersededBy: get('supersededBy'), publishedAt: new Date(get('publishedAt')),
+    body: text.replace(/^---\n[\s\S]*?\n---\n/, ''),
+  };
+}
+function promptFor(articles) {
+  return formatSourcesForPrompt(articles.map((a, i) => ({
+    id: i + 1, name: `Kenniscentrum Avydo (bron: ${a.sourceName})`, title: a.title, url: a.sourceUrl,
+    snippet: articleContextSnippet(a), publishedAt: a.publishedAt, superseded: Boolean(a.supersededBy),
+  })));
+}
+
+test('bronstatus: de regel staat in het BRONGEBRUIK-blok van de systeemprompt', () => {
+  const text = readRouteText();
+  const block = text.slice(text.indexOf('BRONGEBRUIK — CRUCIAAL'), text.indexOf('GEEN ONGEFUNDEERDE CONCLUSIES'));
+  assert.ok(block.includes(STATUS_RULE));
+});
+
+test('bronstatus 1: een wetsvoorstel mag niet als geldende wet — regel noemt (wets)voorstel, en het fragment bevat het statuswoord', () => {
+  assert.match(STATUS_RULE, /\(wets\)voorstel[^;]*nooit als geldende regel/);
+  const prompt = promptFor([loadArticle('2026-07-10-kabinet-wil-meer-zekerheid')]);
+  assert.match(prompt, /wetsvoorstel/i);
+});
+
+test('bronstatus 2: een internetconsultatie wordt als fase benoemd — regel noemt consultatie + "noem de fase", fragment bevat "internetconsultatie"', () => {
+  assert.match(STATUS_RULE, /consultatie/);
+  assert.match(STATUS_RULE, /noem de fase uit de bron/);
+  const prompt = promptFor([loadArticle('2026-10-01-zelfstandigenwet')]);
+  assert.match(prompt, /in internetconsultatie/);
+});
+
+test('bronstatus 3: een toekomstige wijzigingsdatum is geen huidige regel — regel noemt toekomstige wijziging, fragment bevat de toekomstige datum en de huidige regel', () => {
+  assert.match(STATUS_RULE, /toekomstige wijziging nooit als geldende regel/);
+  const prompt = promptFor([loadArticle('2026-09-10-werkgever-mag-geen-huur')]);
+  assert.match(prompt, /per 1 juli 2028/);
+  assert.match(prompt, /Op dit moment geldt nog een maximumpercentage van 25%/);
+});
+
+test('bronstatus 4: historisch artikel is achtergrond — regel gebruikt exact het label uit de bronnaam; actuele bron staat eerst en zonder label', () => {
+  assert.match(STATUS_RULE, /"historisch" = achtergrond, actuele bron leidend/);
+  const prompt = promptFor([loadArticle('2026-03-13-kabinet-komt-met-betaalbare'), loadArticle('2025-09-12-wetsvoorstel-voor-basisverzekering')]);
+  assert.match(prompt, /^\[1\] Kenniscentrum Avydo \(bron: Rijksoverheid, 13-03-2026\)/);
+  assert.match(prompt, /\[2\] Kenniscentrum Avydo \(bron: Rijksoverheid, 12-09-2025, historisch\)/);
+});
+
+test('bronstatus 5: een aangenomen wet mag definitief — de regel beperkt alleen voorstel/voornemen/consultatie/toekomstige wijziging, en de Wtta-bron zegt "aangenomen"', () => {
+  assert.doesNotMatch(STATUS_RULE, /aangenomen|elke bron|altijd een voorbehoud/i);
+  const prompt = promptFor([loadArticle('2025-11-11-eerste-kamer-stemt-in')]);
+  assert.match(prompt, /heeft de Wet toelating terbeschikkingstelling van arbeidskrachten \(Wtta\) aangenomen/);
+  assert.doesNotMatch(prompt, /historisch/);
+});
+
+test('bronstatus 6: een gewone actuele regel blijft actueel — geen statuswoorden of "historisch" in context van een actueel KVK-/Belastingdienst-artikel', () => {
+  const article = loadArticle('2026-10-01-minimumloon-en-loonheffingen');
+  assert.equal(article.sourceName, 'Belastingdienst');
+  const prompt = promptFor([article]);
+  assert.doesNotMatch(prompt, /historisch|wetsvoorstel|internetconsultatie|voornemen/i);
+  assert.match(prompt, /\(bron: Belastingdienst, 01-10-2026\)/);
+});
+
+test('bronstatus: de status-regel verzint zelf geen status ("Verzin geen status")', () => {
+  assert.match(STATUS_RULE, /Verzin geen status\.$/);
 });
