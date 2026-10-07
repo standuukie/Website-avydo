@@ -10,7 +10,7 @@ relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Control
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-06T23:55:05.341Z
 ---

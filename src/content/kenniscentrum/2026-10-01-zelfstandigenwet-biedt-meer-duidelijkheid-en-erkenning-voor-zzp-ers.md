@@ -1,6 +1,6 @@
 ---
 title: "Zelfstandigenwet biedt meer duidelijkheid en erkenning voor zzp’ers"
-category: "Fiscale actualiteit"
+category: "Ondernemen & rechtsvormen"
 priority: "actueel"
 publishedAt: 2026-10-01T06:00:00.000Z
 sourceName: "Rijksoverheid"

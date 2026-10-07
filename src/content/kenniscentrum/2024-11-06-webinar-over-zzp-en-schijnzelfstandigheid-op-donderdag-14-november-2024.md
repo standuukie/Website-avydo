@@ -10,7 +10,7 @@ relevance: "Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de v
 tags: []
 audiences: ["zzp"]
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-07T12:35:33.881Z
 ---

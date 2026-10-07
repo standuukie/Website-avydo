@@ -1,6 +1,6 @@
 ---
 title: "Ondernemerschap blijft volwaardig criterium bij beoordelen schijnzelfstandigheid"
-category: "Btw"
+category: "Ondernemen & rechtsvormen"
 priority: "praktisch"
 publishedAt: 2025-03-27T14:55:00.000Z
 sourceName: "Rijksoverheid"

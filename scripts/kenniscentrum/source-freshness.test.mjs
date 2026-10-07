@@ -30,6 +30,8 @@ const URL_HUIS_FEB = `${B}2025/02/06/afschaffen-van-inhoudingen-op-het-minimumlo
 const URL_HUIS_MEI = `${B}2025/05/09/internetconsultatie-afschaffen-van-inhoudingen-op-het-minimumloon-voor-huisvesting`;
 const URL_HUIS_BESLUIT = `${B}2025/10/30/regeling-voor-huisvestingskosten-arbeidsmigranten-blijft-bestaan`;
 const URL_HUIS_VOORNEMEN = `${B}2026/09/10/werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant`;
+const URL_VBAR = `${B}2025/07/07/wetsvoorstel-voor-meer-duidelijkheid-zzpers-en-sterkere-positie-laagbetaalde-schijnzelfstandigen-naar-de-kamer`;
+const URL_ZZP_RUST = `${B}2026/03/06/kabinet-kiest-voor-meer-rust-en-duidelijkheid-voor-zzpers-en-opdrachtgevers`;
 const URL_E_FACTURATIE = `${B}2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven`;
 const URL_CRYPTO_2025 = `${B}2025/07/07/transacties-met-crypto-straks-meer-in-beeld-bij-belastingdienst`;
 
@@ -132,12 +134,14 @@ test('integriteit: geen kringen in supersededBy-ketens', () => {
   }
 });
 
-test('markeringen: exact de drie handmatig vastgestelde relaties, geen andere', () => {
+test('markeringen: exact de vier handmatig vastgestelde relaties, geen andere', () => {
   const marked = Object.fromEntries(ARTICLES.filter((a) => a.supersededBy).map((a) => [a.sourceUrl, a.supersededBy]));
   assert.deepEqual(marked, {
     [URL_AOV_OUD]: URL_AOV_NIEUW,
     [URL_HUIS_FEB]: URL_HUIS_BESLUIT,
     [URL_HUIS_MEI]: URL_HUIS_BESLUIT,
+    // 2026-10-07: het verduidelijkingsdeel van de Vbar is geschrapt (zie het artikel van 06-03-2026).
+    [URL_VBAR]: URL_ZZP_RUST,
   });
 });
 

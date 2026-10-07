@@ -10,7 +10,7 @@ relevance: "Dit kan gevolgen hebben voor uw aangifte inkomstenbelasting. Control
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-07T00:44:16.835Z
 ---

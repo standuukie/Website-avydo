@@ -10,7 +10,7 @@ relevance: "Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de v
 tags: []
 audiences: []
 featured: false
-hidden: false
+hidden: true
 aiAssisted: false
 fetchedAt: 2026-10-07T00:23:46.866Z
 ---

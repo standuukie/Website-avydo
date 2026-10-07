@@ -148,7 +148,8 @@ test('helper: markdown-escapes en entiteiten van de extractor verschijnen niet i
 // --- Echte content ---
 
 test('echte content: elk Rijksoverheid-artikel krijgt een body-fragment (≤ 1.200 tekens, begint met de hoofdtekst)', () => {
-  assert.ok(RO.length >= 48, String(RO.length));
+  // 48 vóór de opschoning van 2026-10-07; 16 artikelen staan sindsdien op hidden.
+  assert.ok(RO.length >= 32, String(RO.length));
   for (const a of RO) {
     const snippet = newSnippet(a);
     assert.notEqual(snippet, oldSnippet(a), a.file);
