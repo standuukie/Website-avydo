@@ -933,9 +933,13 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   let sourceCount = 0;
   let itemsEvaluated = 0;
   let pageFetches = 0;
+  // Een bron kan de gedeelde limiet per run zelf overschrijven (zie
+  // maxArticlesPerSourcePerRun op de Rijksoverheid-bron in
+  // sources.config.mjs); zonder eigen waarde geldt de gedeelde limiet.
+  const sourceLimit = source.maxArticlesPerSourcePerRun ?? maxArticlesPerSourcePerRun;
 
   for (const item of items) {
-    if (remainingBudget.count <= 0 || sourceCount >= maxArticlesPerSourcePerRun) break;
+    if (remainingBudget.count <= 0 || sourceCount >= sourceLimit) break;
     if (pageFetches >= RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN) {
       log(`  grens van ${RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN} opgehaalde pagina's per run bereikt, stoppen (overige kandidaten volgen in een volgende run).`);
       break;

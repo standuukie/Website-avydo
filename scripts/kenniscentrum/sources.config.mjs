@@ -223,6 +223,12 @@ export const sources = [
     // worden meegenomen.
     maxPagesPerTopic: 5,
     maxArticlesPerTopicPerRun: 20,
+    // Bron-specifieke publicatielimiet per run (2026-10-07), in plaats van
+    // de gedeelde maxArticlesPerSourcePerRun (10) hieronder: met 12 topics
+    // en verwerking van nieuw naar oud bereikte de bron die limiet al na de
+    // meest recente artikelen, waardoor 98 kandidaten onbeoordeeld bleven.
+    // Belastingdienst en KVK houden de gedeelde limiet.
+    maxArticlesPerSourcePerRun: 30,
     // Leeftijdsgrens (2026-10-07): kandidaten met een sort_date die meer dan
     // 24 kalendermaanden vóór de run ligt, worden niet verder geëvalueerd.
     // De derde productierun liet zien dat de resterende topic-wachtrij
@@ -366,8 +372,12 @@ export const maxArticlesPerRun = 45;
 // Voorkomt dat één bron in haar eentje (bijna) het hele budget opsoupeert
 // als die op een dag veel nieuwe items heeft — elke bron krijgt zo altijd
 // ruimte, ook als een andere bron toevallig een grote achterstand inhaalt.
-// Bij 3 bronnen × 10 = 30, ruim binnen het totaal van 45, dus het totaal
-// wordt in de praktijk niet de bottleneck.
+// Geldt voor elke bron zonder eigen maxArticlesPerSourcePerRun (momenteel
+// Belastingdienst en KVK); de Rijksoverheid-bron heeft een eigen limiet
+// van 30. Samen (10 + 30 + 10 = 50) kan het totaal van 45 hierboven daardoor
+// wél bindend worden als Belastingdienst en Rijksoverheid in dezelfde run
+// allebei veel publiceren; KVK (de laatste bron in de volgorde) krijgt dan
+// minder dan 10.
 export const maxArticlesPerSourcePerRun = 10;
 
 export const articleRetentionDays = 270;

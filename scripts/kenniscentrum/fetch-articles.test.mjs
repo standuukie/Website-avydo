@@ -51,6 +51,7 @@ import {
   categoryKeywords,
   rijksoverheidTopicRelevanceSignals,
   rijksoverheidTopicExclusionRules,
+  maxArticlesPerSourcePerRun,
 } from './sources.config.mjs';
 
 // --- Observability: per-bron afwijzingsredenen (stages.reasons) ---
@@ -2341,4 +2342,119 @@ test('content: geen sourceName "Rijksoverheid (fiscale topics)" of "MKB-Nederlan
   assert.equal(sourceNames['Rijksoverheid (fiscale topics)'], undefined);
   assert.equal(sourceNames['MKB-Nederland'], undefined);
   assert.ok(sourceNames.Rijksoverheid > 0);
+});
+
+// --- Bron-specifieke publicatielimiet per run (Rijksoverheid 30, overige 10) ---
+
+test('sources.config.mjs: alleen de Rijksoverheid-bron heeft een eigen limiet per run (30); de gedeelde limiet voor Belastingdienst en KVK blijft 10', () => {
+  assert.equal(maxArticlesPerSourcePerRun, 10);
+  assert.equal(realTopicApiSource.maxArticlesPerSourcePerRun, 30);
+  const withOwnLimit = sources.filter((s) => s.maxArticlesPerSourcePerRun !== undefined).map((s) => s.id);
+  assert.deepEqual(withOwnLimit, ['rijksoverheid-topic-api']);
+  // Overige Rijksoverheid-instellingen ongewijzigd.
+  assert.equal(realTopicApiSource.maxAgeMonths, 24);
+  assert.equal(realTopicApiSource.maxPagesPerTopic, 5);
+  assert.equal(realTopicApiSource.maxArticlesPerTopicPerRun, 20);
+  assert.equal(realTopicApiSource.topics.length, 12);
+});
+
+test('Rijksoverheid-limiet: publiceert maximaal 30 per run; duplicates en irrelevante kandidaten tellen niet mee voor de limiet (echte configuratie, geïsoleerde CONTENT_DIR)', async () => {
+  const day = (n) => new Date(Date.UTC(2026, 8, 30) - n * 3600_000).toISOString(); // aflopend, allemaal recent
+  const candidates = [];
+  // De nieuwste kandidaten zijn bewust duplicates en irrelevant, zodat de
+  // limiet pas ná de bestaande dedup- en relevantiestappen telt.
+  for (let i = 0; i < 3; i++) candidates.push({ slug: `dubbel-${i}`, kind: 'duplicate' });
+  for (let i = 0; i < 4; i++) candidates.push({ slug: `irrelevant-${i}`, kind: 'irrelevant' });
+  for (let i = 0; i < 33; i++) candidates.push({ slug: `relevant-${i}`, kind: 'relevant' });
+  candidates.forEach((c, i) => { c.date = day(i); c.url = `/actueel/nieuws/2026/09/limiet-${c.slug}`; });
+  // Verdeeld over de 12 echte topics (max 4 per topic, ruim onder maxArticlesPerTopicPerRun).
+  const perTopic = new Map(realTopicApiSource.topics.map((t) => [t, []]));
+  candidates.forEach((c, i) => perTopic.get(realTopicApiSource.topics[i % 12]).push(c));
+  const existingUrls = new Set(candidates.filter((c) => c.kind === 'duplicate').map((c) => `https://www.rijksoverheid.nl${c.url}`));
+  const bySlugUrl = new Map(candidates.map((c) => [`https://www.rijksoverheid.nl${c.url}`, c]));
+
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetchAndBody((url, opts) => {
+    if (opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      const topic = body.requestState.filters[0].values[0];
+      const list = body.requestState.current === 1 ? perTopic.get(topic) ?? [] : [];
+      return apiSearchResponse(list.map((c) => apiSearchResult({ url: c.url, date: c.date })));
+    }
+    const c = bySlugUrl.get(url);
+    if (!c) return htmlResponse('', 404);
+    if (c.kind === 'irrelevant') {
+      return htmlResponse(`<html><head><title>Algemeen overheidsbericht ${c.slug} | Rijksoverheid.nl</title><meta name="description" content="Een algemeen bericht zonder fiscale of ondernemersinhoud over een evenement."/></head></html>`);
+    }
+    return htmlResponse(`<html><head><title>Kabinet wijzigt regels box 3 voor spaarders deel ${c.slug} | Rijksoverheid.nl</title><meta name="description" content="Het kabinet past de heffing in box 3 aan voor spaarders en beleggers vanaf volgend jaar."/></head></html>`);
+  }, () => mod.processSitemapSource(realTopicApiSource, existingUrls, { count: 50 }, TOPIC_TEST_NOW)));
+
+  assert.equal(result.stages.fetched, 40);
+  assert.equal(result.stages.reasons.duplicate, 3);
+  assert.equal(result.stages.reasons.irrelevant, 4);
+  assert.equal(result.stages.reasons.tooOld, 0);
+  assert.equal(result.stages.published, 30);
+  assert.equal(result.added, 30);
+  assert.equal(result.stages.reasons.notEvaluated, 3); // de laatste 3 relevante kandidaten volgen in een volgende run
+});
+
+test('Rijksoverheid-limiet: het gedeelde totaalbudget per run blijft daarnaast gelden', async () => {
+  const candidates = Array.from({ length: 8 }, (_, i) => ({ url: `/actueel/nieuws/2026/09/budget-${i}`, date: new Date(Date.UTC(2026, 8, 30) - i * 3600_000).toISOString() }));
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetchAndBody((url, opts) => {
+    if (opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      const isFirst = body.requestState.current === 1 && body.requestState.filters[0].values[0] === realTopicApiSource.topics[0];
+      return apiSearchResponse(isFirst ? candidates.map((c) => apiSearchResult(c)) : []);
+    }
+    return htmlResponse(`<html><head><title>Kabinet wijzigt regels box 3 ${url.split('/').pop()} | Rijksoverheid.nl</title><meta name="description" content="Het kabinet past de heffing in box 3 aan voor spaarders en beleggers."/></head></html>`);
+  }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 5 }, TOPIC_TEST_NOW)));
+  assert.equal(result.stages.published, 5);
+});
+
+test('Rijksoverheid-limiet: de 24-maandenregel blijft actief — te oude kandidaten worden vóór de limiet afgewezen en niet gepubliceerd', async () => {
+  const recent = Array.from({ length: 3 }, (_, i) => ({ url: `/actueel/nieuws/2026/09/recent-${i}`, date: `2026-09-0${i + 1}T00:00:00.000Z` }));
+  const old = Array.from({ length: 2 }, (_, i) => ({ url: `/actueel/nieuws/2019/09/oud-${i}`, date: `2019-09-0${i + 1}T00:00:00.000Z` }));
+  const result = await withIsolatedKvkModule([], (mod) => withMockedFetchAndBody((url, opts) => {
+    if (opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      const isFirst = body.requestState.current === 1 && body.requestState.filters[0].values[0] === realTopicApiSource.topics[0];
+      return apiSearchResponse(isFirst ? [...recent, ...old].map((c) => apiSearchResult(c)) : []);
+    }
+    return htmlResponse(`<html><head><title>Kabinet wijzigt regels box 3 ${url.split('/').pop()} | Rijksoverheid.nl</title><meta name="description" content="Het kabinet past de heffing in box 3 aan voor spaarders en beleggers."/></head></html>`);
+  }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW)));
+  assert.equal(result.stages.published, 3);
+  assert.equal(result.stages.reasons.tooOld, 2);
+});
+
+test('Belastingdienst-limiet: blijft 10 per run, ook als een bronobject zelf een hogere maxArticlesPerSourcePerRun zou hebben (het RSS-pad gebruikt alleen de gedeelde limiet)', async () => {
+  const belastingdienst = sources.find((s) => s.id === 'belastingdienst-zakelijk');
+  assert.equal(belastingdienst.maxArticlesPerSourcePerRun, undefined);
+  const items = Array.from({ length: 15 }, (_, i) => `<item><title>Btw-bericht voor ondernemers nummer ${i}</title><link>https://www.belastingdienst.nl/limiet-bericht-${i}</link><description>Een bericht over de btw-aangifte voor ondernemers, nummer ${i}.</description><pubDate>Mon, ${String(i + 1).padStart(2, '0')} Sep 2026 00:00:00 GMT</pubDate></item>`).join('');
+  const feed = `<?xml version="1.0"?><rss><channel>${items}</channel></rss>`;
+  for (const source of [belastingdienst, { ...belastingdienst, maxArticlesPerSourcePerRun: 30 }]) {
+    const result = await withIsolatedKvkModule([], (mod) => withMockedFetch(
+      (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse('', 404)),
+      () => mod.processRssSource(source, new Set(), { count: 50 }),
+    ));
+    assert.equal(result.stages.published, 10);
+  }
+});
+
+test('KVK-limiet: blijft 10 per run, ook als een bronobject zelf een hogere maxArticlesPerSourcePerRun zou hebben (het KVK-pad gebruikt alleen de gedeelde limiet)', async () => {
+  const kvk = sources.find((s) => s.id === 'kvk-kennisartikelen');
+  assert.equal(kvk.maxArticlesPerSourcePerRun, undefined);
+  const subjects = ['btw-aangifte', 'kleineondernemersregeling', 'zelfstandigenaftrek', 'vennootschapsbelasting', 'dividendbelasting', 'loonheffingen', 'werkkostenregeling', 'jaarrekening', 'urencriterium', 'startersaftrek', 'mkb-winstvrijstelling', 'gebruikelijk-loon', 'box-2', 'motorrijtuigenbelasting'];
+  const entries = subjects.map((s, i) => ({ loc: `https://www.kvk.nl/belastingen/${s}-uitgelegd/`, lastmod: `2026-09-${String(i + 1).padStart(2, '0')}T10:00:00.000Z` }));
+  const pages = new Map(subjects.map((s, i) => [entries[i].loc, s.replaceAll('-', ' ')]));
+  for (const source of [fakeKvkSource, { ...fakeKvkSource, maxArticlesPerSourcePerRun: 30 }]) {
+    const result = await withIsolatedKvkModule([], (mod) => withMockedFetch((url) => {
+      if (url === fakeKvkSource.sitemapIndexUrl) return xmlResponse(kvkSitemapIndexXml());
+      if (url === KVK_DOCUMENTS_SITEMAP_URL) return xmlResponse(kvkDocumentsXml(entries));
+      const subject = pages.get(url);
+      if (!subject) return htmlResponse('', 404);
+      return htmlResponse(`<html><head><meta name="description" content="Alles over ${subject} voor ondernemers: hoe het werkt, wat de fiscale regels zijn en waar je op let."/></head><body><h1>Zo werkt ${subject} voor ondernemers</h1></body></html>`);
+    }, () => mod.processKvkSource(source, new Set(), { count: 50 })));
+    // Er zijn meer dan 10 kandidaten klaar om op te halen; de limiet stopt bij 10.
+    assert.ok(result.stages.reasons.editorialCandidates > 10, `verwacht >10 KVK-kandidaten, kreeg ${result.stages.reasons.editorialCandidates}`);
+    assert.equal(result.stages.published, 10);
+  }
 });
