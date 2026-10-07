@@ -3,7 +3,7 @@ title: "Kabinet dicht belastinglek in box 3 bij obligaties"
 category: "Inkomstenbelasting"
 priority: "belangrijk"
 publishedAt: 2025-08-25T13:53:00.000Z
-sourceName: "Rijksoverheid (fiscale topics)"
+sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/08/25/kabinet-dicht-belastinglek-in-box-3-bij-obligaties"
 summary: "In box 3 is een ongewenst belastinglek ontstaan bij de aankoop van obligaties met zogeheten aangegroeide rente. Het kabinet neemt met een wetswijziging maatregelen om dit lek van circa € 100 miljoen in 2025 te dichten. De wetswijziging gaat in per..."
 relevance: "Dit kan gevolgen hebben voor uw aangifte inkomstenbelasting. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."

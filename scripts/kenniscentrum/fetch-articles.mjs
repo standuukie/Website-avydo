@@ -201,8 +201,8 @@ export function extractMinistryTag(html) {
   return MINISTRY_NAMES[slug] ?? null;
 }
 
-// Nodig voor bronnen waarvan de sitemap zelf geen titel levert (alleen
-// loc+lastmod, zie fetchRijksoverheidGeneralSitemapUrls) — de <title> van
+// Nodig voor bronnen waarvan de discovery zelf geen titel levert (de
+// Rijksoverheid topic-API levert alleen loc+lastmod door) — de <title> van
 // de artikelpagina zelf, met de vaste site-naam-suffix verwijderd (nooit
 // onderdeel van de artikeltitel zelf). Geeft null als er geen <title> is
 // (nooit een gegokte titel).
@@ -657,66 +657,10 @@ export async function processRssSource(source, existingUrls, remainingBudget) {
   return { added, seen: items.length, ok: true, stages };
 }
 
-// --- Rijksoverheid: sitemap.xml (index) -> genummerde algemene
-// sub-sitemaps (/sitemap/N.xml) ---
-//
-// Live onderzoek (2026-10-01, tijdelijke alleen-lezen GitHub Actions
-// dry-run, zie git-historie) stelde vast dat rijksoverheid.nl/sitemap.xml
-// zelf een sitemap-index is die, naast news/sitemap.xml (het eerder
-// gebruikte, qua formaat tot ~2 dagen beperkte Google News-sitemap) en
-// videos/sitemap.xml, verwijst naar een reeks genummerde, algemene
-// sub-sitemaps zonder die beperking. Elk <url>-blok daarin bevat alleen
-// loc+lastmod (geen titel) — zie fetchArticlePageMeta/extractPageTitle
-// voor de titel-extractie van de artikelpagina zelf. Zelfde aanpak als
-// fetchKvkDocumentUrls hieronder: niet-bereikbare sub-sitemaps blokkeren
-// de andere niet, resultaat gededupliceerd en op lastmod (meest recent
-// eerst) gesorteerd, zodat het run-budget bij voorkeur actueel nieuws
-// bereikt vóór oudere content.
-export async function fetchRijksoverheidGeneralSitemapUrls(sitemapIndexUrl, articleUrlPattern) {
-  const indexRes = await fetchWithTimeout(sitemapIndexUrl, FETCH_TIMEOUT_MS);
-  if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status} bij ${sitemapIndexUrl}`);
-  const indexXml = await indexRes.text();
-  const subSitemaps = [...indexXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  const generalSitemaps = subSitemaps.filter((u) => /\/sitemap\/\d+\.xml$/i.test(u));
-  if (generalSitemaps.length === 0) {
-    throw new Error('geen genummerde algemene sub-sitemaps gevonden in sitemap.xml');
-  }
-
-  const entries = [];
-  for (const sitemapUrl of generalSitemaps) {
-    let res;
-    try {
-      res = await fetchWithTimeout(sitemapUrl, FETCH_TIMEOUT_MS);
-    } catch {
-      continue; // één falende sub-sitemap mag de andere niet blokkeren
-    }
-    if (!res.ok) continue;
-    const xml = await res.text();
-    const blocks = [...xml.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => m[1]);
-    for (const block of blocks) {
-      const loc = block.match(/<loc>([^<]+)<\/loc>/)?.[1];
-      const lastmod = block.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] ?? null;
-      if (loc && loc.includes(articleUrlPattern)) entries.push({ loc, lastmod });
-    }
-  }
-
-  const uniqueByUrl = new Map();
-  for (const e of entries) {
-    if (!uniqueByUrl.has(e.loc)) uniqueByUrl.set(e.loc, e);
-  }
-  const deduped = [...uniqueByUrl.values()];
-  deduped.sort((a, b) => {
-    const da = a.lastmod ? Date.parse(a.lastmod) : 0;
-    const db = b.lastmod ? Date.parse(b.lastmod) : 0;
-    return db - da;
-  });
-  return deduped;
-}
-
 // --- Rijksoverheid: topic-API (POST /api/search) ---
 //
-// Aanvullende discovery-bron naast de algemene sitemap hierboven, voor een
-// klein, vast aantal fiscale onderwerpen (zie sources.config.mjs). Live
+// Discovery voor de Rijksoverheid-bron, voor een vast aantal bewust
+// geselecteerde onderwerpen (zie sources.config.mjs). Live
 // read-only onderzoek (zie git-historie) bevestigde de daadwerkelijk
 // werkende requestState/queryConfig-structuur hieronder via een echte,
 // opnieuw gecapturede browser-request — niet zelf verzonnen of uit het
@@ -821,9 +765,8 @@ async function postJsonWithTimeout(url, bodyObj, timeoutMs) {
 }
 
 // Haalt kandidaat-URL's op via de Rijksoverheid topic-API voor elk
-// geconfigureerd onderwerp. Levert dezelfde {loc, lastmod}-vorm op als
-// fetchRijksoverheidGeneralSitemapUrls hierboven, zodat processSitemapSource
-// ze via exact dezelfde route (relevantie, deduplicatie, publicatie) kan
+// geconfigureerd onderwerp. Levert {loc, lastmod}-kandidaten op, zodat
+// processSitemapSource ze via exact dezelfde route (relevantie, deduplicatie, publicatie) kan
 // verwerken — deze functie levert uitsluitend kandidaten, nooit een directe
 // publish-beslissing.
 //
@@ -900,9 +843,9 @@ export async function fetchRijksoverheidTopicApiUrls(topics, options = {}) {
 
 // Veiligheidsgrens op het aantal daadwerkelijk opgehaalde artikelpagina's
 // per run, zelfde motivatie als KVK_MAX_PAGE_FETCHES_PER_RUN hieronder: de
-// genummerde sub-sitemaps bevatten samen een paar honderd nieuwsartikel-
-// URL's, en zonder grens zou een run met veel irrelevante kandidaten
-// onnodig veel pagina's kunnen opvragen vóór het budget/limiet stopt.
+// topic-API kan over alle topics samen honderden kandidaat-URL's opleveren,
+// en zonder grens zou een run met veel irrelevante kandidaten onnodig veel
+// pagina's kunnen opvragen vóór het budget/limiet stopt.
 const RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN = 100;
 
 // Trekt kalendermaanden af in UTC, met clamping op de laatste dag van de
@@ -953,26 +896,12 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       log(`  FOUT: kon topic-API niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
       return { added: 0, seen: 0, ok: false, stages };
     }
-    // Title/description: null/leeg -> wordt net als bij de sitemapIndexUrl-
-    // variant van de artikelpagina zelf gehaald (zie fetchArticlePageMeta
-    // hieronder). De topic-API levert uitsluitend kandidaat-URL's, de
+    // Title/description: null/leeg -> wordt van de artikelpagina zelf
+    // gehaald (zie fetchArticlePageMeta hieronder). De topic-API levert uitsluitend kandidaat-URL's, de
     // bestaande article-fetch blijft verantwoordelijk voor de uiteindelijke
     // titel/samenvatting/ministerie.
     items = entries.map((e) => ({ title: null, link: e.loc, pubDate: e.lastmod, description: '' }));
     log(`  ${items.length} nieuwsartikel-URL('s) gevonden via de topic-API (gededupliceerd over ${source.topics.length} topic(s))`);
-  } else if (source.sitemapIndexUrl) {
-    let entries;
-    try {
-      entries = await fetchRijksoverheidGeneralSitemapUrls(source.sitemapIndexUrl, source.articleUrlPattern ?? '/actueel/nieuws/');
-    } catch (err) {
-      log(`  FOUT: kon sitemap-index niet ophalen (${err.message}). Bron overgeslagen, bestaande content blijft staan.`);
-      return { added: 0, seen: 0, ok: false, stages };
-    }
-    // title: null -> wordt per kandidaat van de artikelpagina zelf gehaald
-    // (zie fetchArticlePageMeta hieronder), de sub-sitemaps zelf leveren
-    // alleen loc+lastmod.
-    items = entries.map((e) => ({ title: null, link: e.loc, pubDate: e.lastmod, description: '' }));
-    log(`  ${items.length} nieuwsartikel-URL('s) gevonden in de algemene sub-sitemaps (gededupliceerd, meest recent eerst)`);
   } else {
     let res;
     try {
@@ -1069,7 +998,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       // Smalle, expliciete aanvulling op categoryKeywords (zie
       // rijksoverheidAudienceSignals in sources.config.mjs) — alleen voor
       // bronnen die zelf `audienceSignals` instellen (momenteel uitsluitend
-      // rijksoverheid-nieuws). Bepaalt alleen OF een item relevant is, net
+      // rijksoverheid-topic-api). Bepaalt alleen OF een item relevant is, net
       // als ministryBypass hierboven; de categorie zelf blijft uitsluitend
       // via categoryKeywords/pickCategory in publishItem bepaald.
       const audienceMatch = source.audienceSignals?.some((kw) => combinedText.toLowerCase().includes(kw));

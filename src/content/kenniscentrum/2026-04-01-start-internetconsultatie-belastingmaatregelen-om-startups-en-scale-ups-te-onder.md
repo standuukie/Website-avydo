@@ -3,7 +3,7 @@ title: "Start internetconsultatie belastingmaatregelen om startups en scale-ups 
 category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2026-04-01T15:33:00.000Z
-sourceName: "Rijksoverheid (fiscale topics)"
+sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/04/01/start-internetconsultatie-belastingmaatregelen-om-startups-en-scale-ups-te-ondersteunen"
 summary: "Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen. Er komt een nieuwe regeling die het aantrekkelijker maakt om medewerkers te belonen met opties op aandelen in het bedrijf...."
 relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."

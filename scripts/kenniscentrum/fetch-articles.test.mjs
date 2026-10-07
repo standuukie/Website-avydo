@@ -10,9 +10,10 @@
 // "e-facturatie/rapportage"-nieuws eerder ten onrechte wegfilterde.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   stripHtml,
   slugify,
@@ -38,7 +39,6 @@ import {
   processRssSource,
   processSitemapSource,
   extractPageTitle,
-  fetchRijksoverheidGeneralSitemapUrls,
   fetchRijksoverheidTopicApiUrls,
   buildRijksoverheidTopicSearchBody,
   matchesRelevanceSignal,
@@ -1057,16 +1057,11 @@ test('processKvkSource telt overlapRejected bij een bestaand, inhoudelijk vergel
 
 // --- Rijksoverheid: sitemap.xml (index) -> genummerde algemene sub-sitemaps ---
 //
-// Regressie/uitbreiding (2026-10-01): de eerder gebruikte Google News-
-// sitemap (news/sitemap.xml) bleek qua formaat beperkt tot ~2 dagen content
-// (~7 items/dag) — een live, in een omgeving mét internettoegang gemeten
-// bevinding (tijdelijke GitHub Actions dry-run, zie git-historie), geen
-// aanname. rijksoverheid.nl/sitemap.xml bleek zelf een sitemap-index die
-// naar een reeks genummerde, algemene sub-sitemaps verwijst zonder die
-// grens. Deze tests dekken de nieuwe discovery-functie en de bijbehorende
-// titel-extractie, en bevestigen dat de bestaande relevantiefilter
-// (requireKeywordMatch/categoryKeywords/ministryBypass) ongewijzigd blijft
-// werken op de bredere kandidatenlijst.
+// Titel-extractie van de artikelpagina en de gedeelde Rijksoverheid-
+// relevantiepoort (requireKeywordMatch/categoryKeywords/ministryBypass/
+// audienceSignals/corroboratie). Sinds de verwijdering van de algemene
+// sitemap-discovery (2026-10-07) lopen deze poorttests via de topic-API-
+// route, de enige Rijksoverheid-discovery.
 
 test('extractPageTitle leest de <title> en verwijdert de vaste "| Rijksoverheid.nl"-suffix', () => {
   const html = '<html><head><title>Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven | Rijksoverheid.nl</title></head></html>';
@@ -1082,82 +1077,49 @@ test('extractPageTitle geeft null zonder <title>-tag (nooit een gegokte titel)',
   assert.equal(extractPageTitle('<html><head></head><body>geen titel</body></html>'), null);
 });
 
-const RO_SITEMAP_INDEX_FIXTURE = `<?xml version="1.0"?>
-<sitemapindex>
-  <sitemap><loc>https://www.rijksoverheid.nl/news/sitemap.xml</loc></sitemap>
-  <sitemap><loc>https://www.rijksoverheid.nl/videos/sitemap.xml</loc></sitemap>
-  <sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap>
-  <sitemap><loc>https://www.rijksoverheid.nl/sitemap/2.xml</loc></sitemap>
-</sitemapindex>`;
+const RO_TOPIC_API_URL = 'https://www.rijksoverheid.nl/api/search';
 
-function roSitemapPage(entries) {
-  const urls = entries.map(({ loc, lastmod }) => `<url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`).join('');
-  return `<?xml version="1.0"?><urlset>${urls}</urlset>`;
+// Eén topic-API-pagina met kandidaten in de vorm {loc, lastmod}; elke
+// aanroep levert een verse Response (een body kan maar één keer gelezen
+// worden).
+function roTopicApiPage(entries) {
+  const rawResults = entries.map(({ loc, lastmod }) => ({ url: { raw: loc }, sort_date: { raw: lastmod } }));
+  return new Response(JSON.stringify({ rawResponse: { rawResults } }), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
-test('fetchRijksoverheidGeneralSitemapUrls volgt alleen de genummerde /sitemap/N.xml-sub-sitemaps (niet news/videos), filtert op articleUrlPattern, dedupliceert en sorteert op lastmod', async () => {
-  const sitemap1 = roSitemapPage([
-    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/20/ouder-artikel', lastmod: '2026-09-20T10:00:00.000Z' },
-    { loc: 'https://www.rijksoverheid.nl/documenten/rapporten/iets-niet-nieuws', lastmod: '2026-09-25T10:00:00.000Z' }, // geen /actueel/nieuws/
-    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel', lastmod: '2026-10-01T10:00:00.000Z' },
-  ]);
-  const sitemap2 = roSitemapPage([
-    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel', lastmod: '2026-10-01T10:00:00.000Z' }, // duplicaat van sitemap1
-    { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2025/01/15/oud-artikel', lastmod: '2025-01-15T10:00:00.000Z' },
-  ]);
-
-  const result = await withMockedFetch((url) => {
-    if (url === 'https://www.rijksoverheid.nl/sitemap.xml') return xmlResponse(RO_SITEMAP_INDEX_FIXTURE);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(sitemap1);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/2.xml') return xmlResponse(sitemap2);
-    // news/sitemap.xml en videos/sitemap.xml mogen niet aangeroepen worden —
-    // zie assertie hieronder.
-    return htmlResponse('', 404);
-  }, () => fetchRijksoverheidGeneralSitemapUrls('https://www.rijksoverheid.nl/sitemap.xml', '/actueel/nieuws/'));
-
-  assert.deepEqual(result.map((e) => e.loc), [
-    'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/nieuwste-artikel',
-    'https://www.rijksoverheid.nl/actueel/nieuws/2026/09/20/ouder-artikel',
-    'https://www.rijksoverheid.nl/actueel/nieuws/2025/01/15/oud-artikel',
-  ]);
-});
-
-test('fetchRijksoverheidGeneralSitemapUrls gooit een fout als de index niet opgehaald kan worden', async () => {
-  await assert.rejects(
-    () => withMockedFetch(() => htmlResponse('', 500), () => fetchRijksoverheidGeneralSitemapUrls('https://www.rijksoverheid.nl/sitemap.xml', '/actueel/nieuws/')),
-  );
-});
-
-const fakeRijksoverheidIndexSource = {
+// Topic-API-bron met exact de relevantiepoort-velden van de echte
+// Rijksoverheid-bron, maar zonder maxAgeMonths/relevanceSignals/
+// exclusionRules: deze tests dekken uitsluitend de gedeelde poort (de
+// echte configuratie wordt verderop apart getest), en een ongeldige datum
+// houdt publishItem hier vóór writeArticle tegen.
+const fakeRijksoverheidGateSource = {
   id: 'test-rijksoverheid',
   name: 'Test-Rijksoverheid-bron',
-  sitemapIndexUrl: 'https://www.rijksoverheid.nl/sitemap.xml',
-  articleUrlPattern: '/actueel/nieuws/',
+  type: 'rijksoverheid-topic-api',
+  topics: ['Testtopic'],
   defaultCategory: 'Fiscale actualiteit',
   requireKeywordMatch: true,
   ministryBypass: 'Ministerie van Financiën',
-  // Zelfde smalle, expliciete signaal als de echte rijksoverheid-nieuws-
-  // bron in sources.config.mjs — zie de tests verderop die specifiek dit
-  // pad dekken.
+  // Zelfde smalle, expliciete signaal als de echte Rijksoverheid-bron in
+  // sources.config.mjs — zie de tests verderop die specifiek dit pad
+  // dekken.
   audienceSignals: rijksoverheidAudienceSignals,
   // Zelfde corroboratie-eis als de echte bron — zie de prinsjesdag-tests
   // verderop.
   corroborationRequiredKeywords: ['prinsjesdag'],
 };
 
-test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de algemene sub-sitemaps, haalt titel+samenvatting van de artikelpagina en past de bestaande relevantiefilter ongewijzigd toe', async () => {
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+test('processSitemapSource (Rijksoverheid-poort via topic-API): ontdekt kandidaten via de algemene sub-sitemaps, haalt titel+samenvatting van de artikelpagina en past de bestaande relevantiefilter ongewijzigd toe', async () => {
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/al-bekend', lastmod: '2026-10-01T09:00:00.000Z' },
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/geen-beschrijving', lastmod: '2026-10-01T08:00:00.000Z' },
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/algemeen-nieuws', lastmod: '2026-10-01T07:00:00.000Z' },
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/kor-nieuws', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
 
   const existingUrls = new Set(['https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/al-bekend']);
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/geen-beschrijving') {
       return htmlResponse('<html><head><title>Titel zonder samenvatting | Rijksoverheid.nl</title></head></html>');
     }
@@ -1168,7 +1130,7 @@ test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de 
       return htmlResponse('<html><head><title>Kleineondernemersregeling uitgelegd | Rijksoverheid.nl</title><meta name="description" content="Deze kleineondernemersregeling is relevant voor zzp\'ers met een lage omzet."/></head></html>');
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, existingUrls, { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, existingUrls, { count: 50 }));
 
   assert.equal(result.ok, true);
   assert.equal(result.stages.fetched, 4);
@@ -1176,18 +1138,12 @@ test('processSitemapSource (sitemapIndexUrl-variant): ontdekt kandidaten via de 
   assert.equal(result.stages.reasons.metadataRejected, 1); // geen-beschrijving: titel wel, samenvatting niet
   assert.equal(result.stages.reasons.irrelevant, 1); // algemeen-nieuws
   assert.equal(result.stages.relevant, 1); // kor-nieuws
-  // Titel kwam niet uit de sitemap (die had alleen loc+lastmod) maar van de
-  // artikelpagina zelf — geverifieerd via de gepubliceerde samenvatting-
+  // Titel kwam niet uit de discovery (die levert alleen loc+lastmod) maar
+  // van de artikelpagina zelf — geverifieerd via de gepubliceerde samenvatting-
   // bronvermelding is lastig zonder te schrijven; i.p.v. daarvan: ongeldige
   // datum op het relevante item voorkomt een echte schrijfactie, net als
   // bij de andere process*Source-tests in dit bestand.
   assert.equal(result.stages.published, 0);
-});
-
-test('processSitemapSource (sitemapIndexUrl-variant): rapporteert een foutresultaat als de sitemap-index niet bereikbaar is, zonder de run te laten crashen', async () => {
-  const result = await withMockedFetch(() => htmlResponse('', 503), () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
-  assert.equal(result.ok, false);
-  assert.equal(result.added, 0);
 });
 
 // --- Regressie (2026-10-01): 'nba'-substring-false-positives + smalle
@@ -1225,7 +1181,7 @@ test("scoreCategories: bestaande opzettelijke voorvoegsel-trefwoorden (bijv. 'bo
   assert.ok('Administratie & jaarrekening' in scoreCategories('Als boekhouder help ik ondernemers met hun administratie.'));
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): een zzp-wet wordt nu relevant via de smalle audienceSignals-aanvulling, ook zonder categoryKeywords-treffer', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een zzp-wet wordt nu relevant via de smalle audienceSignals-aanvulling, ook zonder categoryKeywords-treffer', async () => {
   const title = "Zelfstandigenwet biedt meer duidelijkheid en erkenning voor zzp'ers";
   const description = "Het kabinet heeft een wetsvoorstel ingediend dat meer duidelijkheid moet geven over de positie van zelfstandigen zonder personeel op de arbeidsmarkt.";
   // Zekerstellen dat dit artikel NIET via categoryKeywords of ministryBypass
@@ -1233,28 +1189,26 @@ test('processSitemapSource (sitemapIndexUrl-variant): een zzp-wet wordt nu relev
   // audienceSignals-pad dekt, niet een al bestaand pad.
   assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
   // Ongeldige lastmod -> wordt publishedAt in publishItem -> publishItem
   // geeft null terug vóór writeArticle (zie fetch-articles.mjs), dus
   // stages.relevant kan hier veilig getest worden zonder dat er een echt
   // bestand wordt weggeschreven — zelfde patroon als elders in dit bestand.
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zelfstandigenwet', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zelfstandigenwet') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): een generiek overheidsartikel met alleen het brede audienceKeyword "werkgever" wordt NIET automatisch relevant', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een generiek overheidsartikel met alleen het brede audienceKeyword "werkgever" wordt NIET automatisch relevant', async () => {
   const title = 'Werkgevers krijgen te maken met nieuwe regels';
   const description = 'Werkgevers moeten vanaf volgend jaar rekening houden met enkele nieuwe regels voor personeel op de werkvloer.';
   // 'werkgever'/'personeel' zijn bewust NIET in rijksoverheidAudienceSignals
@@ -1263,18 +1217,16 @@ test('processSitemapSource (sitemapIndexUrl-variant): een generiek overheidsarti
   assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
   assert.equal(rijksoverheidAudienceSignals.some((kw) => description.toLowerCase().includes(kw)), false);
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/werkgevers-nieuwe-regels', lastmod: '2026-10-01T09:00:00.000Z' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/werkgevers-nieuwe-regels') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 0);
   assert.equal(result.stages.reasons.irrelevant, 1);
@@ -1337,7 +1289,7 @@ test("scoreCategories: met excludeKeywords kan 'prinsjesdag' buiten de telling g
   assert.ok('Fiscale actualiteit' in scoreCategories(prinsjesdagEnBelastingplan, new Set(['prinsjesdag'])));
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): een Rijksoverheid-artikel met uitsluitend "prinsjesdag" wordt niet meer automatisch relevant', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een Rijksoverheid-artikel met uitsluitend "prinsjesdag" wordt niet meer automatisch relevant', async () => {
   const title = 'Prinsjesdag 2026: wat gebeurt er op het Binnenhof';
   const description = 'Op Prinsjesdag leest de koning de troonrede voor en biedt het kabinet de rijksbegroting aan bij de Tweede Kamer.';
   // Zekerstellen dat dit artikel alleen via 'prinsjesdag' scoort, en geen
@@ -1347,107 +1299,97 @@ test('processSitemapSource (sitemapIndexUrl-variant): een Rijksoverheid-artikel 
   assert.deepEqual(Object.keys(scores), ['Fiscale actualiteit']);
   assert.equal(rijksoverheidAudienceSignals.some((kw) => description.toLowerCase().includes(kw)), false);
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-2026', lastmod: '2026-10-01T09:00:00.000Z' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-2026') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 0);
   assert.equal(result.stages.reasons.irrelevant, 1);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): een algemeen Prinsjesdag-ministeriepersbericht zonder relevant Avydo-signaal komt niet meer door de poort', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een algemeen Prinsjesdag-ministeriepersbericht zonder relevant Avydo-signaal komt niet meer door de poort', async () => {
   const title = 'Prinsjesdag 2026: kabinet trekt extra geld uit voor Caribisch Nederland';
   const description = 'Rond Prinsjesdag maakt het kabinet bekend dat er extra budget komt voor de kosten van levensonderhoud op Bonaire, Sint-Eustatius en Saba.';
   assert.deepEqual(Object.keys(scoreCategories(`${title} ${description}`)), ['Fiscale actualiteit']);
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/caribisch-nederland', lastmod: '2026-10-01T09:00:00.000Z' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/caribisch-nederland') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 0);
   assert.equal(result.stages.reasons.irrelevant, 1);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + "belastingplan" samen blijven relevant', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): "prinsjesdag" + "belastingplan" samen blijven relevant', async () => {
   const title = 'Prinsjesdag 2026: Belastingplan 2027 ingediend bij de Tweede Kamer';
   const description = 'Op Prinsjesdag heeft het kabinet het Belastingplan 2027 ingediend met voorstellen voor belastingtarieven volgend jaar.';
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
   // Ongeldige lastmod -> publishItem geeft null terug vóór writeArticle,
   // dus stages.relevant kan hier veilig getest worden zonder te schrijven.
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/belastingplan-2027', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/belastingplan-2027') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een ander bestaand category-signaal ("btw") samen blijven relevant', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): "prinsjesdag" + een ander bestaand category-signaal ("btw") samen blijven relevant', async () => {
   const title = 'Prinsjesdag 2026: wijzigingen in de btw-tarieven aangekondigd';
   const description = 'Tijdens Prinsjesdag maakte het kabinet bekend dat de btw-tarieven per volgend jaar wijzigen voor een aantal productgroepen.';
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-tarieven-wijziging', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-tarieven-wijziging') {
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een bestaand audienceSignal (zzp) samen blijven relevant, en audienceSignals blijven los daarvan gewoon werken', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): "prinsjesdag" + een bestaand audienceSignal (zzp) samen blijven relevant, en audienceSignals blijven los daarvan gewoon werken', async () => {
   // Deel 1: 'prinsjesdag' + audienceMatch (zzp) -> relevant via corroboratie.
   const titleMet = 'Prinsjesdag 2026: wat verandert er voor zzp\'ers';
   const descriptionMet = 'Tijdens Prinsjesdag kondigde het kabinet aan dat er voor zzp\'ers enkele regelingen wijzigen per volgend jaar.';
   assert.ok(rijksoverheidAudienceSignals.some((kw) => descriptionMet.toLowerCase().includes(kw)));
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemapMet = roSitemapPage([
+  const topicEntriesMet = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-zzp', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const resultMet = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemapMet);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntriesMet);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/prinsjesdag-zzp') {
       return htmlResponse(`<html><head><title>${titleMet} | Rijksoverheid.nl</title><meta name="description" content="${descriptionMet}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
   assert.equal(resultMet.stages.relevant, 1);
 
   // Deel 2: audienceSignal (zzp) zonder 'prinsjesdag' en zonder categoryKeywords
@@ -1460,17 +1402,16 @@ test('processSitemapSource (sitemapIndexUrl-variant): "prinsjesdag" + een bestaa
   assert.equal(Object.keys(scoreCategories(`${titleZonder} ${descriptionZonder}`)).length, 0);
   assert.ok(rijksoverheidAudienceSignals.some((kw) => `${titleZonder} ${descriptionZonder}`.toLowerCase().includes(kw)));
 
-  const subSitemapZonder = roSitemapPage([
+  const topicEntriesZonder = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zzp-regeling', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const resultZonder = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemapZonder);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntriesZonder);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/zzp-regeling') {
       return htmlResponse(`<html><head><title>${titleZonder} | Rijksoverheid.nl</title><meta name="description" content="${descriptionZonder}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
   assert.equal(resultZonder.stages.relevant, 1);
 });
 
@@ -1492,23 +1433,21 @@ function financienPageHtml(title, description) {
 }
 
 async function runFinancienMinistryBypassCase(slug, title, description) {
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
   // Ongeldige lastmod -> publishItem geeft null terug vóór writeArticle
   // (zie fetch-articles.mjs), dus stages.relevant kan hier veilig getest
   // worden zonder dat er een echt bestand wordt weggeschreven — zelfde
   // patroon als elders in dit bestand. Ook relevant voor de twee cases
   // hieronder die daadwerkelijk relevant=1 verwachten.
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: `https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/${slug}`, lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   return withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === `https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/${slug}`) {
       return htmlResponse(financienPageHtml(title, description));
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 }
 
 for (const [slug, term, title, description] of [
@@ -1517,7 +1456,7 @@ for (const [slug, term, title, description] of [
   ['kinderopvangtoeslag-actie', 'kinderopvangtoeslag', 'Actie voor ouders die kinderopvangtoeslag laten liggen', 'Duizenden ouders ontvangen een brief omdat ze mogelijk nog recht hebben op kinderopvangtoeslag over vorig jaar.'],
   ['kindgebonden-budget-actie', 'kindgebonden budget', 'Actie voor huishoudens die kindgebonden budget laten liggen', 'Duizenden huishoudens ontvangen een brief omdat ze mogelijk nog recht hebben op kindgebonden budget over vorig jaar.'],
 ]) {
-  test(`processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel met uitsluitend '${term}' wordt niet meer relevant via ministryBypass`, async () => {
+  test(`processSitemapSource (Rijksoverheid-poort via topic-API): een Financiën-artikel met uitsluitend '${term}' wordt niet meer relevant via ministryBypass`, async () => {
     // Zekerstellen dat dit artikel geen categoryKeywords-/audienceSignals-
     // treffer heeft — anders test deze test niet specifiek het
     // ministryBypass-pad.
@@ -1530,7 +1469,7 @@ for (const [slug, term, title, description] of [
   });
 }
 
-test('processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel zonder categoryKeyword/audienceSignal maar wél met een fiscale stam blijft relevant via ministryBypass', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een Financiën-artikel zonder categoryKeyword/audienceSignal maar wél met een fiscale stam blijft relevant via ministryBypass', async () => {
   const title = 'Kabinet werkt aan vereenvoudiging van de fiscale regelgeving';
   const description = 'Het kabinet onderzoekt hoe regels rond geldstromen tussen overheid en bedrijfsleven eenvoudiger kunnen worden ingericht voor de komende jaren.';
   // Zekerstellen dat dit artikel ook geen categoryKeywords-/audienceSignals-
@@ -1546,7 +1485,7 @@ test('processSitemapSource (sitemapIndexUrl-variant): een Financiën-artikel zon
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test("processSitemapSource (sitemapIndexUrl-variant): 'zorgtoeslag' blokkeert de ministryBypass niet als het artikel daarnaast een echt categoryKeyword bevat (de uitsluiting raakt alleen ministryBypass, niet de algemene relevantiescoring)", async () => {
+test("processSitemapSource (Rijksoverheid-poort via topic-API): 'zorgtoeslag' blokkeert de ministryBypass niet als het artikel daarnaast een echt categoryKeyword bevat (de uitsluiting raakt alleen ministryBypass, niet de algemene relevantiescoring)", async () => {
   const title = 'Belastingplan 2027: ook wijzigingen voor toeslagen zoals zorgtoeslag';
   const description = 'Naast het Belastingplan 2027 wijzigt ook de systematiek van de zorgtoeslag, als onderdeel van de bredere fiscale wetswijziging voor volgend jaar.';
   // Zekerstellen dat dit artikel WEL een categoryKeywords-treffer heeft
@@ -1571,7 +1510,7 @@ test("processSitemapSource (sitemapIndexUrl-variant): 'zorgtoeslag' blokkeert de
 // audit bevatten beide, ondanks het ontbreken van een categoryKeywords-
 // treffer, wél het woordstam 'belasting' resp. 'fiscaal'.
 
-test("processSitemapSource (sitemapIndexUrl-variant): 'Kabinet zet met belastingwijzigingen 2026 stappen naar een beter belastingstelsel' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
+test("processSitemapSource (Rijksoverheid-poort via topic-API): 'Kabinet zet met belastingwijzigingen 2026 stappen naar een beter belastingstelsel' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
   const title = 'Kabinet zet met belastingwijzigingen 2026 stappen naar een beter belastingstelsel';
   const description = 'Per 1 januari 2026 wijzigen verschillende belastingen waarmee stappen worden gezet naar een beter belastingstelsel. Daarbij houdt het kabinet oog voor de koopkracht van Nederlanders.';
   assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
@@ -1582,7 +1521,7 @@ test("processSitemapSource (sitemapIndexUrl-variant): 'Kabinet zet met belasting
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test("processSitemapSource (sitemapIndexUrl-variant): 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
+test("processSitemapSource (Rijksoverheid-poort via topic-API): 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen' blijft relevant via ministryBypass (fiscale stam 'belasting', geen categoryKeyword)", async () => {
   const title = 'Start internetconsultatie belastingmaatregelen om startups en scale-ups te ondersteunen';
   const description = 'Vandaag start een internetconsultatie om 2 belastingmaatregelen die startups en scale-ups in Nederland ondersteunen. Er komt een nieuwe regeling die het aantrekkelijker maakt om medewerkers te belonen met opties op aandelen in het bedrijf.';
   assert.equal(Object.keys(scoreCategories(`${title} ${description}`)).length, 0);
@@ -1593,7 +1532,7 @@ test("processSitemapSource (sitemapIndexUrl-variant): 'Start internetconsultatie
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test("processSitemapSource (sitemapIndexUrl-variant): 'fiscaal' zonder 'belasting' is ook voldoende als fiscale stam voor ministryBypass", async () => {
+test("processSitemapSource (Rijksoverheid-poort via topic-API): 'fiscaal' zonder 'belasting' is ook voldoende als fiscale stam voor ministryBypass", async () => {
   const title = 'Kabinet kondigt nieuwe fiscale maatregel aan voor innovatieve bedrijven';
   const description = 'Het kabinet neemt een nieuwe fiscale maatregel om innovatie bij bedrijven te stimuleren, zonder dat dit gevolgen heeft voor andere regelingen.';
   assert.equal(`${title} ${description}`.toLowerCase().includes('belasting'), false);
@@ -1605,25 +1544,23 @@ test("processSitemapSource (sitemapIndexUrl-variant): 'fiscaal' zonder 'belastin
   assert.equal(result.stages.reasons.irrelevant, 0);
 });
 
-test('processSitemapSource (sitemapIndexUrl-variant): een categoryKeyword-treffer blijft relevant zonder ministryBypass (de nieuwe fiscale-stam-eis raakt uitsluitend ministryMatch)', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): een categoryKeyword-treffer blijft relevant zonder ministryBypass (de nieuwe fiscale-stam-eis raakt uitsluitend ministryMatch)', async () => {
   const title = 'Nieuwe regels voor de btw-aangifte van kleine ondernemers';
   const description = 'Het kabinet verduidelijkt de regels rond btw-aangifte voor kleine ondernemers vanaf volgend jaar.';
   assert.ok('Btw' in scoreCategories(`${title} ${description}`));
 
-  const indexXml = `<?xml version="1.0"?><sitemapindex><sitemap><loc>https://www.rijksoverheid.nl/sitemap/1.xml</loc></sitemap></sitemapindex>`;
-  const subSitemap = roSitemapPage([
+  const topicEntries = [
     { loc: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-aangifte-kleine-ondernemers', lastmod: 'niet-een-geldige-datum' },
-  ]);
+  ];
   const result = await withMockedFetch((url) => {
-    if (url === fakeRijksoverheidIndexSource.sitemapIndexUrl) return xmlResponse(indexXml);
-    if (url === 'https://www.rijksoverheid.nl/sitemap/1.xml') return xmlResponse(subSitemap);
+    if (url === RO_TOPIC_API_URL) return roTopicApiPage(topicEntries);
     if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/btw-aangifte-kleine-ondernemers') {
       // Bewust GEEN ministerie-breadcrumb in deze pagina — dit artikel moet
       // relevant worden puur via scoreCategories, los van ministryMatch.
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head></html>`);
     }
     return htmlResponse('', 404);
-  }, () => processSitemapSource(fakeRijksoverheidIndexSource, new Set(), { count: 50 }));
+  }, () => processSitemapSource(fakeRijksoverheidGateSource, new Set(), { count: 50 }));
 
   assert.equal(result.stages.relevant, 1);
   assert.equal(result.stages.reasons.irrelevant, 0);
@@ -1637,7 +1574,7 @@ for (const [slug, naam, title, description] of [
   ['tennet-verkoop', 'staatsdeelneming', 'Nederland verkoopt deel TenneT Duitsland aan de Duitse staat', 'De Nederlandse staat verkoopt een deel van de aandelen in TenneT Duitsland aan de Duitse staat via een investeringsbank.'],
   ['nieuwe-munten-2027', 'ceremonieel/munten', "Spinoza en Neder-Germaanse Limes thema's nieuwe munten 2027", 'Jaarlijks brengt het ministerie van Financiën twee bijzondere munten uit om speciale gebeurtenissen of personen te eren.'],
 ]) {
-  test(`processSitemapSource (sitemapIndexUrl-variant): '${naam}' komt niet meer door via ministryBypass (geen fiscale stam 'belasting'/'fiscaal')`, async () => {
+  test(`processSitemapSource (Rijksoverheid-poort via topic-API): '${naam}' komt niet meer door via ministryBypass (geen fiscale stam 'belasting'/'fiscaal')`, async () => {
     const combined = `${title} ${description}`;
     assert.equal(Object.keys(scoreCategories(combined)).length, 0);
     assert.equal(rijksoverheidAudienceSignals.some((kw) => combined.toLowerCase().includes(kw)), false);
@@ -1655,7 +1592,7 @@ for (const [slug, naam, title, description] of [
   });
 }
 
-test('processSitemapSource (sitemapIndexUrl-variant): ministryMatch=false door de nieuwe fiscale-stam-eis blokkeert relevant=true niet als categoryKeywords het artikel al valideert (de eis raakt uitsluitend ministryMatch)', async () => {
+test('processSitemapSource (Rijksoverheid-poort via topic-API): ministryMatch=false door de nieuwe fiscale-stam-eis blokkeert relevant=true niet als categoryKeywords het artikel al valideert (de eis raakt uitsluitend ministryMatch)', async () => {
   const title = 'Kabinet wil administratieplicht voor digitale platformen aanscherpen';
   const description = 'Het kabinet wil dat digitale platformen hun administratieplicht beter naleven om fraude te voorkomen.';
   // Zekerstellen dat dit artikel géén fiscale stam heeft (ministryMatch zou
@@ -1711,33 +1648,90 @@ function apiSearchResponse(rawResults, status = 200) {
 
 // --- Topic-config ---
 
-test('sources.config.mjs: de rijksoverheid-topic-api-bron bevat exact de vier bedoelde topics, met de exacte namen, geen extra topics', () => {
+const EXPECTED_RIJKSOVERHEID_TOPICS = [
+  'Belasting betalen',
+  'Inkomstenbelasting',
+  'Belastingverdragen',
+  'Bijstand voor zelfstandigen (Bbz)',
+  'Europese subsidies',
+  'Prinsjesdag: Belastingplan 2027',
+  'Aanpak belastingontwijking en belastingontduiking',
+  'Zelfstandigen zonder personeel (zzp)',
+  'Ziekteverzuim en herstel naar werk',
+  'Werken met arbeidsbeperking',
+  'Buitenlandse werknemers',
+  'Ondernemen en innovatie',
+];
+const ORIGINAL_FISCAL_TOPICS = [
+  'Belasting betalen',
+  'Inkomstenbelasting',
+  'Belastingverdragen',
+  'Aanpak belastingontwijking en belastingontduiking',
+];
+
+test('sources.config.mjs: de Rijksoverheid-bron bevat exact de 12 geselecteerde topics, met de exacte namen, geen extra topics', () => {
   const source = sources.find((s) => s.id === 'rijksoverheid-topic-api');
   assert.ok(source, 'rijksoverheid-topic-api moet als bron geconfigureerd zijn');
   assert.equal(source.type, 'rijksoverheid-topic-api');
-  assert.deepEqual(source.topics, [
-    'Belasting betalen',
-    'Inkomstenbelasting',
-    'Belastingverdragen',
-    'Aanpak belastingontwijking en belastingontduiking',
-  ]);
-  assert.equal(source.topics.length, 4);
+  assert.deepEqual(source.topics, EXPECTED_RIJKSOVERHEID_TOPICS);
+  assert.equal(source.topics.length, 12);
+  assert.equal(new Set(source.topics).size, 12);
   assert.equal(source.enabled, true);
+  for (const topic of ORIGINAL_FISCAL_TOPICS) assert.ok(source.topics.includes(topic), topic);
+  // Bewust NIET geselecteerde consument-/uitkeringsthema's.
+  for (const excluded of ['AOW', 'Algemene nabestaandenwet (Anw)', 'Arbeidsongeschikt na ziekte (WIA)', 'Kinderbijslag', 'Kinderopvangtoeslag', 'Armoedebestrijding', 'Bijstand', 'Wajong', 'Ziektewet-uitkering']) {
+    assert.equal(source.topics.includes(excluded), false, excluded);
+  }
 });
 
-test('sources.config.mjs: de legacy-bronnen rijksoverheid-nieuws en mkb-nederland-nieuws zijn uitgeschakeld; topic-API, Belastingdienst en KVK blijven actief', () => {
-  const enabledById = Object.fromEntries(sources.map((s) => [s.id, s.enabled]));
-  assert.equal(enabledById['rijksoverheid-nieuws'], false);
-  assert.equal(enabledById['mkb-nederland-nieuws'], false);
-  assert.equal(enabledById['rijksoverheid-topic-api'], true);
-  assert.equal(enabledById['belastingdienst-zakelijk'], true);
-  assert.equal(enabledById['kvk-kennisartikelen'], true);
-  // De enige actieve Rijksoverheid-bron is de fiscale topic-API.
-  const activeRijksoverheid = sources.filter((s) => s.enabled && s.id.startsWith('rijksoverheid'));
-  assert.deepEqual(activeRijksoverheid.map((s) => s.id), ['rijksoverheid-topic-api']);
+test('sources.config.mjs: de Rijksoverheid-bron heet "Rijksoverheid" (wordt zo als sourceName gepubliceerd)', () => {
+  const source = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+  assert.equal(source.name, 'Rijksoverheid');
 });
 
-// --- API-request ---
+test('sources.config.mjs: rijksoverheid-nieuws en mkb-nederland-nieuws bestaan niet meer (ook niet uitgeschakeld); exact Belastingdienst, Rijksoverheid (topic-API) en KVK blijven over', () => {
+  const ids = sources.map((s) => s.id);
+  assert.equal(ids.includes('rijksoverheid-nieuws'), false);
+  assert.equal(ids.includes('mkb-nederland-nieuws'), false);
+  assert.equal(sources.some((s) => s.name === 'MKB-Nederland' || /mkb\.nl/.test(s.feedUrl ?? '')), false);
+  assert.deepEqual(ids, ['belastingdienst-zakelijk', 'rijksoverheid-topic-api', 'kvk-kennisartikelen']);
+  assert.ok(sources.every((s) => s.enabled === true));
+  // De enige Rijksoverheid-bron werkt uitsluitend via de topic-API (geen
+  // algemene sitemap-discovery meer).
+  const rijksoverheid = sources.filter((s) => /rijksoverheid/i.test(s.id) || /rijksoverheid/i.test(s.name));
+  assert.deepEqual(rijksoverheid.map((s) => s.id), ['rijksoverheid-topic-api']);
+  assert.equal(rijksoverheid[0].sitemapIndexUrl, undefined);
+  assert.equal(rijksoverheid[0].sitemapUrl, undefined);
+});
+
+test('sources.config.mjs: Belastingdienst en KVK zijn ongewijzigd geconfigureerd', () => {
+  const belastingdienst = sources.find((s) => s.id === 'belastingdienst-zakelijk');
+  assert.equal(belastingdienst.name, 'Belastingdienst');
+  assert.equal(belastingdienst.type, 'rss');
+  assert.equal(belastingdienst.feedUrl, 'https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/rss/nieuwsfeed_actueel_zakelijk.xml');
+  assert.equal(belastingdienst.requireKeywordMatch, false);
+  assert.equal(belastingdienst.topics, undefined);
+  const kvk = sources.find((s) => s.id === 'kvk-kennisartikelen');
+  assert.equal(kvk.name, 'KVK');
+  assert.equal(kvk.type, 'kvk-sitemap');
+  assert.equal(kvk.sitemapIndexUrl, 'https://www.kvk.nl/sitemap_index.xml');
+  assert.equal(kvk.defaultCategory, 'Ondernemen & rechtsvormen');
+  assert.equal(kvk.requireKeywordMatch, true);
+  assert.equal(kvk.topics, undefined);
+});
+
+test('sources.config.mjs: de Rijksoverheid-bron behoudt leeftijdsgrens, discovery-grenzen, crypto-signaal, uitsluitingen en ministryBypass', () => {
+  const source = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+  assert.equal(source.maxAgeMonths, 24);
+  assert.equal(source.maxPagesPerTopic, 5);
+  assert.equal(source.maxArticlesPerTopicPerRun, 20);
+  assert.equal(source.relevanceSignals, rijksoverheidTopicRelevanceSignals);
+  assert.equal(source.exclusionRules, rijksoverheidTopicExclusionRules);
+  assert.equal(source.ministryBypass, 'Ministerie van Financiën');
+  assert.equal(source.audienceSignals, rijksoverheidAudienceSignals);
+  assert.deepEqual(source.corroborationRequiredKeywords, ['prinsjesdag']);
+  assert.equal(source.requireKeywordMatch, true);
+});
 
 test('buildRijksoverheidTopicSearchBody zet het bewezen topicfilter en content_type-filter correct op', () => {
   const body = buildRijksoverheidTopicSearchBody('Belasting betalen', 1);
@@ -2029,7 +2023,7 @@ test('fetchRijksoverheidTopicApiUrls: haalt onafhankelijk kandidaten op voor all
   assert.equal(result.length, 3 + 2 + 1 + 4);
 });
 
-test('vier-topic regressie: de daadwerkelijk in sources.config.mjs geconfigureerde topics worden elk onafhankelijk bevraagd', async () => {
+test('topic-regressie: alle 12 daadwerkelijk in sources.config.mjs geconfigureerde topics (incl. de vier oorspronkelijke fiscale) worden elk onafhankelijk bevraagd', async () => {
   const configuredTopics = sources.find((s) => s.id === 'rijksoverheid-topic-api').topics;
   const seenTopics = [];
   const result = await withMockedFetchAndBody((_url, opts) => {
@@ -2043,7 +2037,43 @@ test('vier-topic regressie: de daadwerkelijk in sources.config.mjs geconfigureer
   }, () => fetchRijksoverheidTopicApiUrls(configuredTopics, { maxPagesPerTopic: 2, maxArticlesPerTopicPerRun: 10 }));
 
   assert.deepEqual(seenTopics, configuredTopics);
-  assert.equal(result.length, 4);
+  assert.deepEqual(seenTopics, EXPECTED_RIJKSOVERHEID_TOPICS);
+  for (const topic of ORIGINAL_FISCAL_TOPICS) assert.ok(seenTopics.includes(topic), topic);
+  assert.equal(result.length, 12);
+});
+
+test('topic-regressie: elk van de vier oorspronkelijke fiscale topics levert via de echte bronconfiguratie nog steeds kandidaten op, met paginering en deduplicatie over topics', async () => {
+  const configured = sources.find((s) => s.id === 'rijksoverheid-topic-api');
+  const requested = [];
+  const result = await withMockedFetchAndBody((_url, opts) => {
+    const body = JSON.parse(opts.body);
+    const topic = body.requestState.filters[0].values[0];
+    requested.push(`${topic}#${body.requestState.current}`);
+    if (!ORIGINAL_FISCAL_TOPICS.includes(topic)) return apiSearchResponse([]);
+    const slug = topic.toLowerCase().replace(/[^a-z]+/g, '-');
+    // Pagina 1 vol (10), pagina 2 met 1 resultaat -> paginering stopt daarna.
+    // Elk topic noemt ook één gedeeld artikel -> deduplicatie over topics.
+    if (body.requestState.current === 1) {
+      return apiSearchResponse([
+        apiSearchResult({ url: '/actueel/nieuws/gedeeld-fiscaal-artikel' }),
+        ...Array.from({ length: 9 }, (_, i) => apiSearchResult({ url: `/actueel/nieuws/${slug}-${i}` })),
+      ]);
+    }
+    if (body.requestState.current === 2) return apiSearchResponse([apiSearchResult({ url: `/actueel/nieuws/${slug}-extra` })]);
+    return apiSearchResponse([]);
+  }, () => fetchRijksoverheidTopicApiUrls(configured.topics, {
+    maxPagesPerTopic: configured.maxPagesPerTopic,
+    maxArticlesPerTopicPerRun: configured.maxArticlesPerTopicPerRun,
+  }));
+
+  for (const topic of ORIGINAL_FISCAL_TOPICS) {
+    assert.ok(requested.includes(`${topic}#1`), topic);
+    assert.ok(requested.includes(`${topic}#2`), topic);
+    assert.equal(requested.includes(`${topic}#3`), false, topic);
+  }
+  // 4 topics × (9 eigen + 1 extra) + 1 gedeeld artikel (één keer).
+  assert.equal(result.length, 4 * 10 + 1);
+  assert.equal(result.filter((e) => e.loc.endsWith('/gedeeld-fiscaal-artikel')).length, 1);
 });
 
 // --- rijksoverheid-topic-api: gerichte relevantiefilter (audit productieruns 1+2) ---
@@ -2163,12 +2193,7 @@ test('rijksoverheid-topic-api: de nieuwe signalen zijn bron-gescoped — niet in
   assert.deepEqual(scoreCategories(`${TOPIC_CASES.cryptoTransacties.title} ${TOPIC_CASES.cryptoTransacties.description}`), {});
   const withSignals = sources.filter((s) => s.relevanceSignals || s.exclusionRules).map((s) => s.id);
   assert.deepEqual(withSignals, ['rijksoverheid-topic-api']);
-  assert.deepEqual(realTopicApiSource.topics, [
-    'Belasting betalen',
-    'Inkomstenbelasting',
-    'Belastingverdragen',
-    'Aanpak belastingontwijking en belastingontduiking',
-  ]);
+  assert.deepEqual(realTopicApiSource.topics, EXPECTED_RIJKSOVERHEID_TOPICS);
 });
 
 // --- rijksoverheid-topic-api: leeftijdsgrens (maxAgeMonths: 24) ---
@@ -2208,7 +2233,7 @@ test('isOutsideMaxAge: maandverschillen worden in kalendermaanden gerekend, met 
   assert.equal(isOutsideMaxAge('2026-02-27T23:59:59.999Z', 24, leapDay), true);
 });
 
-test('rijksoverheid-topic-api leeftijdsgrens: alleen de topic-API-bron heeft maxAgeMonths (24); KVK, Belastingdienst en de uitgeschakelde bronnen niet', () => {
+test('rijksoverheid-topic-api leeftijdsgrens: alleen de topic-API-bron heeft maxAgeMonths (24); KVK en Belastingdienst niet', () => {
   assert.equal(realTopicApiSource.maxAgeMonths, 24);
   const withMaxAge = sources.filter((s) => s.maxAgeMonths !== undefined).map((s) => s.id);
   assert.deepEqual(withMaxAge, ['rijksoverheid-topic-api']);
@@ -2274,4 +2299,46 @@ test('leeftijdsgrens geldt niet voor Belastingdienst: een feed-item uit 2018 wor
   ));
   assert.equal(result.stages.published, 1);
   assert.equal(result.stages.reasons.tooOld, undefined);
+});
+
+// --- Rijksoverheid: bronnaam en content na consolidatie (2026-10-07) ---
+
+test('Rijksoverheid-bron: een gepubliceerd topic-API-artikel krijgt sourceName "Rijksoverheid" (echte configuratie, geïsoleerde CONTENT_DIR)', async () => {
+  const written = await withIsolatedKvkModule([], async (mod) => {
+    const result = await withMockedFetchAndBody((url, opts) => {
+      if (opts?.method === 'POST') {
+        const body = JSON.parse(opts.body);
+        const rawResults = body.requestState.current === 1 && body.requestState.filters[0].values[0] === 'Belasting betalen'
+          ? [apiSearchResult({ url: '/actueel/nieuws/bronnaam-case', date: '2026-09-01T00:00:00.000Z' })]
+          : [];
+        return apiSearchResponse(rawResults);
+      }
+      if (url === 'https://www.rijksoverheid.nl/actueel/nieuws/bronnaam-case') {
+        return htmlResponse(`<html><head><title>${TOPIC_CASES.box3Obligaties.title} | Rijksoverheid.nl</title><meta name="description" content="${TOPIC_CASES.box3Obligaties.description}"/></head></html>`);
+      }
+      return htmlResponse('', 404);
+    }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW));
+    assert.equal(result.stages.published, 1);
+    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
+    return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => readFileSync(path.join(dir, f), 'utf8'));
+  });
+  assert.equal(written.length, 1);
+  assert.match(written[0], /^sourceName: "Rijksoverheid"$/m);
+  assert.doesNotMatch(written[0], /fiscale topics/);
+});
+
+test('content: geen sourceName "Rijksoverheid (fiscale topics)" of "MKB-Nederland" meer; elk Rijksoverheid-artikel is een rijksoverheid.nl-nieuwsartikel', () => {
+  const contentDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../src/content/kenniscentrum');
+  const sourceNames = {};
+  for (const file of readdirSync(contentDir).filter((f) => f.endsWith('.md'))) {
+    const text = readFileSync(path.join(contentDir, file), 'utf8');
+    const sourceName = text.match(/^sourceName: "(.*)"$/m)?.[1];
+    sourceNames[sourceName] = (sourceNames[sourceName] ?? 0) + 1;
+    if (sourceName === 'Rijksoverheid') {
+      assert.match(text, /^sourceUrl: "https:\/\/www\.rijksoverheid\.nl\/actueel\/nieuws\//m, file);
+    }
+  }
+  assert.equal(sourceNames['Rijksoverheid (fiscale topics)'], undefined);
+  assert.equal(sourceNames['MKB-Nederland'], undefined);
+  assert.ok(sourceNames.Rijksoverheid > 0);
 });

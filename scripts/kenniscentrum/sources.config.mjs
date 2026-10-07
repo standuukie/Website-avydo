@@ -8,54 +8,30 @@
 // Bron-types:
 //  - "rss": een RSS/Atom-feed, opgehaald en geparsed als XML-items met
 //    title/link/description/pubDate.
-//  - "sitemap": een sitemap-gebaseerde bron zonder samenvattingstekst in de
-//    sitemap zelf — per nieuw artikel wordt de paginabron zelf opgehaald om
-//    de meta-description (of og:description) te lezen als brontekst voor de
-//    samenvatting, en (als de sitemap zelf geen titel levert) ook de
-//    paginatitel — nooit verzonnen, altijd de eigen tekst van de bron.
-//    Optioneel kan een "ministryBypass" ingesteld worden: als de
-//    artikelpagina een breadcrumb-link naar die ministerie-pagina bevat,
-//    telt het artikel als relevant ook zonder trefwoordtreffer (zie
-//    fetch-articles.mjs, extractMinistryTag). Twee discovery-varianten:
-//    - "sitemapUrl": één Google News-sitemap (xmlns:news) met title +
-//      publicatiedatum per item, rechtstreeks geparsed.
-//    - "sitemapIndexUrl" + "articleUrlPattern": een sitemap-index die naar
-//      meerdere sub-sitemaps verwijst (zie rijksoverheid-nieuws hieronder);
-//      sub-sitemaps bevatten alleen loc+lastmod, dus de titel komt van de
-//      artikelpagina zelf, net als de samenvatting.
+//  - "sitemap": een Google News-sitemap ("sitemapUrl", xmlns:news) zonder
+//    samenvattingstekst in de sitemap zelf — per nieuw artikel wordt de
+//    paginabron zelf opgehaald om de meta-description (of og:description)
+//    te lezen als brontekst voor de samenvatting — nooit verzonnen, altijd
+//    de eigen tekst van de bron. Momenteel door geen actieve bron gebruikt.
+//  - "rijksoverheid-topic-api": de Rijksoverheid-bron. Discovery via de
+//    topic-API van rijksoverheid.nl (POST /api/search), per geconfigureerd
+//    topic; elke kandidaat doorloopt daarna dezelfde artikelpagina-fetch en
+//    relevantiepoort als het "sitemap"-type (zie processSitemapSource in
+//    fetch-articles.mjs). Optioneel kan een "ministryBypass" ingesteld
+//    worden: als de artikelpagina een breadcrumb-link naar die
+//    ministerie-pagina bevat, telt het artikel als relevant ook zonder
+//    trefwoordtreffer (zie extractMinistryTag).
+//  - "kvk-sitemap": de KVK-bron (zie hieronder).
 //
-// Geschiedenis rijksoverheid-nieuws: rijksoverheid.nl is begin/medio 2026
+// Geschiedenis Rijksoverheid: rijksoverheid.nl is begin/medio 2026
 // overgestapt op een nieuw technisch platform. Daarbij is de oude
 // RSS-infrastructuur op feeds.rijksoverheid.nl buiten gebruik geraakt (het
-// domein resolvet niet meer; herbevestigd 2026-10-01 met een live fetch
-// vanuit een omgeving mét internettoegang tot rijksoverheid.nl — zie
-// hieronder). De officiële rijksoverheid.nl/service/rss-toelichtingspagina
-// (eveneens live gecontroleerd) documenteert ook geen statische sitewide
-// RSS-URL: RSS is daar uitsluitend per pagina/onderwerp beschikbaar via een
-// "Abonneren"-knop die de link pas client-side in een pop-up genereert —
-// geen bruikbaar alternatief voor een onbeheerde dagelijkse job.
-//
-// Aangepast 2026-10-01 (observability → discovery-uitbreiding): de
-// voorheen gebruikte Google News-sitemap (news/sitemap.xml) bleek bij live
-// onderzoek slechts ~7 items per run op te leveren, uitsluitend van de
-// afgelopen ~24 uur — een eigenschap van het Google News-sitemapformaat
-// zelf (dat formaat is uitdrukkelijk bedoeld voor zeer recent nieuws), geen
-// bug in dit script en geen beperking van rijksoverheid.nl's content.
-// Live onderzoek (tijdelijke, alleen-lezen GitHub Actions dry-run, zie
-// git-historie) stelde vast dat https://www.rijksoverheid.nl/sitemap.xml
-// zelf een sitemap-index is die, naast news/sitemap.xml en
-// videos/sitemap.xml, verwijst naar een reeks genummerde, algemene
-// sub-sitemaps (/sitemap/1.xml, /sitemap/2.xml, ...) zónder die 2-dagen-
-// grens: bevestigd met content tot enkele jaren terug én de actuele dag
-// (bijv. een artikel van dezelfde dag over de Zelfstandigenwet, relevant
-// voor zzp'ers). Dit is dezelfde discovery-aanpak als de KVK-bron
-// (sitemap_index.xml -> documents-*.xml) hieronder: een bredere, officiële,
-// machineleesbare bron i.p.v. een kleinere. articleUrlPattern filtert deze
-// (grotendeels niet-nieuws) algemene sub-sitemaps terug tot alleen
-// /actueel/nieuws/-artikelen. De bestaande relevantiefilter
-// (requireKeywordMatch/categoryKeywords/ministryBypass) is volledig
-// ongewijzigd: er stromen alleen meer kandidaten dezelfde, bestaande
-// filter in.
+// domein resolvet niet meer; herbevestigd 2026-10-01 met een live fetch).
+// De officiële rijksoverheid.nl/service/rss-toelichtingspagina documenteert
+// ook geen statische sitewide RSS-URL. De daarna gebruikte sitewide
+// sitemap-discovery leverde vrijwel uitsluitend niet-relevant
+// overheidsnieuws op en is op 2026-10-07 volledig verwijderd (zie
+// git-historie); sindsdien is de topic-API de enige Rijksoverheid-route.
 //
 // KVK-source (toegevoegd 2026-10-01, Fase 1 — integratie + dry-run):
 // kvk.nl/overzicht/ zelf heeft geen RSS en haalt zijn content client-side op
@@ -120,9 +96,9 @@
 // De sleutels hier moeten gelijk zijn aan `audiences` in
 // src/content/config.ts.
 //
-// Staat bewust vóór `sources` hieronder: de rijksoverheid-nieuws-bron
-// verwijst naar rijksoverheidAudienceSignals (zie verderop) in haar eigen
-// configuratie-object, en dat moet al geïnitialiseerd zijn op het moment
+// Staat bewust vóór `sources` hieronder: de Rijksoverheid-bron
+// (rijksoverheid-topic-api) verwijst naar rijksoverheidAudienceSignals (zie
+// verderop) in haar eigen configuratie-object, en dat moet al geïnitialiseerd zijn op het moment
 // dat die array-literal wordt geëvalueerd.
 export const audienceKeywords = {
   zzp: ['zzp', "zzp'er", 'zzper', 'zelfstandige zonder personeel', 'eenmanszaak', 'zelfstandig ondernemer'],
@@ -147,7 +123,7 @@ export const audienceKeywords = {
 // dienen. Bewust NIET toegevoegd: werkgever/starter/mkb-ondernemer — die
 // bevatten brede, generieke termen ("ondernemer", "werkgever", "personeel",
 // "mkb") die massaal algemeen overheidsnieuws zouden doorlaten. Dit raakt
-// alleen rijksoverheid-nieuws; andere bronnen filteren nog steeds
+// alleen de Rijksoverheid-bron (rijksoverheid-topic-api); andere bronnen filteren nog steeds
 // uitsluitend op categoryKeywords (+ ministryBypass waar van toepassing).
 export const rijksoverheidAudienceSignals = audienceKeywords.zzp;
 
@@ -201,76 +177,38 @@ export const sources = [
     requireKeywordMatch: false,
   },
   {
-    id: 'rijksoverheid-nieuws',
-    name: 'Rijksoverheid',
-    type: 'sitemap',
-    // Sitemap-index i.p.v. één Google News-sitemap (zie toelichting
-    // hierboven) — bredere discovery, zelfde discovery-aanpak als KVK.
-    sitemapIndexUrl: 'https://www.rijksoverheid.nl/sitemap.xml',
-    articleUrlPattern: '/actueel/nieuws/',
-    defaultCategory: 'Fiscale actualiteit',
-    // Uitgeschakeld (legacy): vervangen door de gerichte topic-API-bron
-    // hieronder. De eerste productierun met beide bronnen (2026-10-06)
-    // leverde via deze sitewide sitemap 0 relevante artikelen op uit 100
-    // beoordeelde pagina's; de bestaande content van deze bron is
-    // verwijderd. Configuratie bewust bewaard (niet verwijderd) omdat
-    // rijksoverheidAudienceSignals en de toelichting hierboven nog door de
-    // topic-API-bron worden gebruikt.
-    enabled: false,
-    urlConfidence: 'confirmed',
-    // Sitewide nieuws-discovery van de hele Rijksoverheid (alle ministeries):
-    // strikt filteren is hier essentieel. Sinds de redactionele aanscherping
-    // (2026-10-01, zie categoryKeywords hieronder) is deze filtering
-    // bewust smal gehouden tot échte accountancy-/fiscale termen, nadat
-    // bleek dat brede trefwoorden als "wet"/"wetsvoorstel" volstrekt
-    // onrelevant overheidsnieuws doorlieten (bijv. gemeentelijke
-    // herindeling, bestuursbenoemingen op Bonaire, lijkbezorgingswetgeving).
-    requireKeywordMatch: true,
-    // Publicaties van het Ministerie van Financiën tellen altijd als
-    // relevant, ook zonder trefwoordtreffer (zie extractMinistryTag).
-    ministryBypass: 'Ministerie van Financiën',
-    // Smalle, expliciete aanvulling op categoryKeywords — zie
-    // rijksoverheidAudienceSignals hierboven voor de volledige toelichting.
-    audienceSignals: rijksoverheidAudienceSignals,
-    // 'prinsjesdag' is op zichzelf te breed voor sitewide Rijksoverheid-
-    // nieuws (zie processSitemapSource in fetch-articles.mjs voor de
-    // volledige toelichting en de audit die dit aantoonde, 2026-10-01):
-    // elk ministerie publiceert rond Prinsjesdag nieuws, los van fiscale
-    // relevantie. Trefwoorden in deze lijst tellen daarom alleen mee als
-    // er ook een ander category- of audiencesignaal aanwezig is;
-    // 'belastingplan' staat hier bewust niet in en blijft zelfstandig
-    // voldoende.
-    corroborationRequiredKeywords: ['prinsjesdag'],
-  },
-  {
     id: 'rijksoverheid-topic-api',
-    name: 'Rijksoverheid (fiscale topics)',
+    name: 'Rijksoverheid',
     type: 'rijksoverheid-topic-api',
-    // De gerichte fiscale Rijksoverheid-bron: de enige actieve
-    // Rijksoverheid-bron van het Kenniscentrum, beperkt tot vier fiscale
-    // topics. Toegevoegd na read-only onderzoek (zie
-    // git-historie) dat de daadwerkelijk werkende Rijksoverheid topic-API
-    // (POST /api/search) en de exacte requestState/queryConfig-structuur
-    // bevestigde via een live gecapturede browser-request. Bewust beperkt
-    // tot deze 4 topics — de enige 4 die uit dat onderzoek naar voren kwamen
-    // als zowel voldoende volume als hoge precision (geen van de overige
-    // onderzochte topics, zoals Bbz/Europese subsidies/Prinsjesdag/zzp/
-    // Buitenlandse werknemers/Ondernemen en innovatie, is hier toegevoegd).
-    // Exacte topicnamen zoals de API ze verwacht, niet gegokt.
+    // De enige Rijksoverheid-bron van het Kenniscentrum. Discovery via de
+    // Rijksoverheid topic-API (POST /api/search); de exacte
+    // requestState/queryConfig-structuur is bevestigd via een live
+    // gecapturede browser-request (zie git-historie). Uitsluitend de 12
+    // hieronder bewust voor Avydo geselecteerde topics — geen andere topics
+    // uit de algemene Rijksoverheid-topicstructuur (bijv. AOW, Anw, WIA,
+    // Kinderbijslag, toeslagen of andere consument-/uitkeringsthema's).
+    // Exacte topicnamen zoals de API ze accepteert, live geverifieerd in het
+    // read-only topic-onderzoek (elk topic gaf resultaten), niet gegokt.
     topics: [
       'Belasting betalen',
       'Inkomstenbelasting',
       'Belastingverdragen',
+      'Bijstand voor zelfstandigen (Bbz)',
+      'Europese subsidies',
+      'Prinsjesdag: Belastingplan 2027',
       'Aanpak belastingontwijking en belastingontduiking',
+      'Zelfstandigen zonder personeel (zzp)',
+      'Ziekteverzuim en herstel naar werk',
+      'Werken met arbeidsbeperking',
+      'Buitenlandse werknemers',
+      'Ondernemen en innovatie',
     ],
     defaultCategory: 'Fiscale actualiteit',
     enabled: true,
     urlConfidence: 'confirmed',
-    // Dezelfde relevantiepoort als de algemene Rijksoverheid-sitemapbron
-    // hierboven, ongewijzigd hergebruikt: een topic-kandidaat is geen
-    // automatische publicatie, en moet nog steeds door exact dezelfde
-    // categoryKeywords-/ministryBypass-/audienceSignals-/corroboratie-
-    // logica (zie processSitemapSource in fetch-articles.mjs).
+    // Een topic-kandidaat is geen automatische publicatie: elke kandidaat
+    // moet door dezelfde categoryKeywords-/ministryBypass-/audienceSignals-/
+    // corroboratie-logica (zie processSitemapSource in fetch-articles.mjs).
     requireKeywordMatch: true,
     ministryBypass: 'Ministerie van Financiën',
     audienceSignals: rijksoverheidAudienceSignals,
@@ -281,9 +219,8 @@ export const sources = [
     // (en zonder wijziging aan) de bestaande RIJKSOVERHEID_MAX_PAGE_FETCHES_PER_RUN
     // in fetch-articles.mjs. 5 pagina's × 10 resultaten = maximaal 50
     // kandidaten per topic bevraagd; maxArticlesPerTopicPerRun begrenst
-    // daarna hoeveel kandidaten per topic daadwerkelijk worden meegenomen,
-    // ruim boven het werkelijk geobserveerde volume per topic (8–29) uit
-    // het onderzoek.
+    // daarna hoeveel kandidaten per topic (meest recent eerst) daadwerkelijk
+    // worden meegenomen.
     maxPagesPerTopic: 5,
     maxArticlesPerTopicPerRun: 20,
     // Leeftijdsgrens (2026-10-07): kandidaten met een sort_date die meer dan
@@ -294,25 +231,6 @@ export const sources = [
     // gepubliceerd. Zie isOutsideMaxAge in fetch-articles.mjs voor het
     // exacte grensgedrag.
     maxAgeMonths: 24,
-  },
-  {
-    id: 'mkb-nederland-nieuws',
-    name: 'MKB-Nederland',
-    type: 'rss',
-    feedUrl: 'https://www.mkb.nl/rss/nieuws-mkb-nederland',
-    defaultCategory: 'Fiscale actualiteit',
-    // Uitgeschakeld (legacy): bron niet langer gewenst voor het
-    // Kenniscentrum; de bestaande content van deze bron is verwijderd.
-    enabled: false,
-    urlConfidence: 'confirmed',
-    // Aangescherpt op 2026-10-01: deze feed bevat overwegend politieke
-    // lobby-standpunten en algemeen ondernemersnieuws (stikstof, cao-
-    // overleg, conjunctuurcijfers) die niet specifiek over accountancy of
-    // belastingen gaan — dat paste niet bij een kenniscentrum van een
-    // accountants- en belastingadvieskantoor. Voortaan telt een item van
-    // deze bron alleen mee bij een treffer op een daadwerkelijk fiscaal/
-    // accountancy-trefwoord (zie categoryKeywords hieronder).
-    requireKeywordMatch: true,
   },
   {
     id: 'kvk-kennisartikelen',
@@ -373,8 +291,8 @@ export const sources = [
 // "ondernemer", "bedrijven", "economie") liet veel te veel niet-fiscaal
 // overheids- en lobbynieuws door — zie het Kenniscentrum-auditrapport van
 // 2026-10-01. Let op: deze trefwoorden bepalen niet alleen de categorie,
-// maar via requireKeywordMatch ook OF een artikel (van Rijksoverheid of
-// MKB-Nederland) überhaupt wordt opgenomen — bewust specifiek houden.
+// maar via requireKeywordMatch ook OF een artikel (bijv. van Rijksoverheid
+// of KVK) überhaupt wordt opgenomen — bewust specifiek houden.
 export const categoryKeywords = {
   'Fiscale actualiteit': [
     'belastingplan', 'prinsjesdag', 'miljoenennota', 'fiscale wetswijziging',

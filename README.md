@@ -46,16 +46,16 @@ Zie `scripts/kenniscentrum/sources.config.mjs` voor de volledige, becommentariee
 | Bron | Type | Bron-URL | Categorie |
 |---|---|---|---|
 | Belastingdienst (Actueel zakelijk) | RSS | `nieuwsfeed_actueel_zakelijk.xml` | Belastingen |
-| Rijksoverheid | Google News-sitemap | `rijksoverheid.nl/news/sitemap.xml` | gemengd (streng gefilterd op brede mkb-trefwoorden; publicaties van het Ministerie van Financiën tellen altijd mee) |
-| MKB-Nederland | RSS (eigen nieuwsfeed) | `mkb.nl/rss/nieuws-mkb-nederland` | Ondernemen |
+| Rijksoverheid | Topic-API (`POST /api/search`), 12 geselecteerde topics | `rijksoverheid.nl/api/search` | gemengd (streng gefilterd op fiscale/accountancy-trefwoorden; Financiën-publicaties met een fiscale stam tellen mee; alleen artikelen van maximaal 24 maanden oud) |
 
 Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL rechtstreeks live is getest (niet via een zoekmachine); `inferred` betekent dat de URL een bevestigd patroon volgt maar niet 1-op-1 live is geverifieerd. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed/sitemap wordt overgeslagen (nooit verzonnen), en de uitkomst per bron — inclusief de stadia *opgehaald → geparsed → relevant → gepubliceerd* — is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary") en in de jobs-log.
 
 **Bron-types** (veld `type` in `sources.config.mjs`):
 - `rss`: een RSS/Atom-feed met title/link/description/pubDate per item.
-- `sitemap`: een Google News-sitemap (`xmlns:news`), die alleen recente artikelen bevat (titel, publicatiedatum, canonieke URL) zonder samenvattingstekst. Voor elk nieuw artikel wordt de paginabron zelf opgehaald om de `meta description`/`og:description` te lezen als brontekst voor de samenvatting, en (bij de Rijksoverheid-bron) de breadcrumb-link naar `/ministeries/<slug>` om ministerie-specifieke publicaties (Financiën) altijd als relevant te markeren, ook zonder trefwoordtreffer (`ministryBypass`-veld).
+- `sitemap`: een Google News-sitemap (`xmlns:news`), die alleen recente artikelen bevat (titel, publicatiedatum, canonieke URL) zonder samenvattingstekst. Voor elk nieuw artikel wordt de paginabron zelf opgehaald om de `meta description`/`og:description` te lezen als brontekst voor de samenvatting. Momenteel door geen actieve bron gebruikt.
+- `rijksoverheid-topic-api`: de Rijksoverheid-bron. Kandidaat-URL's komen per geconfigureerd topic uit de topic-API van rijksoverheid.nl; daarna wordt per nieuw artikel de paginabron opgehaald (titel, samenvatting en de breadcrumb-link naar `/ministeries/<slug>`, waarmee fiscale publicaties van Financiën als relevant tellen, ook zonder trefwoordtreffer — `ministryBypass`-veld).
 
-**Waarom Rijksoverheid een sitemap gebruikt in plaats van RSS**: rijksoverheid.nl is medio 2026 overgestapt op een nieuw technisch platform, waarbij de oude RSS-infrastructuur op `feeds.rijksoverheid.nl` buiten gebruik is geraakt (het domein resolvet niet meer — dit was structureel de oorzaak dat er nooit Rijksoverheid-artikelen verschenen, ook al werkte de Belastingdienst-feed in dezelfde runs prima). `rijksoverheid.nl/news/sitemap.xml` is live geverifieerd als werkende, officiële vervanging.
+**Waarom Rijksoverheid de topic-API gebruikt in plaats van RSS**: rijksoverheid.nl is medio 2026 overgestapt op een nieuw technisch platform, waarbij de oude RSS-infrastructuur op `feeds.rijksoverheid.nl` buiten gebruik is geraakt (het domein resolvet niet meer). Een sitewide sitemap-aanpak leverde vrijwel alleen niet-relevant overheidsnieuws op en is verwijderd; de topic-API beperkt de kandidaten tot 12 bewust voor Avydo geselecteerde onderwerpen (zie `sources.config.mjs`).
 
 Om te voorkomen dat één bron structureel (bijna) alle artikelen levert, geldt naast het totale `maxArticlesPerRun` ook een `maxArticlesPerSourcePerRun`-plafond per bron per run.
 
