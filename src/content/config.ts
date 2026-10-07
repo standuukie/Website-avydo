@@ -42,6 +42,11 @@ const kenniscentrum = defineCollection({
     hidden: z.boolean().default(false),
     aiAssisted: z.boolean().default(false),
     fetchedAt: z.date().optional(),
+    // Optioneel, uitsluitend handmatig/redactioneel gezet: de sourceUrl van
+    // het artikel dat dit artikel inhoudelijk heeft opgevolgd. Afwezig =
+    // normaal/current. Het artikel blijft bestaan; retrieval geeft het alleen
+    // lagere voorrang (zie src/lib/source-freshness.mjs). Nooit automatisch.
+    supersededBy: z.string().url().optional(),
   }),
 });
 

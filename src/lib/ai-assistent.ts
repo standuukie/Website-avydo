@@ -14,6 +14,7 @@ import { knowledgeBase } from '@/data/ai-knowledge';
 import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
 import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, retrieveKnowledgeItemsWithContext, tokenize } from './knowledge-match.mjs';
+import { formatSourcesForPrompt as formatSourcesWithFreshness, rankScoredArticles } from './source-freshness.mjs';
 
 export interface RetrievedSource {
   id: number;
@@ -21,6 +22,10 @@ export interface RetrievedSource {
   title: string;
   url: string;
   snippet: string;
+  /** Alleen bij Kenniscentrum-artikelen: getoond aan het model (zie source-freshness.mjs). */
+  publishedAt?: Date;
+  /** Alleen bij Kenniscentrum-artikelen: true als het artikel een (handmatig gezette) `supersededBy` heeft. */
+  superseded?: boolean;
 }
 
 // Verlaagd (2026-09-29, ronde 3) van 4/3 naar 2/2: Kenniscentrum-artikelen
@@ -77,6 +82,8 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
         title: pinned.data.title,
         url: pinned.data.sourceUrl,
         snippet: `${pinned.data.summary} ${pinned.data.relevance}`.slice(0, 700),
+        publishedAt: pinned.data.publishedAt,
+        superseded: Boolean(pinned.data.supersededBy),
       });
     }
   }
@@ -107,18 +114,24 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
   // nieuwsartikel — bijvoorbeeld een artikel dat het woord "btw" bevat maar
   // niets met de gestelde vraag te maken heeft. Eén losse treffer (score 1)
   // is daarom niet meer genoeg om een artikel als bron mee te geven.
-  const scoredArticles = allArticles
-    .filter((a) => !opts.pinnedArticleSlug || a.slug !== opts.pinnedArticleSlug)
-    .map((article) => ({
-      article,
-      score: overlapScore(
-        queryTokens,
-        `${article.data.title} ${article.data.summary} ${article.data.category} ${article.data.tags.join(' ')}`,
-      ),
-    }))
-    .filter((x) => x.score >= MIN_RELEVANCE_SCORE)
-    .sort((a, b) => b.score - a.score || b.article.data.publishedAt.valueOf() - a.article.data.publishedAt.valueOf())
-    .slice(0, MAX_ARTICLE_SOURCES);
+  // Volgorde: zie rankScoredArticles (source-freshness.mjs) — de score zelf is
+  // ongewijzigd; alleen een handmatig gezette `supersededBy` geeft een
+  // opgevolgd artikel lagere voorrang. Geen recentheidsbonus.
+  const scoredArticles = rankScoredArticles(
+    allArticles
+      .filter((a) => !opts.pinnedArticleSlug || a.slug !== opts.pinnedArticleSlug)
+      .map((article) => ({
+        article,
+        score: overlapScore(
+          queryTokens,
+          `${article.data.title} ${article.data.summary} ${article.data.category} ${article.data.tags.join(' ')}`,
+        ),
+        publishedAt: article.data.publishedAt,
+        sourceUrl: article.data.sourceUrl,
+        supersededBy: article.data.supersededBy,
+      }))
+      .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
+  ).slice(0, MAX_ARTICLE_SOURCES);
 
   for (const { article } of scoredArticles) {
     sources.push({
@@ -127,6 +140,8 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
       title: article.data.title,
       url: article.data.sourceUrl,
       snippet: `${article.data.summary} ${article.data.relevance}`.slice(0, 500),
+      publishedAt: article.data.publishedAt,
+      superseded: Boolean(article.data.supersededBy),
     });
   }
 
@@ -178,9 +193,8 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
   return sources;
 }
 
+// Toont bij Kenniscentrum-artikelen de publicatiedatum (en "historisch" bij
+// een opgevolgd artikel); overige bronnen ongewijzigd. Zie source-freshness.mjs.
 export function formatSourcesForPrompt(sources: RetrievedSource[]): string {
-  if (sources.length === 0) return '(Geen relevante bronnen gevonden in het Kenniscentrum, de Belastingkalender of Avydo-informatie voor deze vraag.)';
-  return sources
-    .map((s) => `[${s.id}] ${s.name} — "${s.title}"\n${s.snippet}`)
-    .join('\n\n');
+  return formatSourcesWithFreshness(sources);
 }
