@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_RELEVANCE_SCORE, overlapScore, tokenize } from '../../src/lib/knowledge-match.mjs';
-import { formatSourceDate, formatSourceName, formatSourcesForPrompt, rankScoredArticles } from '../../src/lib/source-freshness.mjs';
+import { formatSourceDate, formatSourceName, formatSourcesForPrompt, rankScoredArticles, substituteExplicitSuccessors } from '../../src/lib/source-freshness.mjs';
 import { buildSourceFallbackAnswer } from '../../src/lib/fallback-answer.mjs';
 import { articleContextSnippet } from '../../src/lib/article-context.mjs';
 
@@ -30,6 +30,8 @@ const URL_HUIS_FEB = `${B}2025/02/06/afschaffen-van-inhoudingen-op-het-minimumlo
 const URL_HUIS_MEI = `${B}2025/05/09/internetconsultatie-afschaffen-van-inhoudingen-op-het-minimumloon-voor-huisvesting`;
 const URL_HUIS_BESLUIT = `${B}2025/10/30/regeling-voor-huisvestingskosten-arbeidsmigranten-blijft-bestaan`;
 const URL_HUIS_VOORNEMEN = `${B}2026/09/10/werkgever-mag-geen-huur-meer-inhouden-op-minimumloon-arbeidsmigrant`;
+const URL_E_FACTURATIE = `${B}2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven`;
+const URL_CRYPTO_2025 = `${B}2025/07/07/transacties-met-crypto-straks-meer-in-beeld-bij-belastingdienst`;
 
 function loadArticles() {
   return readdirSync(CONTENT_DIR)
@@ -60,19 +62,18 @@ const byUrl = (url) => ARTICLES.find((a) => a.sourceUrl === url);
 // Zelfde artikelstap als retrieveContext() in src/lib/ai-assistent.ts.
 function retrieveArticleSources(query, articles = ARTICLES, max = 2) {
   const queryTokens = tokenize(query);
-  const ranked = rankScoredArticles(
-    articles
-      .filter((a) => !a.hidden)
-      .map((article) => ({
-        article,
-        score: overlapScore(queryTokens, `${article.title} ${article.summary} ${article.category} ${article.tags.join(' ')}`),
-        publishedAt: article.publishedAt,
-        sourceUrl: article.sourceUrl,
-        supersededBy: article.supersededBy,
-      }))
-      .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
-  );
-  const sources = ranked.slice(0, max).map(({ article }, i) => ({
+  const candidates = articles
+    .filter((a) => !a.hidden)
+    .map((article) => ({
+      article,
+      score: overlapScore(queryTokens, `${article.title} ${article.summary} ${article.category} ${article.tags.join(' ')}`),
+      publishedAt: article.publishedAt,
+      sourceUrl: article.sourceUrl,
+      supersededBy: article.supersededBy,
+    }));
+  const ranked = rankScoredArticles(candidates.filter((x) => x.score >= MIN_RELEVANCE_SCORE));
+  const selected = substituteExplicitSuccessors(ranked.slice(0, max), candidates);
+  const sources = selected.map(({ article }, i) => ({
     id: i + 1,
     name: `Kenniscentrum Avydo (bron: ${article.sourceName})`,
     title: article.title,
@@ -101,6 +102,11 @@ test('ai-assistent.ts gebruikt ongewijzigde score + rankScoredArticles + de form
   assert.equal((text.match(/article\.body/g) ?? []).length, 1);
   assert.match(text, /snippet: articleContextSnippet\(\{\s*sourceName: article\.data\.sourceName,\s*summary: article\.data\.summary,\s*relevance: article\.data\.relevance,\s*body: article\.body,\s*\}\)/);
   assert.ok(text.indexOf('article.body') > text.indexOf('.slice(0, MAX_ARTICLE_SOURCES)'));
+  // Opvolgervervanging: ná de topselectie, vóór het bronfragment.
+  const substitution = text.indexOf('substituteExplicitSuccessors(');
+  assert.ok(substitution > text.indexOf('.slice(0, MAX_ARTICLE_SOURCES)'));
+  assert.ok(substitution < text.indexOf('articleContextSnippet({'));
+  assert.match(text, /for \(const \{ article \} of selectedArticles\)/);
 });
 
 // --- Integriteit van supersededBy ---
@@ -252,11 +258,118 @@ test('dossier huisvesting — de herziene artikelen uit februari en mei 2025 bli
   }
 });
 
-test('dossier huisvesting — zonder de supersededBy-markeringen zou het geldende besluit buiten de bronnen vallen (dit is wat de fix oplost)', () => {
-  const unmarked = ARTICLES.map((a) => ({ ...a, supersededBy: undefined }));
+test('dossier huisvesting — zonder de supersededBy-markeringen én zonder de tags van het besluit (30-10-2025) valt het geldende besluit buiten de bronnen (dit is wat de markeringen oplossen)', () => {
+  // Fixture los van de content-metadata: het besluit zonder zijn tags, zodat
+  // deze test uitsluitend het effect van de supersededBy-markeringen meet.
+  const unmarked = ARTICLES.map((a) => ({ ...a, supersededBy: undefined, tags: a.sourceUrl === URL_HUIS_BESLUIT ? [] : a.tags }));
   const { sources } = retrieveArticleSources(HUISVESTING_VRAAG, unmarked);
   assert.equal(sources.some((s) => s.url === URL_HUIS_BESLUIT), false);
   assert.ok(sources.some((s) => s.url === URL_HUIS_MEI || s.url === URL_HUIS_FEB));
+});
+
+// --- Expliciete opvolgervervanging (substituteExplicitSuccessors) ---
+
+test('substituteExplicitSuccessors: een geselecteerd artikel met expliciete supersededBy wordt vervangen door die opvolger, op dezelfde plek', () => {
+  const corpus = [
+    { id: 'a', sourceUrl: 'u:a' },
+    { id: 'pred', sourceUrl: 'u:pred', supersededBy: 'u:succ' },
+    { id: 'succ', sourceUrl: 'u:succ' },
+  ];
+  const result = substituteExplicitSuccessors([corpus[1], corpus[0]], corpus);
+  assert.deepEqual(result.map((x) => x.id), ['succ', 'a']);
+});
+
+test('substituteExplicitSuccessors: zonder supersededBy nooit vervangen — ook niet door een nieuwer artikel over hetzelfde onderwerp', () => {
+  const corpus = [
+    { id: 'oud', sourceUrl: 'u:oud', publishedAt: d('2025-01-01'), title: 'Regeling X' },
+    { id: 'nieuw', sourceUrl: 'u:nieuw', publishedAt: d('2026-01-01'), title: 'Regeling X gewijzigd' },
+  ];
+  assert.deepEqual(substituteExplicitSuccessors([corpus[0]], corpus).map((x) => x.id), ['oud']);
+});
+
+test('substituteExplicitSuccessors: opvolger al geselecteerd → geen vervanging, geen dubbele bron', () => {
+  const corpus = [
+    { id: 'succ', sourceUrl: 'u:succ' },
+    { id: 'pred', sourceUrl: 'u:pred', supersededBy: 'u:succ' },
+  ];
+  assert.deepEqual(substituteExplicitSuccessors(corpus, corpus).map((x) => x.id), ['succ', 'pred']);
+});
+
+test('substituteExplicitSuccessors: twee voorgangers van dezelfde opvolger → alleen de eerste wordt vervangen', () => {
+  const corpus = [
+    { id: 'feb', sourceUrl: 'u:feb', supersededBy: 'u:succ' },
+    { id: 'mei', sourceUrl: 'u:mei', supersededBy: 'u:succ' },
+    { id: 'succ', sourceUrl: 'u:succ' },
+  ];
+  assert.deepEqual(substituteExplicitSuccessors([corpus[0], corpus[1]], corpus).map((x) => x.id), ['succ', 'mei']);
+});
+
+test('substituteExplicitSuccessors: onbekende of dubbelzinnige (gedeelde) opvolger-URL → geen vervanging', () => {
+  const corpus = [
+    { id: 'p1', sourceUrl: 'u:p1', supersededBy: 'u:bestaat-niet' },
+    { id: 'p2', sourceUrl: 'u:p2', supersededBy: 'u:gedeeld' },
+    { id: 'g1', sourceUrl: 'u:gedeeld' },
+    { id: 'g2', sourceUrl: 'u:gedeeld' },
+  ];
+  assert.deepEqual(substituteExplicitSuccessors([corpus[0], corpus[1]], corpus).map((x) => x.id), ['p1', 'p2']);
+});
+
+// --- Gerichte retrievalfixes op echte content ---
+
+test('content: T1/T2-tags staan in de productie-artikelen', () => {
+  assert.deepEqual(byUrl(URL_E_FACTURATIE).tags, ['e-facturatie', 'verplicht']);
+  assert.deepEqual(byUrl(URL_HUIS_BESLUIT).tags, ['huur', 'inhouden', 'werkgever', 'huisvesting']);
+});
+
+for (const query of ['Wanneer wordt e-facturatie verplicht?', 'Is e-facturatie verplicht?']) {
+  test(`e-facturatie — "${query}" vindt het bestaande e-facturatie-artikel`, () => {
+    assert.ok(retrieveArticleSources(query).sources.some((s) => s.url === URL_E_FACTURATIE));
+  });
+}
+
+test('e-facturatie — bekend neveneffect van de tag "verplicht": "Is rapportage voor crypto verplicht?" krijgt het e-facturatie-artikel vóór crypto 07-07-2025', () => {
+  // Bewust vastgelegd (niet weggewerkt met bredere retrievallogica): het
+  // e-facturatie-artikel scoort hier op "rapportage" + "verplicht".
+  const { sources } = retrieveArticleSources('Is rapportage voor crypto verplicht?');
+  assert.deepEqual(sources.map((s) => s.url), [URL_E_FACTURATIE, URL_CRYPTO_2025]);
+});
+
+test('huur — "Hoeveel huur mag een werkgever inhouden op het minimumloon?": het voorstel (10-09-2026) én de geldende regel (30-10-2025)', () => {
+  const { sources } = retrieveArticleSources('Hoeveel huur mag een werkgever inhouden op het minimumloon?');
+  assert.deepEqual(sources.map((s) => s.url), [URL_HUIS_VOORNEMEN, URL_HUIS_BESLUIT]);
+  assert.ok(sources.every((s) => s.superseded === false));
+  // Het latere voorstel heeft geen supersededBy-relatie met het besluit en vervangt het dus niet.
+  assert.equal(byUrl(URL_HUIS_BESLUIT).supersededBy, undefined);
+  const prompt = formatSourcesForPrompt(sources);
+  assert.ok(prompt.includes('(bron: Rijksoverheid, 10-09-2026)'));
+  assert.ok(prompt.includes('(bron: Rijksoverheid, 30-10-2025)'));
+});
+
+const HUUR_OPVOLGER_VRAAG = 'Mag ik als werkgever kosten voor huisvesting inhouden op het minimumloon?';
+
+test('huur-opvolger — "Mag ik als werkgever kosten voor huisvesting inhouden op het minimumloon?": 30-10-2025 wordt geselecteerd; 02-2025 en 05-2025 niet vóór de geldende opvolger', () => {
+  const { sources } = retrieveArticleSources(HUUR_OPVOLGER_VRAAG);
+  const urls = sources.map((s) => s.url);
+  assert.deepEqual(urls, [URL_HUIS_VOORNEMEN, URL_HUIS_BESLUIT]);
+  for (const old of [URL_HUIS_FEB, URL_HUIS_MEI]) {
+    assert.ok(!urls.includes(old) || urls.indexOf(old) > urls.indexOf(URL_HUIS_BESLUIT), old);
+  }
+  assert.equal(formatSourcesForPrompt(sources).includes('historisch'), false);
+});
+
+test('huur-opvolger — ook zonder de tags van het besluit: de topselectie kiest de opgevolgde 02-2025-bron, de expliciete supersededBy vervangt die door 30-10-2025', () => {
+  const untagged = ARTICLES.map((a) => (a.sourceUrl === URL_HUIS_BESLUIT ? { ...a, tags: [] } : a));
+  const { ranked, sources } = retrieveArticleSources(HUUR_OPVOLGER_VRAAG, untagged);
+  assert.deepEqual(ranked.slice(0, 2).map((x) => x.sourceUrl), [URL_HUIS_VOORNEMEN, URL_HUIS_FEB]);
+  assert.deepEqual(sources.map((s) => s.url), [URL_HUIS_VOORNEMEN, URL_HUIS_BESLUIT]);
+});
+
+test('opvolgervervanging — verwachte wijziging in de bestaande set: "Moet ik mezelf verzekeren tegen het risico dat een werknemer ziek wordt?" krijgt 13-03-2026 i.p.v. het opgevolgde 12-09-2025', () => {
+  const { ranked, sources } = retrieveArticleSources('Moet ik mezelf verzekeren tegen het risico dat een werknemer ziek wordt?');
+  assert.ok(ranked.slice(0, 2).some((x) => x.sourceUrl === URL_AOV_OUD));
+  const urls = sources.map((s) => s.url);
+  assert.ok(urls.includes(URL_AOV_NIEUW));
+  assert.equal(urls.includes(URL_AOV_OUD), false);
 });
 
 // --- Fallback bij uitval van Groq ---

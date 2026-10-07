@@ -12,7 +12,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIN_RELEVANCE_SCORE, overlapScore, tokenize } from '../../src/lib/knowledge-match.mjs';
-import { rankScoredArticles, formatSourcesForPrompt } from '../../src/lib/source-freshness.mjs';
+import { rankScoredArticles, formatSourcesForPrompt, substituteExplicitSuccessors } from '../../src/lib/source-freshness.mjs';
 import { estimateTokens } from '../../src/lib/token-estimate.mjs';
 import {
   articleContextSnippet,
@@ -50,23 +50,20 @@ const ARTICLES = readdirSync(CONTENT_DIR)
   });
 
 // Zelfde artikelstap als retrieveContext(): score (zonder body) → drempel →
-// rankScoredArticles → top-N → pas dán het fragment.
+// rankScoredArticles → top-N → expliciete opvolgervervanging → pas dán het fragment.
 function selectArticles(query, articles = ARTICLES) {
   const queryTokens = tokenize(query);
-  return rankScoredArticles(
-    articles
-      .filter((a) => !a.hidden)
-      .map((article) => ({
-        article,
-        score: overlapScore(queryTokens, `${article.title} ${article.summary} ${article.category} ${article.tags.join(' ')}`),
-        publishedAt: article.publishedAt,
-        sourceUrl: article.sourceUrl,
-        supersededBy: article.supersededBy,
-      }))
-      .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
-  )
-    .slice(0, MAX_ARTICLE_SOURCES)
-    .map(({ article, score }) => ({ article, score }));
+  const candidates = articles
+    .filter((a) => !a.hidden)
+    .map((article) => ({
+      article,
+      score: overlapScore(queryTokens, `${article.title} ${article.summary} ${article.category} ${article.tags.join(' ')}`),
+      publishedAt: article.publishedAt,
+      sourceUrl: article.sourceUrl,
+      supersededBy: article.supersededBy,
+    }));
+  const ranked = rankScoredArticles(candidates.filter((x) => x.score >= MIN_RELEVANCE_SCORE));
+  return substituteExplicitSuccessors(ranked.slice(0, MAX_ARTICLE_SOURCES), candidates).map(({ article, score }) => ({ article, score }));
 }
 
 function toSources(selected, snippetFn) {

@@ -22,7 +22,7 @@ import {
   retrieveKnowledgeItems,
   findDeterministicFallbackItem,
 } from '../../src/lib/knowledge-match.mjs';
-import { formatSourcesForPrompt, rankScoredArticles } from '../../src/lib/source-freshness.mjs';
+import { formatSourcesForPrompt, rankScoredArticles, substituteExplicitSuccessors } from '../../src/lib/source-freshness.mjs';
 import { articleContextSnippet } from '../../src/lib/article-context.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -83,18 +83,15 @@ const articleText = (a) => `${a.title} ${a.summary} ${a.category} ${a.tags.join(
 
 function retrieveArticleSources(query, max = 2) {
   const queryTokens = tokenize(query);
-  const ranked = rankScoredArticles(
-    ARTICLES.filter((a) => !a.hidden)
-      .map((article) => ({
-        article,
-        score: overlapScore(queryTokens, articleText(article)),
-        publishedAt: article.publishedAt,
-        sourceUrl: article.sourceUrl,
-        supersededBy: article.supersededBy,
-      }))
-      .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
-  );
-  return ranked.slice(0, max).map(({ article, score }, i) => ({
+  const candidates = ARTICLES.filter((a) => !a.hidden).map((article) => ({
+    article,
+    score: overlapScore(queryTokens, articleText(article)),
+    publishedAt: article.publishedAt,
+    sourceUrl: article.sourceUrl,
+    supersededBy: article.supersededBy,
+  }));
+  const ranked = rankScoredArticles(candidates.filter((x) => x.score >= MIN_RELEVANCE_SCORE));
+  return substituteExplicitSuccessors(ranked.slice(0, max), candidates).map(({ article, score }, i) => ({
     id: i + 1,
     name: `Kenniscentrum Avydo (bron: ${article.sourceName})`,
     title: article.title,
@@ -171,6 +168,11 @@ test(`positief — "${AOV_VRAAG}": beide Rijksoverheid-artikelen, 13-03-2026 vó
   const prompt = formatSourcesForPrompt(sources);
   assert.ok(prompt.includes('(bron: Rijksoverheid, 13-03-2026)'));
   assert.ok(prompt.includes('(bron: Rijksoverheid, 12-09-2025, historisch)'));
+});
+
+test(`regressie opvolgervervanging — "${AOV_VRAAG}": opvolger al geselecteerd, dus exact [13-03-2026 actueel, 12-09-2025 historisch]`, () => {
+  const sources = retrieveArticleSources(AOV_VRAAG);
+  assert.deepEqual(sources.map((s) => [s.url, s.superseded]), [[URL_AOV_NIEUW, false], [URL_AOV_OUD, true]]);
 });
 
 test('positief — zonder de alias haalden de AOV-artikelen de drempel niet (alleen "zelfstandigen" matcht exact)', () => {
@@ -290,13 +292,9 @@ test('regressie — bronselectie van kennisitems en artikelen voor alle bestaand
   };
   const exactArticles = (query) => {
     const qt = tokenize(query);
-    return rankScoredArticles(
-      ARTICLES.filter((a) => !a.hidden)
-        .map((a) => ({ a, score: exactOverlap(qt, articleText(a)), publishedAt: a.publishedAt, sourceUrl: a.sourceUrl, supersededBy: a.supersededBy }))
-        .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
-    )
-      .slice(0, 2)
-      .map((x) => x.sourceUrl);
+    const candidates = ARTICLES.filter((a) => !a.hidden).map((a) => ({ a, score: exactOverlap(qt, articleText(a)), publishedAt: a.publishedAt, sourceUrl: a.sourceUrl, supersededBy: a.supersededBy }));
+    const ranked = rankScoredArticles(candidates.filter((x) => x.score >= MIN_RELEVANCE_SCORE));
+    return substituteExplicitSuccessors(ranked.slice(0, 2), candidates).map((x) => x.sourceUrl);
   };
   for (const query of EXISTING_QUESTIONS) {
     assert.deepEqual(retrieveKnowledgeItems(query, KB, { maxItems: 2 }).map((i) => i.id), exactKnowledge(query), query);

@@ -42,6 +42,41 @@ export function rankScoredArticles(scored) {
   return ranked;
 }
 
+/**
+ * Na de topselectie: vervangt een GESELECTEERD artikel met een expliciet
+ * gezette `supersededBy` door zijn opvolger. Uitsluitend als:
+ *  - `supersededBy` exact overeenkomt met de sourceUrl van precies één
+ *    artikel in `corpus` (een gedeelde/dubbelzinnige sourceUrl: geen
+ *    vervanging);
+ *  - die opvolger nog niet geselecteerd is.
+ * Een artikel zonder `supersededBy` wordt nooit vervangen. Geen
+ * "nieuwste wint", geen datum-, titel- of fuzzy-matching; scores en de
+ * volgorde van de selectie blijven verder ongewijzigd (de opvolger neemt de
+ * plek van het opgevolgde artikel in).
+ *
+ * @template {{ sourceUrl: string, supersededBy?: string }} T
+ * @param {T[]} selected
+ * @param {T[]} corpus
+ * @returns {T[]}
+ */
+export function substituteExplicitSuccessors(selected, corpus) {
+  const byUrl = new Map();
+  const ambiguous = new Set();
+  for (const candidate of corpus) {
+    if (byUrl.has(candidate.sourceUrl)) ambiguous.add(candidate.sourceUrl);
+    else byUrl.set(candidate.sourceUrl, candidate);
+  }
+  const selectedUrls = new Set(selected.map((item) => item.sourceUrl));
+  return selected.map((item) => {
+    const successorUrl = item.supersededBy;
+    if (!successorUrl || ambiguous.has(successorUrl) || selectedUrls.has(successorUrl)) return item;
+    const successor = byUrl.get(successorUrl);
+    if (!successor) return item;
+    selectedUrls.add(successorUrl);
+    return successor;
+  });
+}
+
 /** @param {Date} date */
 export function formatSourceDate(date) {
   return date.toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: '2-digit', month: '2-digit', year: 'numeric' });

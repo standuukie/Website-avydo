@@ -14,7 +14,7 @@ import { knowledgeBase } from '@/data/ai-knowledge';
 import { taxDeadlines } from '@/data/belastingkalender';
 import { company } from '@/data/company';
 import { MIN_RELEVANCE_SCORE, overlapScore, retrieveKnowledgeItems, retrieveKnowledgeItemsWithContext, tokenize } from './knowledge-match.mjs';
-import { formatSourcesForPrompt as formatSourcesWithFreshness, rankScoredArticles } from './source-freshness.mjs';
+import { formatSourcesForPrompt as formatSourcesWithFreshness, rankScoredArticles, substituteExplicitSuccessors } from './source-freshness.mjs';
 import { articleContextSnippet } from './article-context.mjs';
 
 export interface RetrievedSource {
@@ -118,9 +118,9 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
   // Volgorde: zie rankScoredArticles (source-freshness.mjs) — de score zelf is
   // ongewijzigd; alleen een handmatig gezette `supersededBy` geeft een
   // opgevolgd artikel lagere voorrang. Geen recentheidsbonus.
+  const candidateArticles = allArticles.filter((a) => !opts.pinnedArticleSlug || a.slug !== opts.pinnedArticleSlug);
   const scoredArticles = rankScoredArticles(
-    allArticles
-      .filter((a) => !opts.pinnedArticleSlug || a.slug !== opts.pinnedArticleSlug)
+    candidateArticles
       .map((article) => ({
         article,
         score: overlapScore(
@@ -134,7 +134,21 @@ export async function retrieveContext(query: string, opts: RetrieveOptions = {})
       .filter((x) => x.score >= MIN_RELEVANCE_SCORE),
   ).slice(0, MAX_ARTICLE_SOURCES);
 
-  for (const { article } of scoredArticles) {
+  // Ná de topselectie, vóór het bronfragment: een gekozen artikel met een
+  // expliciet gezette `supersededBy` wordt vervangen door die opvolger
+  // (exacte sourceUrl, nog niet gekozen). Geen scorewijziging; artikelen
+  // zonder `supersededBy` blijven altijd staan. Zie source-freshness.mjs.
+  const toSuccessionCandidate = (article: (typeof allArticles)[number]) => ({
+    article,
+    sourceUrl: article.data.sourceUrl,
+    supersededBy: article.data.supersededBy,
+  });
+  const selectedArticles = substituteExplicitSuccessors(
+    scoredArticles.map(({ article }) => toSuccessionCandidate(article)),
+    candidateArticles.map(toSuccessionCandidate),
+  );
+
+  for (const { article } of selectedArticles) {
     sources.push({
       id: nextId++,
       name: `Kenniscentrum Avydo (bron: ${article.data.sourceName})`,
