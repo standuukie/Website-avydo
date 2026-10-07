@@ -213,14 +213,171 @@ export function extractPageTitle(html) {
   return title || null;
 }
 
-async function fetchArticlePageMeta(url) {
+// --- Rijksoverheid: hoofdtekst van een nieuwsbericht (2026-10-07) ---
+//
+// De artikelpagina wordt al opgehaald (zie fetchArticlePageMeta); tot nu toe
+// werd alleen de meta-description bewaard. Deze extractie haalt uit DIEZELFDE
+// HTML de hoofdtekst, zonder extra request en zonder nieuwe dependency.
+//
+// Gebaseerd op een read-only audit van 176 echte rijksoverheid.nl-
+// nieuwsberichten (opgehaald vanaf de GitHub-runner, 2026-10-06; ruwe HTML
+// was vanuit de ontwikkelomgeving niet bereikbaar). Op tekstniveau bleek de
+// structuur in 176/176 gelijk:
+//   ... "Vul in wat u zoekt" <titel> "Nieuwsbericht DD-MM-JJJJ | UU:MM"
+//   <hoofdtekst> ["Documenten" + bijlagen]
+//   "Heeft deze informatie u geholpen? Ja Nee" "Meer over dit onderwerp" ...
+//   "Hoort bij" ... vaste footer ("... Terug naar boven").
+// De extractie werkt daarom op die tekstmarkers (tags ertussen toegestaan)
+// en op generieke inhoudselementen (<p>, <h2>, <h3>, <li>), niet op
+// class-namen die niet geverifieerd konden worden. Lukt dat niet volledig
+// betrouwbaar, dan null: de caller valt dan terug op de bestaande summary.
+
+const RIJKSOVERHEID_BODY_MAX_LENGTH = 8000;
+const RIJKSOVERHEID_BODY_MIN_LENGTH = 400;
+const RIJKSOVERHEID_BODY_MIN_PARAGRAPHS = 2;
+// Een "inhoudelijke alinea" is een <p> met minstens zoveel tekens; korte
+// <p>'s (labels, losse woorden) tellen niet mee voor de drempel.
+const RIJKSOVERHEID_BODY_MIN_PARAGRAPH_LENGTH = 40;
+
+// Witruimte, harde spaties en tags tussen de delen van een marker.
+const HTML_GAP = '(?:\\s|&nbsp;|&#160;|<[^>]*>)*';
+// Paginatype + datum + tijd. Vereist expliciet "Nieuwsbericht": een ander
+// paginatype (toespraak, publicatie, ...) levert dus geen startmarker op.
+const RIJKSOVERHEID_BODY_START = new RegExp(
+  `Nieuwsbericht${HTML_GAP}\\d{2}-\\d{2}-\\d{4}${HTML_GAP}(?:\\||&#124;|&#x7c;)${HTML_GAP}\\d{2}:\\d{2}`,
+  'i',
+);
+const RIJKSOVERHEID_BODY_END = /Heeft(?:\s|&nbsp;)+deze(?:\s|&nbsp;)+informatie(?:\s|&nbsp;)+u(?:\s|&nbsp;)+geholpen/i;
+// Kopje van het bijlagenblok; in de audit stond dit blok altijd als laatste
+// vóór de eindmarker, dus alles vanaf dit kopje valt weg.
+const RIJKSOVERHEID_DOCUMENTS_HEADING = />\s*(?:Documenten|Bijlagen|Downloads)\s*</i;
+const RIJKSOVERHEID_BOILERPLATE = /Vul in wat u zoekt|Heeft deze informatie|Terug naar boven|Ga direct naar inhoud/i;
+// Niet-inhoudelijke blokken die vóór alles worden verwijderd. Vooral
+// <script> is essentieel: Next.js zet de volledige paginatekst ook in een
+// script-payload, die anders als (dubbele) startmarker zou kunnen tellen.
+const NON_CONTENT_BLOCKS = /<(script|style|noscript|template|svg|figure|iframe)\b[\s\S]*?<\/\1\s*>/gi;
+
+const NAMED_HTML_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  euro: '€', ndash: '–', mdash: '—', hellip: '…', bull: '•', middot: '·',
+  lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„',
+  laquo: '«', raquo: '»', deg: '°', sect: '§', copy: '©', reg: '®', shy: '',
+  eacute: 'é', egrave: 'è', ecirc: 'ê', euml: 'ë', aacute: 'á', agrave: 'à', auml: 'ä',
+  iacute: 'í', iuml: 'ï', oacute: 'ó', ouml: 'ö', uacute: 'ú', uuml: 'ü', ccedil: 'ç',
+  Eacute: 'É', Euml: 'Ë', Iuml: 'Ï', Ouml: 'Ö', Uuml: 'Ü',
+};
+
+// Eén enkele pass (geen dubbele decodering: "&amp;lt;" wordt "&lt;", niet "<").
+function decodeHtmlEntities(text) {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity) => {
+    if (entity[0] === '#') {
+      const code = entity[1] === 'x' || entity[1] === 'X' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return match;
+      return code === 160 ? ' ' : String.fromCodePoint(code);
+    }
+    return NAMED_HTML_ENTITIES[entity] ?? match;
+  });
+}
+
+// Tekst van één inhoudselement: tags weg, entiteiten gedecodeerd, witruimte
+// genormaliseerd, en daarna < en > weer als entiteit zodat er nooit
+// letterlijke HTML in de markdown-body belandt.
+function rijksoverheidBlockText(innerHtml) {
+  return decodeHtmlEntities(innerHtml.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Regels die in markdown iets anders zouden betekenen dan tekst (kop,
+// thematische breuk / frontmatter-scheiding) krijgen een backslash-escape.
+function neutralizeMarkdownLine(line) {
+  return /^(?:#|-{3,}|\*{3,}|_{3,}|={3,}|<)/.test(line) ? `\\${line}` : line;
+}
+
+// Afkortingen waarna een punt geen zinseinde is.
+const SENTENCE_END_ABBREVIATION = /(?:^|\s)(?:bijv|bv|o\.a|m\.b\.t|i\.p\.v|d\.w\.z|nr|art|ca|incl|excl|zgn|e\.d|t\.o\.v|mr|dr|drs|ir|prof)\.$/i;
+
+// Kapt af op het laatste zinseinde vóór `max`; voegt niets toe. null als er
+// geen bruikbaar zinseinde is.
+function truncateAtSentenceBoundary(text, max) {
+  if (text.length <= max) return text;
+  const sentenceEnd = /[.!?][”"’)]?(?=\s|$)/g;
+  let cut = -1;
+  let match;
+  while ((match = sentenceEnd.exec(text)) && match.index + match[0].length <= max) {
+    const end = match.index + match[0].length;
+    if (!SENTENCE_END_ABBREVIATION.test(text.slice(Math.max(0, end - 12), end))) cut = end;
+  }
+  return cut > 0 ? text.slice(0, cut).trimEnd() : null;
+}
+
+/**
+ * Hoofdtekst van een rijksoverheid.nl-nieuwsbericht als schone markdown-
+ * tekst (alinea's gescheiden door een lege regel, lijstitems als "- ..."),
+ * of null als die niet betrouwbaar te extraheren is. Zie de toelichting
+ * hierboven voor markers en drempels.
+ * @param {string} html
+ * @returns {string | null}
+ */
+export function extractRijksoverheidArticleBody(html) {
+  if (typeof html !== 'string' || html.length === 0) return null;
+  const cleaned = html.replace(/<!--[\s\S]*?-->/g, ' ').replace(NON_CONTENT_BLOCKS, ' ');
+
+  const start = cleaned.match(RIJKSOVERHEID_BODY_START);
+  if (!start) return null;
+  const afterStart = cleaned.slice(start.index + start[0].length);
+  const end = afterStart.match(RIJKSOVERHEID_BODY_END);
+  if (!end) return null;
+  let region = afterStart.slice(0, end.index);
+  const documents = region.match(RIJKSOVERHEID_DOCUMENTS_HEADING);
+  if (documents) region = region.slice(0, documents.index + 1);
+
+  const blocks = [];
+  for (const m of region.matchAll(/<(p|h2|h3|li)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)) {
+    const text = rijksoverheidBlockText(m[2]);
+    if (!text) continue;
+    const tag = m[1].toLowerCase();
+    blocks.push({ tag, line: neutralizeMarkdownLine(tag === 'li' ? `- ${text}` : text) });
+  }
+
+  const body = truncateAtSentenceBoundary(blocks.map((b) => b.line).join('\n\n'), RIJKSOVERHEID_BODY_MAX_LENGTH);
+  if (!body || body.length < RIJKSOVERHEID_BODY_MIN_LENGTH) return null;
+  if (RIJKSOVERHEID_BOILERPLATE.test(body)) return null;
+  // Inhoudelijke alinea's tellen over wat ná het afkappen overblijft (een
+  // afgekapte laatste alinea telt mee voor het behouden deel).
+  let paragraphs = 0;
+  let pos = 0;
+  for (const b of blocks) {
+    if (pos >= body.length) break;
+    const kept = Math.min(b.line.length, body.length - pos);
+    if (b.tag === 'p' && kept >= RIJKSOVERHEID_BODY_MIN_PARAGRAPH_LENGTH) paragraphs += 1;
+    pos += b.line.length + 2;
+  }
+  if (paragraphs < RIJKSOVERHEID_BODY_MIN_PARAGRAPHS) return null;
+  return body;
+}
+
+// `extractBody` (alleen voor de Rijksoverheid-bron) haalt uit dezelfde HTML
+// ook de hoofdtekst; geen extra request. Een fout in de extractie maakt
+// alleen `body` null, nooit de rest van de metadata.
+async function fetchArticlePageMeta(url, { extractBody = false } = {}) {
   try {
     const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
-    if (!res.ok) return { title: null, description: null, ministry: null };
+    if (!res.ok) return { title: null, description: null, ministry: null, body: null };
     const html = await res.text();
-    return { title: extractPageTitle(html), description: extractMetaDescription(html), ministry: extractMinistryTag(html) };
+    let body = null;
+    if (extractBody) {
+      try {
+        body = extractRijksoverheidArticleBody(html);
+      } catch {
+        body = null;
+      }
+    }
+    return { title: extractPageTitle(html), description: extractMetaDescription(html), ministry: extractMinistryTag(html), body };
   } catch {
-    return { title: null, description: null, ministry: null };
+    return { title: null, description: null, ministry: null, body: null };
   }
 }
 
@@ -463,7 +620,10 @@ Geef terug als JSON met exact deze velden, geen andere tekst:
   }
 }
 
-function writeArticle({ title, category, priority, publishedAt, sourceName, sourceUrl, summary, relevance, audiences, aiAssisted }) {
+// `body` (optioneel, alleen Rijksoverheid) vervangt de markdown-body; zonder
+// body blijft die exact zoals voorheen de summary. De frontmatter is in
+// beide gevallen identiek.
+function writeArticle({ title, category, priority, publishedAt, sourceName, sourceUrl, summary, relevance, audiences, aiAssisted, body }) {
   const dateStr = publishedAt.toISOString().slice(0, 10);
   let baseSlug = `${dateStr}-${slugify(title)}`;
   let filename = `${baseSlug}.md`;
@@ -491,7 +651,7 @@ function writeArticle({ title, category, priority, publishedAt, sourceName, sour
     `fetchedAt: ${new Date().toISOString()}`,
     '---',
     '',
-    summary,
+    body ?? summary,
     '',
   ].join('\n');
 
@@ -534,6 +694,7 @@ async function publishItem(item, source, categoryHint) {
     relevance: summaryData.relevance,
     audiences,
     aiAssisted: summaryData.aiAssisted,
+    body: item.body ?? undefined,
   });
 }
 
@@ -944,6 +1105,10 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   let sourceCount = 0;
   let itemsEvaluated = 0;
   let pageFetches = 0;
+  // Hoofdtekst-extractie (zie extractRijksoverheidArticleBody) uitsluitend
+  // voor de Rijksoverheid-bron; tellers alleen voor de logregel per run.
+  const extractBody = source.type === 'rijksoverheid-topic-api';
+  const bodyStats = { extracted: 0, fallback: 0 };
   // Een bron kan de gedeelde limiet per run zelf overschrijven (zie
   // maxArticlesPerSourcePerRun op de Rijksoverheid-bron in
   // sources.config.mjs); zonder eigen waarde geldt de gedeelde limiet.
@@ -982,7 +1147,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     // artikel (pagina niet bereikbaar, geen description) slaat alleen dat
     // artikel over, niet de hele bron.
     pageFetches += 1;
-    const { title: fetchedTitle, description, ministry } = await fetchArticlePageMeta(item.link);
+    const { title: fetchedTitle, description, ministry, body } = await fetchArticlePageMeta(item.link, { extractBody });
     const title = item.title || fetchedTitle;
     if (!title || !description || description.length < 20) {
       log(`  - overgeslagen (geen betrouwbare titel/samenvattingstekst op bron-pagina): ${item.link}`);
@@ -990,7 +1155,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       addRejectionSample(samples, 'metadataRejected', title ?? item.link);
       continue;
     }
-    const enrichedItem = { ...item, title, description };
+    const enrichedItem = { ...item, title, description, body };
     stages.parsed += 1;
 
     let categoryHint;
@@ -1072,6 +1237,11 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
     remainingBudget.count -= 1;
     stages.published += 1;
     log(`  + ${filename}`);
+    if (extractBody) {
+      if (body) bodyStats.extracted += 1;
+      else bodyStats.fallback += 1;
+      log(body ? `    body extracted (${body.length} tekens)` : '    body extraction failed (summary als body)');
+    }
   }
   // Zie de toelichting bij processRssSource: items die vóór hun beurt al
   // niet meer bekeken werden doordat het budget op was. Geen
@@ -1079,6 +1249,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   stages.reasons.notEvaluated = items.length - itemsEvaluated;
 
   log(`  ${added} nieuw artikel(en) toegevoegd`);
+  if (extractBody && added > 0) log(`  Body-extractie: ${bodyStats.extracted} extracted, ${bodyStats.fallback} failed`);
   logReasonBreakdown(stages);
   logRejectionSamples(samples);
   return { added, seen: items.length, ok: true, stages };

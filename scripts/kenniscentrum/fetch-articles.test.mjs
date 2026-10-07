@@ -2639,3 +2639,60 @@ test('Rijksoverheid-categorie: een artikel dat via het zzp-audiencesignaal relev
   assert.ok(rijksoverheidAudienceSignals.some((kw) => `${title} ${description}`.toLowerCase().includes(kw)));
   assert.equal(await publishedCategoryFor({ title, description }), 'Ondernemen & rechtsvormen');
 });
+
+// --- Hoofdtekst-extractie geldt alleen voor Rijksoverheid (2026-10-07) ---
+//
+// Regressie: KVK en Belastingdienst schrijven ongewijzigd de summary als
+// markdown-body, ook als hun pagina toevallig dezelfde structuur/markers
+// bevat als een Rijksoverheid-nieuwsbericht (zie rijksoverheid-body.test.mjs).
+const RIJKSOVERHEID_LIKE_BODY = `<p>Nieuwsbericht 10-09-2026 | 14:30</p>
+  <p>Een eerste inhoudelijke alinea die lang genoeg is om als echte hoofdtekst mee te tellen in de extractie.</p>
+  <p>Een tweede inhoudelijke alinea met nog meer tekst, zodat de minimale lengte en het minimale aantal alinea's ruim worden gehaald.</p>
+  <p>Een derde alinea die de tekst verder aanvult tot ruim boven de ondergrens van vierhonderd tekens voor een betrouwbare body.</p>
+  <p>Een vierde alinea, zodat deze structuur voor de Rijksoverheid-extractie zeker een geldige hoofdtekst zou opleveren.</p>
+  <h2>Heeft deze informatie u geholpen?</h2>`;
+
+function writtenFilesIn(dir) {
+  return readdirSync(dir).filter((f) => f.endsWith('.md') && !f.startsWith('bestaand-')).map((f) => readFileSync(path.join(dir, f), 'utf8'));
+}
+function bodyAndSummary(fileText) {
+  const [, frontmatter, body] = fileText.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  return { body, summary: frontmatter.match(/^summary: "(.*)"$/m)[1] };
+}
+
+test('regressie body-extractie: een KVK-artikel krijgt nog steeds de summary als markdown-body, ook met Rijksoverheid-achtige paginastructuur', async () => {
+  const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-doen-uitgelegd/';
+  const files = await withIsolatedKvkModule([], async (mod) => {
+    // Zelfde structuur zou bij Rijksoverheid wél een body opleveren.
+    assert.ok(mod.extractRijksoverheidArticleBody(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`));
+    const result = await withMockedFetch(
+      withKvkSitemapRouting(candidateLoc, '2026-09-20T10:00:00.000Z', () => htmlResponse(
+        `<html><head><meta name="description" content="Als ondernemer moet u periodiek btw-aangifte doen bij de Belastingdienst. Lees hier hoe de omzetbelasting werkt."/></head><body><h1>Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?</h1>${RIJKSOVERHEID_LIKE_BODY}</body></html>`,
+      )),
+      () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
+    );
+    assert.equal(result.stages.published, 1);
+    return writtenFilesIn(process.env.KENNISCENTRUM_CONTENT_DIR);
+  });
+  assert.equal(files.length, 1);
+  const { body, summary } = bodyAndSummary(files[0]);
+  assert.equal(body, `\n${summary}\n`);
+  assert.equal(body.includes('eerste inhoudelijke alinea'), false);
+});
+
+test('regressie body-extractie: een Belastingdienst-artikel (RSS) krijgt nog steeds de summary als markdown-body', async () => {
+  const belastingdienst = sources.find((s) => s.id === 'belastingdienst-zakelijk');
+  const feed = `<?xml version="1.0"?><rss><channel><item><title>Btw-aangifte: nieuwe termijnen</title><link>https://www.belastingdienst.nl/body-regressie</link><description>Een bericht over de btw-aangifte voor ondernemers en de nieuwe termijnen.</description><pubDate>Mon, 21 Sep 2026 00:00:00 GMT</pubDate></item></channel></rss>`;
+  const files = await withIsolatedKvkModule([], async (mod) => {
+    assert.ok(mod.extractRijksoverheidArticleBody(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`));
+    const result = await withMockedFetch(
+      (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`)),
+      () => mod.processRssSource(belastingdienst, new Set(), { count: 50 }),
+    );
+    assert.equal(result.stages.published, 1);
+    return writtenFilesIn(process.env.KENNISCENTRUM_CONTENT_DIR);
+  });
+  assert.equal(files.length, 1);
+  const { body, summary } = bodyAndSummary(files[0]);
+  assert.equal(body, `\n${summary}\n`);
+});
