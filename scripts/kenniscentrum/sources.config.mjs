@@ -210,8 +210,9 @@ export const sources = [
     id: 'rijksoverheid-topic-api',
     name: 'Rijksoverheid (fiscale topics)',
     type: 'rijksoverheid-topic-api',
-    // Aanvullende discovery-bron náást (niet in plaats van) de algemene
-    // sitemap hierboven. Toegevoegd na read-only onderzoek (zie
+    // De gerichte fiscale Rijksoverheid-bron: de enige actieve
+    // Rijksoverheid-bron van het Kenniscentrum, beperkt tot vier fiscale
+    // topics. Toegevoegd na read-only onderzoek (zie
     // git-historie) dat de daadwerkelijk werkende Rijksoverheid topic-API
     // (POST /api/search) en de exacte requestState/queryConfig-structuur
     // bevestigde via een live gecapturede browser-request. Bewust beperkt
