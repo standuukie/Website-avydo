@@ -47,10 +47,6 @@ const kenniscentrum = defineCollection({
     // normaal/current. Het artikel blijft bestaan; retrieval geeft het alleen
     // lagere voorrang (zie src/lib/source-freshness.mjs). Nooit automatisch.
     supersededBy: z.string().url().optional(),
-    // Optioneel, redactioneel: nieuws of naslag (evergreen uitleg). Zonder
-    // dit veld zijn KVK-kennisartikelen naslag en is de rest nieuws; zie
-    // isReferenceArticle in src/lib/news-presentation.mjs. Alleen weergave.
-    contentType: z.enum(['nieuws', 'naslag']).optional(),
     // Optioneel, redactioneel: de fase van het bericht, als badge getoond
     // (STATUS_LABELS in src/lib/news-presentation.mjs). Afwezig = geen badge.
     // 'van-kracht' = het voorstel uit het bericht is inmiddels geldende regel.

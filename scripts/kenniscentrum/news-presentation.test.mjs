@@ -36,7 +36,6 @@ const ARTICLES = readdirSync(CONTENT_DIR)
       relevance: get('relevance')?.replace(/\\"/g, '"'),
       sourceName: get('sourceName'),
       sourceUrl: get('sourceUrl'),
-      contentType: get('contentType'),
       status: get('status'),
       avydoContent: get('avydoContent'),
       hidden: get('hidden') === 'true',
@@ -84,17 +83,24 @@ test('sjabloon-duidingen komen alleen voor bij automatisch opgehaalde KVK-/Belas
   }
 });
 
-// Fase 1 (2026-10-08): het Kenniscentrum is één verzameling artikelen. Het
-// veld contentType staat nog in schema en content, maar wordt nergens meer
-// gelezen voor een nieuws/naslag-scheiding.
+// 2026-10-08: het Kenniscentrum is één verzameling artikelen, zonder
+// scheiding tussen nieuws en naslag in weergave of contentmodel.
 test('één Kenniscentrum: geen scheiding tussen nieuws en naslag', () => {
-  assert.equal('isReferenceArticle' in presentation, false);
+  assert.deepEqual(Object.keys(presentation).sort(), [
+    'GENERIC_RELEVANCE_TEXTS',
+    'OUTDATED_STATUSES',
+    'STATUS_LABELS',
+    'dateIsSourceLastModified',
+    'hasOwnRelevance',
+    'isHeadingBlock',
+    'sourceBodyBlocks',
+  ]);
 
   const index = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/index.astro'), 'utf8');
   const card = readFileSync(path.join(ROOT, 'src/components/kenniscentrum/ArticleCard.astro'), 'utf8');
   const page = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/[...slug].astro'), 'utf8');
   for (const text of [index, card, page]) {
-    assert.doesNotMatch(text, /isReferenceArticle|contentType|data-kind|\bnaslag\b/i);
+    assert.doesNotMatch(text, /data-kind|\bnaslag\b/i);
   }
   for (const pattern of [/newsArticles/, /DEFAULT_KIND/, /activeKind/, /kindExplicit/, /effectiveKind/, /matchesKind/, /'soort'/]) {
     assert.doesNotMatch(index, pattern);
@@ -113,6 +119,18 @@ test('één Kenniscentrum: geen scheiding tussen nieuws en naslag', () => {
   }
   for (const param of ['categorie', 'bron', 'doelgroep', 'q']) {
     assert.match(index, new RegExp(`params\\.set\\('${param}'`));
+  }
+
+  // Contentmodel: elk frontmatterveld van elk artikel (ook verborgen) staat
+  // in het schema; er blijven geen losse, niet-gebruikte velden achter.
+  const config = readFileSync(path.join(ROOT, 'src/content/config.ts'), 'utf8');
+  const schemaKeys = new Set([...config.matchAll(/^ {4}(\w+): z\./gm)].map((m) => m[1]));
+  assert.ok(schemaKeys.has('sourceUrl') && schemaKeys.has('status'), 'schemavelden niet gevonden in config.ts');
+  for (const file of readdirSync(CONTENT_DIR).filter((f) => f.endsWith('.md'))) {
+    const frontmatter = readFileSync(path.join(CONTENT_DIR, file), 'utf8').match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '';
+    for (const [, key] of frontmatter.matchAll(/^([A-Za-z]\w*):/gm)) {
+      assert.ok(schemaKeys.has(key), `${file}: frontmatterveld "${key}" staat niet in het schema`);
+    }
   }
 
   // De eigen gidsen blijven gewoon artikelen in dezelfde verzameling.

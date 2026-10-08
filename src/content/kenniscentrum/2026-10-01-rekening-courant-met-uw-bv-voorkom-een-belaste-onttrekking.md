@@ -12,7 +12,6 @@ audiences: ["bv-dga"]
 featured: false
 hidden: false
 avydoContent: "gids"
-contentType: "naslag"
 aiAssisted: true
 ---
 

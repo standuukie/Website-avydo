@@ -11,7 +11,6 @@ tags: []
 audiences: []
 featured: false
 hidden: false
-contentType: "nieuws"
 aiAssisted: false
 fetchedAt: 2026-10-01T19:43:24.063Z
 ---

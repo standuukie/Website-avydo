@@ -11,7 +11,6 @@ tags: []
 audiences: ["mkb-ondernemer"]
 featured: false
 hidden: false
-contentType: "nieuws"
 aiAssisted: false
 fetchedAt: 2026-10-01T19:26:29.827Z
 ---

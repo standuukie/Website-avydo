@@ -11,7 +11,6 @@ tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
-contentType: "naslag"
 aiAssisted: true
 fetchedAt: 2026-10-07T00:44:17.963Z
 ---

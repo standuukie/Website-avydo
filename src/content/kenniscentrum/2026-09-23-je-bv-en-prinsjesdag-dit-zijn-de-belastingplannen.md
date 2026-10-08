@@ -11,7 +11,6 @@ tags: []
 audiences: ["bv-dga"]
 featured: false
 hidden: false
-contentType: "nieuws"
 aiAssisted: false
 fetchedAt: 2026-10-01T19:01:28.877Z
 ---
