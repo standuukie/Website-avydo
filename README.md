@@ -94,21 +94,22 @@ Elk artikel is een los markdown-bestand in `src/content/kenniscentrum/`, met lee
 
 ### Avydo-artikel genereren (AI)
 
-De redactiestap (`editorial.mjs`) roept de Anthropic API aan met een verplichte tool en een JSON-schema (titel, samenvatting, tekst met tussenkoppen, duiding, status, categorie, doelgroepen, tags) en de volledige opgehaalde brontekst. Het model is in te stellen met `KENNISCENTRUM_MODEL`. De prompt verbiedt informatie die niet in de bron staat; bij te weinig broninformatie levert het model geen artikel. Daarna controleert `validate-article.mjs` zonder AI onder meer: officiële en bereikbare bron, eigen titel (niet de brontitel), voldoende tekst en tussenkoppen, bedragen/percentages/datums/jaartallen die in de bron voorkomen, een voorstel niet als geldende regel, een toekomstige datum niet als al geldend, geldige status en geen overlap met bestaande Avydo-artikelen. Eén fout = geen artikel en geen Pull Request.
+De redactiestap (`editorial.mjs`) roept de Groq API aan (`https://api.groq.com/openai/v1/chat/completions`, gratis tier, dezelfde aanpak als de AI-assistent in `src/lib/ai-providers/groq.ts`) met een verplichte function-tool en een JSON-schema (titel, samenvatting, tekst met tussenkoppen, duiding, status, categorie, doelgroepen, tags) en de volledige opgehaalde brontekst. Standaardmodel: `openai/gpt-oss-20b` (`temperature` 0.3, `reasoning_effort` low, `max_tokens` 3000); in te stellen met `KENNISCENTRUM_MODEL` of `GROQ_MODEL` (in GitHub Actions als repository variable). Geen retries: bij een Groq-fout of -limiet (HTTP 429) komt er die run geen artikel, en na een 429 stopt de redactie voor die run. Tussen twee AI-aanroepen in één run zit een minuut, zodat ze niet in hetzelfde tokens-per-minuutvenster vallen. De prompt verbiedt informatie die niet in de bron staat; bij te weinig broninformatie levert het model geen artikel. Daarna controleert `validate-article.mjs` zonder AI onder meer: officiële en bereikbare bron, eigen titel (niet de brontitel), voldoende tekst en tussenkoppen, bedragen/percentages/datums/jaartallen die in de bron voorkomen, een voorstel niet als geldende regel, een toekomstige datum niet als al geldend, geldige status en geen overlap met bestaande Avydo-artikelen. Eén fout = geen artikel en geen Pull Request.
 
-Zonder `ANTHROPIC_API_KEY` worden alleen bronrecords vastgelegd en ontstaat er geen artikel. Hoofdtekst wordt opgehaald voor Rijksoverheid (vaste tekstmarkers) en voor Belastingdienst/KVK (het `<main>`-element van de bronpagina); lukt dat niet betrouwbaar, dan komt de bron niet in aanmerking voor een artikel.
+Zonder `GROQ_API_KEY` worden alleen bronrecords vastgelegd: geen AI-aanroep, geen artikel en geen Pull Request. Anthropic (`ANTHROPIC_API_KEY`) is voor de Kenniscentrum-workflow niet nodig. Hoofdtekst wordt opgehaald voor Rijksoverheid (vaste tekstmarkers) en voor Belastingdienst/KVK (het `<main>`-element van de bronpagina); lukt dat niet betrouwbaar, dan komt de bron niet in aanmerking voor een artikel.
 
 ### Environment variables
 
 | Variabele | Verplicht | Waar instellen | Doel |
 |---|---|---|---|
 | `GEMINI_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Primaire, gratis AI-provider voor de AI-assistent (`/kenniscentrum/ai-assistent`). Zie "Kenniscentrum: AI-assistent" hieronder. |
-| `GROQ_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Secundaire, gratis fallback-provider voor de AI-assistent. |
+| `GROQ_API_KEY` | Nee (aanbevolen) | GitHub &rarr; Settings &rarr; Secrets and variables &rarr; Actions &rarr; **Repository secrets** **én** Vercel &rarr; Project Settings &rarr; Environment Variables | In GitHub Actions: nodig om dagelijks een Avydo-artikel te laten schrijven (redactiestap). Op Vercel: gratis provider voor de AI-assistent. |
+| `KENNISCENTRUM_MODEL` / `GROQ_MODEL` | Nee | GitHub &rarr; Settings &rarr; Secrets and variables &rarr; Actions &rarr; **Variables** | Ander Groq-model voor de redactiestap (standaard `openai/gpt-oss-20b`); `KENNISCENTRUM_MODEL` gaat voor. |
 | `AI_PROVIDER` | Nee | Vercel &rarr; Project Settings &rarr; Environment Variables | Kiest de providerketen (`free` = standaard). Zie "Provider-configuratie" hieronder. |
-| `ANTHROPIC_API_KEY` | Nee | GitHub &rarr; repository Secrets (Actions) **én/of** Vercel &rarr; Project Settings &rarr; Environment Variables | In GitHub Actions: nodig om dagelijks een Avydo-artikel te laten schrijven. Op Vercel (alleen bij expliciete `AI_PROVIDER=anthropic`/`free-with-paid-fallback`): een optionele, betaalde provider voor de AI-assistent. |
+| `ANTHROPIC_API_KEY` | Nee | Vercel &rarr; Project Settings &rarr; Environment Variables | Alleen bij expliciete `AI_PROVIDER=anthropic`/`free-with-paid-fallback`: een optionele, betaalde provider voor de AI-assistent. Niet gebruikt door de Kenniscentrum-workflow. |
 
 Alle sleutels worden uitsluitend server-side gebruikt:
-- `ANTHROPIC_API_KEY` in GitHub Actions (workflow "Kenniscentrum bijwerken") voor de redactiestap. Zonder deze key worden alleen bronnen vastgelegd en komt er geen redactievoorstel.
+- `GROQ_API_KEY` in GitHub Actions (workflow "Kenniscentrum bijwerken", als repository secret, geen environment secret) voor de redactiestap. Zonder deze key worden alleen bronnen vastgelegd en komt er geen redactievoorstel.
 - `GEMINI_API_KEY`/`GROQ_API_KEY`/`ANTHROPIC_API_KEY` op Vercel, gelezen door `src/pages/api/kenniscentrum-chat.ts` en `src/lib/ai-providers/` (een serverless function, zie hieronder) voor de AI-assistent. **Zonder minstens één geldige sleutel op Vercel toont de assistent een nette "momenteel niet beschikbaar"-melding** in plaats van te crashen; de rest van de website blijft gewoon werken.
 
 Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/environment variable, alleen server-side gelezen. Dit is na implementatie expliciet gecontroleerd door de volledige Vercel build-output te doorzoeken op de sleutelnamen en provider-domeinen: die komen alleen voor in de servergebundelde function, nooit in de statische client-bundels.
@@ -125,12 +126,12 @@ Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/enviro
 
 - GitHub Actions: gratis binnen de standaard minutenlimiet van deze repository (de job duurt typisch enkele seconden tot een minuut per run).
 - Bronnen: gratis, publieke overheidsfeeds en -sitemaps.
-- AI: hooguit twee aanroepen per dag (één per gekozen onderwerp), alleen bij gezette `ANTHROPIC_API_KEY`.
+- AI: hooguit twee Groq-aanroepen per dag (één per gekozen onderwerp, gratis tier), alleen bij gezette `GROQ_API_KEY`. Die gebruiken ruwweg 10.000 tokens per dag van het dagbudget dat de sleutel met de AI-assistent deelt.
 - Geen betaalde nieuws-API's of zoekdiensten gebruikt.
 
 ### Handmatig een run starten
 
-GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; **Run workflow**. Of lokaal: `npm run kenniscentrum:fetch` (schrijft bronrecords naar `src/content/bronnen/` en, met `ANTHROPIC_API_KEY`, een gevalideerd artikel naar `src/content/kenniscentrum/`; lokaal komt er geen Pull Request).
+GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; **Run workflow**. Of lokaal: `npm run kenniscentrum:fetch` (schrijft bronrecords naar `src/content/bronnen/` en, met `GROQ_API_KEY`, een gevalideerd artikel naar `src/content/kenniscentrum/`; lokaal komt er geen Pull Request).
 
 Let op: voor het aanmaken van Pull Requests moet in GitHub &rarr; Settings &rarr; Actions &rarr; General de optie "Allow GitHub Actions to create and approve pull requests" aan staan.
 

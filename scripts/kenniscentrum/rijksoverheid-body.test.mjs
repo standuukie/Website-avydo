@@ -255,9 +255,9 @@ let importCounter = 0;
 async function runRijksoverheidPipeline(pageHtml) {
   const dir = mkdtempSync(path.join(tmpdir(), 'kenniscentrum-body-test-'));
   const previousEnv = process.env.KENNISCENTRUM_CONTENT_DIR;
-  const previousKey = process.env.ANTHROPIC_API_KEY;
+  const previousKey = process.env.GROQ_API_KEY;
   process.env.KENNISCENTRUM_CONTENT_DIR = dir;
-  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.GROQ_API_KEY;
   const originalFetch = globalThis.fetch;
   const originalLog = console.log;
   const logs = [];
@@ -292,7 +292,7 @@ async function runRijksoverheidPipeline(pageHtml) {
     globalThis.fetch = originalFetch;
     if (previousEnv === undefined) delete process.env.KENNISCENTRUM_CONTENT_DIR;
     else process.env.KENNISCENTRUM_CONTENT_DIR = previousEnv;
-    if (previousKey !== undefined) process.env.ANTHROPIC_API_KEY = previousKey;
+    if (previousKey !== undefined) process.env.GROQ_API_KEY = previousKey;
     rmSync(dir, { recursive: true, force: true });
   }
 }

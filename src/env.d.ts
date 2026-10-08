@@ -22,12 +22,11 @@ interface ImportMetaEnv {
   readonly GROQ_MODEL?: string;
 
   /**
-   * Server-side only. Gebruikt door zowel scripts/kenniscentrum/fetch-articles.mjs
-   * (optionele AI-samenvatting) als, optioneel, src/pages/api/kenniscentrum-chat.ts
+   * Server-side only. Alleen gebruikt door src/pages/api/kenniscentrum-chat.ts
    * (AI-assistent, alleen als AI_PROVIDER dit expliciet inschakelt — zie
-   * hierboven). Nooit blootgesteld aan de browser: alleen gelezen binnen
-   * een API-route (prerender = false) of GitHub Actions-workflow die
-   * server-side draait.
+   * hierboven). De Kenniscentrum-workflow gebruikt GROQ_API_KEY, niet deze
+   * sleutel. Nooit blootgesteld aan de browser: alleen gelezen binnen een
+   * API-route (prerender = false).
    */
   readonly ANTHROPIC_API_KEY?: string;
   /** Server-side only. Override van het standaard Anthropic-model ("claude-haiku-4-5-20251001"). */

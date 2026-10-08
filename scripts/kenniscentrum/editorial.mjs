@@ -7,10 +7,11 @@
 // GitHub Action zet het resultaat in een Pull Request; zonder geslaagd
 // artikel komt er geen Pull Request.
 //
-// De AI-aanroep bouwt voort op de eerdere aiSummary(): dezelfde directe
-// Messages API-aanroep, maar met een verplichte tool en JSON-schema
-// (hetzelfde patroon als src/lib/ai-providers/anthropic.ts), zodat de output
-// gestructureerd is in plaats van uit vrije tekst gevist.
+// De AI-aanroep gaat naar Groq (gratis tier), met een verplichte tool en
+// JSON-schema volgens hetzelfde patroon als de AI-assistent in
+// src/lib/ai-providers/groq.ts, zodat de output gestructureerd is in plaats
+// van uit vrije tekst gevist. groq.ts zelf wordt niet hergebruikt: dat is
+// Astro/TypeScript (import.meta.env), dit is een los Node-script.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { loadExistingArticlesMeta, slugify } from './fetch-articles.mjs';
@@ -18,8 +19,17 @@ import { readSourceRecords, updateSourceRecord } from './source-records.mjs';
 import { selectTopics } from './select-topics.mjs';
 import { validateAvydoArticle, CATEGORIES, AUDIENCES, ARTICLE_STATUSES } from './validate-article.mjs';
 
-export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+export const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completions';
+// Zelfde standaardmodel als de AI-assistent (zie groq.ts voor de keuze).
+export const DEFAULT_MODEL = 'openai/gpt-oss-20b';
 const API_TIMEOUT_MS = 90000;
+// Brontekst + instructies + schema zijn samen ruwweg 1.500-2.500 tokens;
+// met deze bovengrens blijft één aanroep ruim onder Groq's
+// tokens-per-minuutlimiet van de gratis tier (zie groq.ts).
+export const MAX_OUTPUT_TOKENS = 3000;
+// Wachttijd tussen twee AI-aanroepen in dezelfde run, zodat het tweede
+// artikel niet in hetzelfde tokens-per-minuutvenster valt als het eerste.
+export const AI_CALL_SPACING_MS = 60000;
 const SOURCE_CHECK_TIMEOUT_MS = 15000;
 // Bovengrens op de brontekst in de prompt (de extractie kapt al af op 8000).
 const MAX_SOURCE_CHARS = 9000;
@@ -60,7 +70,7 @@ export function parsePendingSourceUrls(prs) {
 const ARTICLE_TOOL = {
   name: 'avydo_artikel',
   description: 'Lever het Avydo-artikel op, of geef aan dat de bron onvoldoende informatie bevat.',
-  input_schema: {
+  parameters: {
     type: 'object',
     properties: {
       voldoendeInformatie: { type: 'boolean', description: 'false als de brontekst te weinig concrete informatie bevat voor een betrouwbaar artikel' },
@@ -117,31 +127,52 @@ BRONTEKST
 ${sourceText}`;
 }
 
+/** Model voor de redactiestap: KENNISCENTRUM_MODEL, anders GROQ_MODEL, anders het standaardmodel. */
+export function resolveModel(env = process.env) {
+  return env.KENNISCENTRUM_MODEL || env.GROQ_MODEL || DEFAULT_MODEL;
+}
+
 /**
- * Laat het Avydo-artikel schrijven. Geeft { ok: true, article } of
- * { ok: false, reason } — nooit een exception.
+ * Laat het Avydo-artikel schrijven via Groq. Geeft { ok: true, article } of
+ * { ok: false, reason, rateLimited? } — nooit een exception. Geen retries:
+ * bij een fout (ook een 429) komt er gewoon geen artikel.
  */
 export async function generateAvydoArticle(record, kind, { apiKey, now, model = DEFAULT_MODEL, fetchImpl = fetch }) {
-  if (!apiKey) return { ok: false, reason: 'ANTHROPIC_API_KEY ontbreekt; geen artikel gegenereerd' };
+  if (!apiKey) return { ok: false, reason: 'GROQ_API_KEY ontbreekt; geen AI-aanroep en geen artikel gegenereerd' };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
-    const res = await fetchImpl('https://api.anthropic.com/v1/messages', {
+    const res = await fetchImpl(GROQ_CHAT_COMPLETIONS_URL, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        max_tokens: 4000,
-        tools: [ARTICLE_TOOL],
-        tool_choice: { type: 'tool', name: ARTICLE_TOOL.name },
+        temperature: 0.3,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        // Zie groq.ts: zonder deze parameter kan het redeneermodel een groot
+        // deel van max_tokens aan redeneren besteden vóór de tool-call.
+        reasoning_effort: 'low',
         messages: [{ role: 'user', content: buildArticlePrompt(record, kind, now) }],
+        tools: [{ type: 'function', function: ARTICLE_TOOL }],
+        tool_choice: { type: 'function', function: { name: ARTICLE_TOOL.name } },
       }),
     });
-    if (!res.ok) return { ok: false, reason: `AI-aanroep mislukt (HTTP ${res.status})` };
+    if (res.status === 429) {
+      return { ok: false, rateLimited: true, reason: 'Groq-limiet bereikt (HTTP 429); geen artikel, geen nieuwe poging in deze run' };
+    }
+    if (!res.ok) return { ok: false, reason: `AI-aanroep mislukt (HTTP ${res.status}, model "${model}")` };
     const data = await res.json();
-    const input = data?.content?.find((c) => c.type === 'tool_use' && c.name === ARTICLE_TOOL.name)?.input;
-    if (!input || typeof input !== 'object') return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    const rawArgs = toolCall?.function?.name === ARTICLE_TOOL.name ? toolCall.function.arguments : undefined;
+    if (typeof rawArgs !== 'string') return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
+    let input;
+    try {
+      input = JSON.parse(rawArgs);
+    } catch {
+      return { ok: false, reason: 'AI-respons bevat ongeldige JSON' };
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
     if (input.voldoendeInformatie !== true) {
       return { ok: false, reason: `bron bevat onvoldoende informatie${input.redenOnvoldoende ? `: ${input.redenOnvoldoende}` : ''}` };
     }
@@ -275,7 +306,8 @@ export function buildPullRequest(created, summary, now) {
  */
 export async function runEditorialPipeline({
   contentDir, sourcesDir, now = new Date(), apiKey, pendingSourceUrls = [], log = () => {},
-  model = process.env.KENNISCENTRUM_MODEL || DEFAULT_MODEL, fetchImpl = fetch,
+  model = resolveModel(), fetchImpl = fetch,
+  aiCallSpacingMs = AI_CALL_SPACING_MS, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
   const records = readSourceRecords(sourcesDir);
   const avydoArticles = loadExistingArticlesMeta(contentDir);
@@ -293,13 +325,25 @@ export async function runEditorialPipeline({
 
   const created = [];
   const failed = [];
-  for (const { record, kind, tier, reason } of selected) {
+  let aiCalls = 0;
+  for (const [index, { record, kind, tier, reason }] of selected.entries()) {
     log(`  > gekozen (groep ${tier}, ${kind}): ${record.title} — ${reason}`);
     const sourceReachable = await checkSourceReachable(record.sourceUrl, fetchImpl);
+    if (apiKey && aiCalls > 0 && aiCallSpacingMs > 0) await sleep(aiCallSpacingMs);
+    if (apiKey) aiCalls += 1;
     const generated = await generateAvydoArticle(record, kind, { apiKey, now, model, fetchImpl });
     if (!generated.ok) {
       log(`    geen artikel: ${generated.reason}`);
       failed.push({ title: record.title, reason: generated.reason });
+      if (generated.rateLimited) {
+        // Gecontroleerd stoppen: geen verdere AI-aanroepen deze run. De
+        // overige gekozen bronnen blijven kandidaat voor een volgende run.
+        for (const rest of selected.slice(index + 1)) {
+          failed.push({ title: rest.record.title, reason: 'niet geprobeerd: Groq-limiet bereikt' });
+        }
+        log('    Groq-limiet bereikt: redactie stopt voor deze run.');
+        break;
+      }
       continue;
     }
     const validation = validateAvydoArticle(generated.article, record, { now, avydoArticles, sourceReachable });

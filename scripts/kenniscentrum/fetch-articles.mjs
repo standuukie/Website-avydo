@@ -22,8 +22,10 @@
  * nooit de andere bronnen blokkeren of de hele run laten mislukken.
  *
  * Gebruik: node scripts/kenniscentrum/fetch-articles.mjs
- * Env: ANTHROPIC_API_KEY — nodig voor de redactiestap; zonder key worden
+ * Env: GROQ_API_KEY — nodig voor de redactiestap (Groq); zonder key worden
  *      alleen bronrecords vastgelegd en ontstaat er geen artikel.
+ *      KENNISCENTRUM_MODEL / GROQ_MODEL (optioneel) — ander Groq-model dan
+ *      het standaardmodel (zie editorial.mjs).
  *      KENNISCENTRUM_PR_LIST_FILE (optioneel) — JSON van `gh pr list`, zodat
  *      een bron uit een openstaand of afgewezen voorstel niet opnieuw wordt
  *      gekozen.
@@ -53,7 +55,7 @@ const SOURCES_DIR = process.env.KENNISCENTRUM_SOURCES_DIR
   : process.env.KENNISCENTRUM_CONTENT_DIR
     ? path.join(CONTENT_DIR, 'bronnen')
     : path.resolve(__dirname, '../../src/content/bronnen');
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const FETCH_TIMEOUT_MS = 15000;
 
 function log(...args) {
@@ -1886,11 +1888,14 @@ async function main() {
   // geïmporteerd: editorial.mjs gebruikt zelf helpers uit dit bestand.
   log('\n=== Redactie ===');
   const { runEditorialPipeline, readPendingSourceUrls } = await import('./editorial.mjs');
+  if (!GROQ_API_KEY) {
+    log('GROQ_API_KEY ontbreekt: geen AI-aanroep, geen artikel en geen Pull Request. Zet GROQ_API_KEY als GitHub Actions repository secret.');
+  }
   const editorial = await runEditorialPipeline({
     contentDir: CONTENT_DIR,
     sourcesDir: SOURCES_DIR,
     now,
-    apiKey: ANTHROPIC_API_KEY,
+    apiKey: GROQ_API_KEY,
     pendingSourceUrls: readPendingSourceUrls(process.env.KENNISCENTRUM_PR_LIST_FILE),
     log,
   });

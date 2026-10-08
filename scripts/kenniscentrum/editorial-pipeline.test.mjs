@@ -37,7 +37,11 @@ import {
   renderArticleMarkdown,
   parsePendingSourceUrls,
   buildArticlePrompt,
+  resolveModel,
   PR_SOURCE_MARKER,
+  GROQ_CHAT_COMPLETIONS_URL,
+  DEFAULT_MODEL,
+  MAX_OUTPUT_TOKENS,
 } from './editorial.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -457,37 +461,127 @@ test('bron en duplicaat: onofficiële host, onbereikbare bron, andere links en o
 
 // --- AI-redactiestap (gemockt) ---
 
-function aiResponse(input, status = 200) {
-  return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'avydo_artikel', input }] }), { status, headers: { 'content-type': 'application/json' } });
+// Groq-antwoord (OpenAI-compatibel): de tool-argumenten komen als JSON-tekst.
+function groqResponse(args, { status = 200, name = 'avydo_artikel' } = {}) {
+  const body = { choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call_1', type: 'function', function: { name, arguments: args } }] } }] };
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
+const aiResponse = (input) => groqResponse(JSON.stringify(input));
+const isGroq = (url) => String(url) === GROQ_CHAT_COMPLETIONS_URL;
 const AI_INPUT = { voldoendeInformatie: true, ...VALID_ARTICLE, status: 'consultatie', tags: ['Btw', 'kleine ondernemers'] };
 
-test('generatie: verplichte tool met JSON-schema; de volledige brontekst gaat mee; output is gestructureerd', async () => {
+// Het artikelschema zoals de redactie het sinds 2026-10-08 gebruikt; mag
+// bij de overstap naar Groq niet veranderen.
+const ARTICLE_SCHEMA_FIELDS = ['voldoendeInformatie', 'redenOnvoldoende', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'];
+const ARTICLE_SCHEMA_REQUIRED = ['voldoendeInformatie', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'];
+
+test('generatie (Groq): juiste URL, Bearer-sleutel, function-tool met parameters, verplichte tool_choice; de volledige brontekst gaat mee', async () => {
   let request;
   const result = await generateAvydoArticle(RECORD, 'toelichting', {
     apiKey: 'test-key',
     now: NOW,
     fetchImpl: async (url, opts) => {
-      request = { url, body: JSON.parse(opts.body) };
+      request = { url, headers: opts.headers, body: JSON.parse(opts.body) };
       return aiResponse(AI_INPUT);
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(request.url, 'https://api.anthropic.com/v1/messages');
-  assert.deepEqual(request.body.tool_choice, { type: 'tool', name: 'avydo_artikel' });
-  const schema = request.body.tools[0].input_schema;
-  for (const field of ['title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags']) assert.ok(schema.required.includes(field), field);
+  assert.equal(request.url, 'https://api.groq.com/openai/v1/chat/completions');
+  assert.equal(request.headers.authorization, 'Bearer test-key');
+  assert.equal(request.headers['x-api-key'], undefined);
+  assert.equal(request.headers['anthropic-version'], undefined);
+  assert.equal(request.body.model, 'openai/gpt-oss-20b');
+  assert.equal(request.body.temperature, 0.3);
+  assert.equal(request.body.reasoning_effort, 'low');
+  assert.equal(request.body.max_tokens, MAX_OUTPUT_TOKENS);
+  assert.ok(MAX_OUTPUT_TOKENS >= 2500 && MAX_OUTPUT_TOKENS <= 3500);
+  assert.equal(request.body.tools.length, 1);
+  assert.equal(request.body.tools[0].type, 'function');
+  assert.equal(request.body.tools[0].function.name, 'avydo_artikel');
+  assert.equal(request.body.tools[0].input_schema, undefined);
+  assert.equal(request.body.tools[0].function.input_schema, undefined);
+  assert.deepEqual(request.body.tool_choice, { type: 'function', function: { name: 'avydo_artikel' } });
+  const schema = request.body.tools[0].function.parameters;
+  assert.equal(schema.type, 'object');
+  assert.ok(request.body.messages.length === 1 && request.body.messages[0].role === 'user');
   assert.ok(request.body.messages[0].content.includes(SOURCE_BODY));
+  assert.equal(request.body.messages[0].content, buildArticlePrompt(RECORD, 'toelichting', NOW));
   assert.match(buildArticlePrompt(RECORD, 'toelichting', NOW), /Noem geen bedragen, percentages, datums of jaartallen die niet letterlijk in de brontekst staan/);
-  assert.deepEqual(Object.keys(result.article).sort(), ['audiences', 'body', 'category', 'relevance', 'status', 'summary', 'tags', 'title']);
-  assert.deepEqual(result.article.tags, ['btw', 'kleine ondernemers']);
 });
 
-test('generatie: onvoldoende broninformatie, geen API-key of een API-fout → geen artikel', async () => {
+test('generatie (Groq): het artikelschema is ongewijzigd (velden, verplichte velden, enums)', async () => {
+  let schema;
+  await generateAvydoArticle(RECORD, 'toelichting', {
+    apiKey: 'k', now: NOW,
+    fetchImpl: async (_url, opts) => {
+      schema = JSON.parse(opts.body).tools[0].function.parameters;
+      return aiResponse(AI_INPUT);
+    },
+  });
+  assert.deepEqual(Object.keys(schema.properties), ARTICLE_SCHEMA_FIELDS);
+  assert.deepEqual(schema.required, ARTICLE_SCHEMA_REQUIRED);
+  assert.deepEqual(schema.properties.status.enum, ['geen', ...ARTICLE_STATUSES]);
+  assert.equal(schema.properties.category.enum.length, 8);
+  assert.equal(schema.properties.tags.maxItems, 6);
+  assert.deepEqual(schema.properties.audiences.items.enum, ['zzp', 'bv-dga', 'werkgever', 'starter', 'mkb-ondernemer']);
+});
+
+test('generatie (Groq): tool_calls[0].function.arguments wordt met JSON.parse gelezen en levert het gestructureerde artikel', async () => {
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(AI_INPUT) });
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.article).sort(), ['audiences', 'body', 'category', 'relevance', 'status', 'summary', 'tags', 'title']);
+  assert.equal(result.article.title, VALID_ARTICLE.title);
+  assert.equal(result.article.body, VALID_ARTICLE.body);
+  assert.equal(result.article.status, 'consultatie');
+  assert.deepEqual(result.article.tags, ['btw', 'kleine ondernemers']);
+  const geen = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse({ ...AI_INPUT, status: 'geen' }) });
+  assert.equal(geen.article.status, undefined);
+});
+
+test('generatie (Groq): ongeldige JSON, geen tool-call, een andere tool of een API-fout → geen artikel, geen exception', async () => {
+  const cases = [
+    groqResponse('{"title": "afgekapt'),
+    groqResponse('"alleen tekst"'),
+    groqResponse(JSON.stringify(AI_INPUT), { name: 'iets_anders' }),
+    new Response(JSON.stringify({ choices: [{ message: { content: 'vrije tekst' } }] }), { status: 200 }),
+    new Response('{}', { status: 500 }),
+    new Response('{"error":{"code":"tool_use_failed"}}', { status: 400 }),
+  ];
+  for (const response of cases) {
+    const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => response });
+    assert.equal(result.ok, false);
+    assert.ok(result.reason);
+  }
   const insufficient = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse({ ...AI_INPUT, voldoendeInformatie: false, redenOnvoldoende: 'te vaag' }) });
   assert.deepEqual([insufficient.ok, /te vaag/.test(insufficient.reason)], [false, true]);
-  assert.equal((await generateAvydoArticle(RECORD, 'toelichting', { apiKey: '', now: NOW })).ok, false);
-  assert.equal((await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => new Response('{}', { status: 529 }) })).ok, false);
+});
+
+test('generatie (Groq): HTTP 429 → geen artikel, gemarkeerd als limiet, precies één aanroep (geen retry)', async () => {
+  let calls = 0;
+  const result = await generateAvydoArticle(RECORD, 'toelichting', {
+    apiKey: 'k', now: NOW,
+    fetchImpl: async () => { calls += 1; return new Response('{"error":"rate_limit"}', { status: 429 }); },
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.rateLimited, true);
+  assert.match(result.reason, /429/);
+});
+
+test('generatie (Groq): zonder GROQ_API_KEY geen AI-aanroep', async () => {
+  let calls = 0;
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: '', now: NOW, fetchImpl: async () => { calls += 1; return aiResponse(AI_INPUT); } });
+  assert.equal(calls, 0);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /GROQ_API_KEY ontbreekt/);
+});
+
+test('model: standaard openai/gpt-oss-20b; KENNISCENTRUM_MODEL gaat vóór GROQ_MODEL', () => {
+  assert.equal(DEFAULT_MODEL, 'openai/gpt-oss-20b');
+  assert.equal(resolveModel({}), 'openai/gpt-oss-20b');
+  assert.equal(resolveModel({ KENNISCENTRUM_MODEL: '', GROQ_MODEL: '' }), 'openai/gpt-oss-20b');
+  assert.equal(resolveModel({ GROQ_MODEL: 'openai/gpt-oss-120b' }), 'openai/gpt-oss-120b');
+  assert.equal(resolveModel({ KENNISCENTRUM_MODEL: 'x/a', GROQ_MODEL: 'x/b' }), 'x/a');
 });
 
 test('Avydo-artikel-output: frontmatter past op het schema, met avydoContent, bron, aparte brondatum en Avydo-publicatiedatum', () => {
@@ -509,7 +603,7 @@ test('Avydo-artikel-output: frontmatter past op het schema, met avydoContent, br
 
 // --- Volledige redactierun (tijdelijke mappen, gemockte fetch) ---
 
-async function runPipelineWith(aiInput, { records = [RECORD], pending = [], apiKey = 'k' } = {}) {
+async function runPipelineWith(aiInput, { records = [RECORD], pending = [], apiKey = 'k', fetchImpl } = {}) {
   const contentDir = tempDir('content');
   const sourcesDir = tempDir('sources');
   for (const r of records) writeSourceRecord(sourcesDir, r);
@@ -517,7 +611,8 @@ async function runPipelineWith(aiInput, { records = [RECORD], pending = [], apiK
   try {
     const run = await runEditorialPipeline({
       contentDir, sourcesDir, now: NOW, apiKey, pendingSourceUrls: pending, log: (l) => logs.push(l),
-      fetchImpl: async (url) => (String(url).startsWith('https://api.anthropic.com/') ? aiResponse(aiInput) : new Response('<html></html>', { status: 200 })),
+      aiCallSpacingMs: 0,
+      fetchImpl: fetchImpl ?? (async (url) => (isGroq(url) ? aiResponse(aiInput) : new Response('<html></html>', { status: 200 }))),
     });
     return { run, logs, articles: readdirSync(contentDir).filter((f) => f.endsWith('.md')).map((f) => ({ f, text: readFileSync(path.join(contentDir, f), 'utf8') })), records: readSourceRecords(sourcesDir) };
   } finally {
@@ -573,23 +668,24 @@ test('redactierun: zonder API-key ontstaat er geen (half) artikel en geen Pull R
     const run = await runEditorialPipeline({
       contentDir, sourcesDir, now: NOW, apiKey: '', log: () => {},
       fetchImpl: async (url) => {
-        if (String(url).startsWith('https://api.anthropic.com/')) aiCalls += 1;
+        if (String(url).includes('groq.com') || String(url).includes('anthropic.com')) aiCalls += 1;
         return new Response('<html></html>', { status: 200 });
       },
     });
     assert.equal(aiCalls, 0);
     assert.equal(run.created.length, 0);
     assert.equal(run.pullRequest, null);
-    assert.match(run.summary.failed[0].reason, /ANTHROPIC_API_KEY ontbreekt/);
+    assert.match(run.summary.failed[0].reason, /GROQ_API_KEY ontbreekt/);
     assert.deepEqual(readdirSync(contentDir), []);
     assert.equal(readSourceRecords(sourcesDir)[0].processingStatus, 'kandidaat');
   } finally {
     rmSync(contentDir, { recursive: true, force: true });
     rmSync(sourcesDir, { recursive: true, force: true });
   }
-  // De workflow maakt alleen een PR als er een artikel is, en geeft de sleutel als secret door.
+  // De workflow maakt alleen een PR als er een artikel is, en geeft de sleutel als repository secret door.
   const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
-  assert.match(wf, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
+  assert.match(wf, /GROQ_API_KEY: \$\{\{ secrets\.GROQ_API_KEY \}\}/);
+  assert.doesNotMatch(wf, /^\s*environment:/m);
   assert.match(wf, /- name: Pull Request maken\n\s+if: steps\.fetch\.outputs\.created != '0'/);
 });
 
@@ -615,4 +711,89 @@ test('workflow: de dagelijkse run maakt alleen bij een geslaagd artikel een Pull
   assert.match(wf, /npm run kenniscentrum:test/);
   assert.match(wf, /npm run build/);
   assert.equal((wf.match(/git push/g) ?? []).length, 1);
+});
+
+// --- Regressie: de Kenniscentrum-redactie hangt niet meer af van Anthropic ---
+
+test('regressie: redactie, import en workflow gebruiken geen ANTHROPIC_API_KEY of Anthropic-API meer', () => {
+  const files = ['scripts/kenniscentrum/editorial.mjs', 'scripts/kenniscentrum/fetch-articles.mjs', 'scripts/kenniscentrum/select-topics.mjs', 'scripts/kenniscentrum/validate-article.mjs', '.github/workflows/kenniscentrum-update.yml'];
+  for (const file of files) {
+    const text = readFileSync(path.join(ROOT, file), 'utf8');
+    for (const forbidden of [/ANTHROPIC_API_KEY/, /api\.anthropic\.com/, /anthropic-version/, /input_schema/, /tool_use/]) {
+      assert.doesNotMatch(text, forbidden, `${file} bevat ${forbidden}`);
+    }
+  }
+  assert.match(readFileSync(path.join(ROOT, 'scripts/kenniscentrum/fetch-articles.mjs'), 'utf8'), /process\.env\.GROQ_API_KEY/);
+});
+
+test('regressie: met alleen ANTHROPIC_API_KEY (zonder Groq-sleutel) ontstaat er geen artikel en wordt er geen AI aangeroepen', async () => {
+  const previous = { anthropic: process.env.ANTHROPIC_API_KEY, groq: process.env.GROQ_API_KEY };
+  process.env.ANTHROPIC_API_KEY = 'alleen-anthropic';
+  delete process.env.GROQ_API_KEY;
+  let aiCalls = 0;
+  try {
+    const { run, articles } = await runPipelineWith(AI_INPUT, {
+      apiKey: process.env.GROQ_API_KEY ?? '',
+      fetchImpl: async (url) => {
+        if (String(url).includes('groq.com') || String(url).includes('anthropic.com')) aiCalls += 1;
+        return new Response('<html></html>', { status: 200 });
+      },
+    });
+    assert.equal(aiCalls, 0);
+    assert.equal(run.created.length, 0);
+    assert.equal(run.pullRequest, null);
+    assert.deepEqual(articles, []);
+  } finally {
+    if (previous.anthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = previous.anthropic;
+    if (previous.groq !== undefined) process.env.GROQ_API_KEY = previous.groq;
+  }
+});
+
+test('redactierun (Groq): 429 bij het eerste onderwerp → gecontroleerd stoppen, geen tweede AI-aanroep, geen artikel/PR; bronnen blijven kandidaat', async () => {
+  const second = { ...RECORD, sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/06/tweede-bericht', title: 'Tweede bericht over loonheffingen voor werkgevers' };
+  let aiCalls = 0;
+  const { run, articles, records, logs } = await runPipelineWith(AI_INPUT, {
+    records: [RECORD, second],
+    fetchImpl: async (url) => {
+      if (isGroq(url)) { aiCalls += 1; return new Response('{}', { status: 429 }); }
+      return new Response('<html></html>', { status: 200 });
+    },
+  });
+  assert.equal(run.summary.selected, 2);
+  assert.equal(aiCalls, 1);
+  assert.equal(run.summary.failed.length, 2);
+  assert.match(run.summary.failed[1].reason, /niet geprobeerd: Groq-limiet bereikt/);
+  assert.equal(run.created.length, 0);
+  assert.equal(run.pullRequest, null);
+  assert.deepEqual(articles, []);
+  assert.ok(records.every((r) => r.processingStatus !== 'verwerkt'));
+  assert.ok(logs.some((l) => /Groq-limiet bereikt/.test(l)));
+});
+
+test('redactierun (Groq): twee onderwerpen → wachttijd tussen de twee AI-aanroepen; hooguit twee artikelen', async () => {
+  const second = { ...RECORD, sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/06/tweede-bericht', title: 'Tweede bericht over loonheffingen voor werkgevers' };
+  const contentDir = tempDir('content-spacing');
+  const sourcesDir = tempDir('sources-spacing');
+  for (const r of [RECORD, second]) writeSourceRecord(sourcesDir, r);
+  const sleeps = [];
+  let aiCalls = 0;
+  try {
+    const run = await runEditorialPipeline({
+      contentDir, sourcesDir, now: NOW, apiKey: 'k', log: () => {},
+      sleep: async (ms) => { sleeps.push(ms); },
+      fetchImpl: async (url) => {
+        if (isGroq(url)) { aiCalls += 1; return aiResponse(AI_INPUT); }
+        return new Response('<html></html>', { status: 200 });
+      },
+    });
+    assert.equal(run.summary.selected, 2);
+    assert.ok(run.summary.selected <= MAX_TOPICS_PER_RUN);
+    assert.equal(aiCalls, 2);
+    assert.deepEqual(sleeps, [60000]);
+    assert.ok(run.created.length >= 1 && run.created.length <= 2);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
 });
