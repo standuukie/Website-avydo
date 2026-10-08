@@ -74,7 +74,13 @@ const ARTICLE_TOOL = {
     type: 'object',
     properties: {
       voldoendeInformatie: { type: 'boolean', description: 'false als de brontekst te weinig concrete informatie bevat voor een betrouwbaar artikel' },
-      redenOnvoldoende: { type: 'string', description: 'Alleen bij voldoendeInformatie=false: waarom.' },
+      // Alleen inhoudelijk bij voldoendeInformatie=false. Het model zet het
+      // veld bij een voldoende bron soms op null; Groq keurt de hele
+      // tool-call dan af als het schema alleen een string toestaat (run #41).
+      redenOnvoldoende: {
+        type: ['string', 'null'],
+        description: 'Alleen bij voldoendeInformatie=false: korte reden waarom de bron onvoldoende is. Bij voldoendeInformatie=true: null.',
+      },
       title: { type: 'string', description: 'Eigen titel, 30-90 tekens, niet de brontitel.' },
       summary: { type: 'string', description: 'Eigen samenvatting in 1-2 zinnen, 80-300 tekens.' },
       body: { type: 'string', description: 'Artikeltekst in markdown met ## tussenkoppen, zonder # hoofdtitel en zonder links.' },
@@ -115,7 +121,7 @@ STRIKTE REGELS
 - Presenteer gevolgen niet als feit als de bron dat niet zegt; formuleer voorzichtig ("kan gevolgen hebben voor").
 - Geen links, geen HTML, geen hoofdtitel (#) in de tekst.
 - Kies status "geen" alleen voor gewone, geldende informatie.
-- Bevat de bron te weinig concrete informatie: zet voldoendeInformatie op false.
+- voldoendeInformatie is leidend. Bevat de bron te weinig concrete informatie: zet voldoendeInformatie op false en geef in redenOnvoldoende kort aan waarom. Is de bron voldoende: zet voldoendeInformatie op true en zet redenOnvoldoende op null.
 
 BRON
 Organisatie: ${record.sourceName}
@@ -226,7 +232,8 @@ export async function generateAvydoArticle(record, kind, { apiKey, now, model = 
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
     if (input.voldoendeInformatie !== true) {
-      return { ok: false, reason: `bron bevat onvoldoende informatie${input.redenOnvoldoende ? `: ${input.redenOnvoldoende}` : ''}` };
+      const reden = typeof input.redenOnvoldoende === 'string' ? input.redenOnvoldoende.trim() : '';
+      return { ok: false, reason: reden ? `bron bevat onvoldoende informatie: ${reden}` : 'bron bevat onvoldoende informatie (model gaf geen reden op)' };
     }
     return {
       ok: true,

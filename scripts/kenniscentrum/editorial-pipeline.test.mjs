@@ -877,7 +877,8 @@ test('regressie run #40: het artikelschema gebruikt alleen standaard JSON Schema
   })(body.tools[0].function.parameters);
   for (const key of used) assert.ok(allowed.has(key), `onverwacht schema-sleutelwoord ${key}`);
   for (const value of Object.values(body.tools[0].function.parameters.properties)) {
-    assert.ok(['string', 'boolean', 'array'].includes(value.type));
+    const types = Array.isArray(value.type) ? value.type : [value.type];
+    assert.ok(types.every((t) => ['string', 'boolean', 'array', 'null'].includes(t)));
     if (value.enum) assert.ok(value.enum.every((v) => typeof v === 'string' && v.length > 0));
   }
 });
@@ -951,4 +952,124 @@ test('veilige foutlogging: niet-JSON-antwoord en lange antwoorden worden ingekor
   });
   assert.equal(limited.rateLimited, true);
   assert.match(limited.reason, /HTTP 429 type=tokens code=rate_limit_exceeded melding: Rate limit reached/);
+});
+
+// --- Regressie run #41: "redenOnvoldoende": null werd door Groq afgewezen ---
+//
+// Groq valideert de gegenereerde tool-argumenten tegen het schema vóórdat
+// wij ze zien. Run #41: "parameters for tool avydo_artikel did not match
+// schema: errors: [`/redenOnvoldoende`: expected string, but got null]".
+// Deze kleine validator dekt precies de sleutelwoorden die het schema mag
+// gebruiken (zie de test "alleen standaard JSON Schema-sleutelwoorden").
+
+function schemaErrors(schema, value, at = '') {
+  const errors = [];
+  const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
+  const typeOf = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' ? 'number' : typeof v);
+  if (types.length && !types.includes(typeOf(value))) {
+    errors.push(`${at || '/'}: expected ${types.join(' or ')}, but got ${typeOf(value)}`);
+    return errors;
+  }
+  if (schema.enum && !schema.enum.includes(value)) errors.push(`${at}: value must be one of the enum values`);
+  if (typeOf(value) === 'object' && schema.properties) {
+    for (const key of schema.required ?? []) if (!(key in value)) errors.push(`${at}: missing property '${key}'`);
+    for (const [key, v] of Object.entries(value)) {
+      if (schema.properties[key]) errors.push(...schemaErrors(schema.properties[key], v, `${at}/${key}`));
+    }
+  }
+  if (typeOf(value) === 'array') {
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) errors.push(`${at}: maxItems ${schema.maxItems}`);
+    if (schema.items) value.forEach((v, i) => errors.push(...schemaErrors(schema.items, v, `${at}/${i}`)));
+  }
+  return errors;
+}
+
+async function articleSchema() {
+  let schema;
+  await generateAvydoArticle(RECORD, 'toelichting', {
+    apiKey: 'k', now: NOW,
+    fetchImpl: async (_url, opts) => { schema = JSON.parse(opts.body).tools[0].function.parameters; return aiResponse(AI_INPUT); },
+  });
+  return schema;
+}
+
+// Het argument uit run #41 (failed_generation), ingekort tot de schemavelden.
+const RUN41_ARGUMENTS = {
+  ...AI_INPUT,
+  audiences: ['bv-dga', 'mkb-ondernemer', 'werkgever'],
+  status: 'geen',
+  category: 'Administratie & jaarrekening',
+  redenOnvoldoende: null,
+};
+
+test('regressie run #41: de validator geeft exact Groq\'s fout op het oude schema (redenOnvoldoende alleen string)', async () => {
+  const schema = await articleSchema();
+  const oldSchema = { ...schema, properties: { ...schema.properties, redenOnvoldoende: { type: 'string' } } };
+  assert.deepEqual(schemaErrors(oldSchema, RUN41_ARGUMENTS), ['/redenOnvoldoende: expected string, but got null']);
+});
+
+test('regressie run #41: voldoendeInformatie true + redenOnvoldoende null → schema geldig, artikel gaat door', async () => {
+  const schema = await articleSchema();
+  assert.deepEqual(schemaErrors(schema, RUN41_ARGUMENTS), []);
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(RUN41_ARGUMENTS) });
+  assert.equal(result.ok, true);
+  assert.equal(result.article.category, 'Administratie & jaarrekening');
+  assert.equal('redenOnvoldoende' in result.article, false);
+});
+
+test('schema: voldoendeInformatie true zonder redenOnvoldoende → geldig; normale artikelrespons blijft werken en doorstaat de validatie', async () => {
+  const schema = await articleSchema();
+  const { redenOnvoldoende, ...withoutReason } = RUN41_ARGUMENTS;
+  assert.equal(redenOnvoldoende, null);
+  assert.deepEqual(schemaErrors(schema, withoutReason), []);
+  assert.deepEqual(schemaErrors(schema, AI_INPUT), []);
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(AI_INPUT) });
+  assert.equal(result.ok, true);
+  assert.deepEqual(validateAvydoArticle(result.article, RECORD, VALID_CONTEXT).errors, []);
+});
+
+test('schema: voldoendeInformatie false + reden → geldig; de pipeline maakt geen artikel en neemt de reden over', async () => {
+  const schema = await articleSchema();
+  const insufficient = { ...AI_INPUT, voldoendeInformatie: false, redenOnvoldoende: 'De bron noemt alleen een verwijzing naar een formulier.' };
+  assert.deepEqual(schemaErrors(schema, insufficient), []);
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(insufficient) });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'bron bevat onvoldoende informatie: De bron noemt alleen een verwijzing naar een formulier.');
+});
+
+test('schema: voldoendeInformatie false zonder bruikbare reden (null, leeg of ontbrekend) → afgewezen, met expliciete melding', async () => {
+  for (const reden of [null, '', '   ', undefined]) {
+    const input = { ...AI_INPUT, voldoendeInformatie: false, redenOnvoldoende: reden };
+    if (reden === undefined) delete input.redenOnvoldoende;
+    const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(input) });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'bron bevat onvoldoende informatie (model gaf geen reden op)');
+  }
+  const { run, articles } = await runPipelineWith({ ...AI_INPUT, voldoendeInformatie: false, redenOnvoldoende: null });
+  assert.equal(run.created.length, 0);
+  assert.equal(run.pullRequest, null);
+  assert.deepEqual(articles, []);
+});
+
+test('schema: alleen redenOnvoldoende mag null zijn; alle artikelvelden blijven verplicht en strikt getypeerd', async () => {
+  const schema = await articleSchema();
+  assert.deepEqual(schema.required, ['voldoendeInformatie', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags']);
+  const nullable = Object.entries(schema.properties).filter(([, v]) => Array.isArray(v.type) && v.type.includes('null')).map(([k]) => k);
+  assert.deepEqual(nullable, ['redenOnvoldoende']);
+  assert.deepEqual(schema.properties.redenOnvoldoende.type, ['string', 'null']);
+  for (const field of schema.required) {
+    const errors = schemaErrors(schema, { ...RUN41_ARGUMENTS, [field]: null });
+    assert.ok(errors.some((e) => e.startsWith(`/${field}: expected`)), `${field} mag niet null zijn`);
+    const { [field]: _omitted, ...missing } = RUN41_ARGUMENTS;
+    assert.ok(schemaErrors(schema, missing).includes(`: missing property '${field}'`), `${field} moet verplicht blijven`);
+  }
+  assert.ok(schemaErrors(schema, { ...RUN41_ARGUMENTS, status: 'onzin' }).length > 0);
+  assert.ok(schemaErrors(schema, { ...RUN41_ARGUMENTS, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }).length > 0);
+});
+
+test('prompt: voldoendeInformatie is leidend; redenOnvoldoende alleen bij false, anders null', () => {
+  const prompt = buildArticlePrompt(RECORD, 'toelichting', NOW);
+  assert.match(prompt, /voldoendeInformatie is leidend/);
+  assert.match(prompt, /zet voldoendeInformatie op false en geef in redenOnvoldoende kort aan waarom/);
+  assert.match(prompt, /zet voldoendeInformatie op true en zet redenOnvoldoende op null/);
 });
