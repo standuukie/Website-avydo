@@ -6,7 +6,7 @@ publishedAt: 2026-08-04T13:01:25.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/starten/voorkom-een-naheffingsaanslag-omzetbelasting/"
 summary: "Je krijgt een naheffingsaanslag als je geen of te laat btw-aangifte doet. Dat kan veel geld kosten. Lees hier hoe je dit voorkomt."
-relevance: "Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+relevance: "Een naheffingsaanslag dreigt bij te late btw-aangifte. Ook te laat betalen kan belastingrente en een boete kosten: aangeven en betalen zijn twee aparte verplichtingen. Welk tijdvak en welke termijn voor u gelden, leest u in onze gids ‘Btw-aangifte: termijnen, tijdvakken en wat als u te laat bent?’."
 tags: []
 audiences: []
 featured: false

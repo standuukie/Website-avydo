@@ -6,7 +6,7 @@ publishedAt: 2026-02-06T13:38:36.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/geldzaken/de-dga-en-werknemersverzekeringen/"
 summary: "Kom je er niet uit of je als dga valt onder verplichte werknemersverzekeringen ? UWV en Belastingdienst beoordelen je situatie."
-relevance: "Als DGA of BV kan dit gevolgen hebben voor uw fiscale positie. Bespreek met uw adviseur of dit voor uw situatie relevant is."
+relevance: "Of u als DGA verplicht verzekerd bent, beoordelen UWV en Belastingdienst. Een aparte vraag is welk loon u uit uw BV fiscaal in aanmerking moet nemen; daarover gaat onze gids ‘Gebruikelijk loon: hoeveel salaris moet u uzelf als DGA minimaal uitkeren?’."
 tags: []
 audiences: ["bv-dga", "werkgever"]
 featured: false
