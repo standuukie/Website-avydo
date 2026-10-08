@@ -42,6 +42,9 @@ import {
   GROQ_CHAT_COMPLETIONS_URL,
   DEFAULT_MODEL,
   MAX_OUTPUT_TOKENS,
+  ARTICLE_SCHEMA,
+  ARTICLE_SCHEMA_NAME,
+  ARTICLE_RESPONSE_FORMAT,
   describeGroqError,
   redactSecrets,
   buildSourceLayerPullRequestBody,
@@ -488,21 +491,23 @@ test('bron en duplicaat: onofficiële host, onbereikbare bron, andere links en o
 
 // --- AI-redactiestap (gemockt) ---
 
-// Groq-antwoord (OpenAI-compatibel): de tool-argumenten komen als JSON-tekst.
-function groqResponse(args, { status = 200, name = 'avydo_artikel' } = {}) {
-  const body = { choices: [{ message: { role: 'assistant', tool_calls: [{ id: 'call_1', type: 'function', function: { name, arguments: args } }] } }] };
+// Groq-antwoord (OpenAI-compatibel) bij Structured Outputs: het artikel komt
+// als JSON-tekst in choices[0].message.content.
+function groqResponse(content, { status = 200, finishReason = 'stop' } = {}) {
+  const body = { choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: finishReason }] };
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 const aiResponse = (input) => groqResponse(JSON.stringify(input));
 const isGroq = (url) => String(url) === GROQ_CHAT_COMPLETIONS_URL;
-const AI_INPUT = { voldoendeInformatie: true, ...VALID_ARTICLE, status: 'consultatie', tags: ['Btw', 'kleine ondernemers'] };
+const AI_INPUT = { voldoendeInformatie: true, redenOnvoldoende: null, ...VALID_ARTICLE, status: 'consultatie', tags: ['Btw', 'kleine ondernemers'] };
 
-// Het artikelschema zoals de redactie het sinds 2026-10-08 gebruikt; mag
-// bij de overstap naar Groq niet veranderen.
+// Het artikelschema zoals de redactie het sinds 2026-10-08 gebruikt. Bij de
+// overstap naar strict Structured Outputs zijn velden, typen en enums gelijk
+// gebleven; alleen redenOnvoldoende is (nullable) verplicht geworden.
 const ARTICLE_SCHEMA_FIELDS = ['voldoendeInformatie', 'redenOnvoldoende', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'];
-const ARTICLE_SCHEMA_REQUIRED = ['voldoendeInformatie', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'];
+const ARTICLE_SCHEMA_REQUIRED = ARTICLE_SCHEMA_FIELDS;
 
-test('generatie (Groq): juiste URL, Bearer-sleutel, function-tool met parameters, verplichte tool_choice; de volledige brontekst gaat mee', async () => {
+test('generatie (Groq): juiste URL, Bearer-sleutel, strict Structured Output (json_schema), geen tools; de volledige brontekst gaat mee', async () => {
   let request;
   const result = await generateAvydoArticle(RECORD, 'toelichting', {
     apiKey: 'test-key',
@@ -522,14 +527,14 @@ test('generatie (Groq): juiste URL, Bearer-sleutel, function-tool met parameters
   assert.equal(request.body.reasoning_effort, 'low');
   assert.equal(request.body.max_tokens, MAX_OUTPUT_TOKENS);
   assert.ok(MAX_OUTPUT_TOKENS >= 2500 && MAX_OUTPUT_TOKENS <= 3500);
-  assert.equal(request.body.tools.length, 1);
-  assert.equal(request.body.tools[0].type, 'function');
-  assert.equal(request.body.tools[0].function.name, 'avydo_artikel');
-  assert.equal(request.body.tools[0].input_schema, undefined);
-  assert.equal(request.body.tools[0].function.input_schema, undefined);
-  assert.deepEqual(request.body.tool_choice, { type: 'function', function: { name: 'avydo_artikel' } });
-  const schema = request.body.tools[0].function.parameters;
-  assert.equal(schema.type, 'object');
+  assert.equal(request.body.tools, undefined);
+  assert.equal(request.body.tool_choice, undefined);
+  assert.equal(request.body.response_format.type, 'json_schema');
+  assert.deepEqual(Object.keys(request.body.response_format.json_schema).sort(), ['name', 'schema', 'strict']);
+  assert.equal(request.body.response_format.json_schema.name, 'avydo_artikel');
+  assert.equal(request.body.response_format.json_schema.strict, true);
+  assert.deepEqual(request.body.response_format.json_schema.schema, ARTICLE_SCHEMA);
+  assert.equal(request.body.response_format.json_schema.schema.type, 'object');
   assert.ok(request.body.messages.length === 1 && request.body.messages[0].role === 'user');
   assert.ok(request.body.messages[0].content.includes(SOURCE_BODY));
   assert.equal(request.body.messages[0].content, buildArticlePrompt(RECORD, 'toelichting', NOW));
@@ -541,7 +546,7 @@ test('generatie (Groq): het artikelschema is ongewijzigd (velden, verplichte vel
   await generateAvydoArticle(RECORD, 'toelichting', {
     apiKey: 'k', now: NOW,
     fetchImpl: async (_url, opts) => {
-      schema = JSON.parse(opts.body).tools[0].function.parameters;
+      schema = JSON.parse(opts.body).response_format.json_schema.schema;
       return aiResponse(AI_INPUT);
     },
   });
@@ -553,7 +558,7 @@ test('generatie (Groq): het artikelschema is ongewijzigd (velden, verplichte vel
   assert.deepEqual(schema.properties.audiences.items.enum, ['zzp', 'bv-dga', 'werkgever', 'starter', 'mkb-ondernemer']);
 });
 
-test('generatie (Groq): tool_calls[0].function.arguments wordt met JSON.parse gelezen en levert het gestructureerde artikel', async () => {
+test('generatie (Groq): choices[0].message.content wordt met JSON.parse gelezen en levert het gestructureerde artikel', async () => {
   const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(AI_INPUT) });
   assert.equal(result.ok, true);
   assert.deepEqual(Object.keys(result.article).sort(), ['audiences', 'body', 'category', 'relevance', 'status', 'summary', 'tags', 'title']);
@@ -565,14 +570,17 @@ test('generatie (Groq): tool_calls[0].function.arguments wordt met JSON.parse ge
   assert.equal(geen.article.status, undefined);
 });
 
-test('generatie (Groq): ongeldige JSON, geen tool-call, een andere tool of een API-fout → geen artikel, geen exception', async () => {
+test('generatie (Groq): ongeldige of lege content, een array of een API-fout → geen artikel, geen exception', async () => {
   const cases = [
     groqResponse('{"title": "afgekapt'),
     groqResponse('"alleen tekst"'),
-    groqResponse(JSON.stringify(AI_INPUT), { name: 'iets_anders' }),
+    groqResponse('[1,2]'),
+    groqResponse(null),
+    groqResponse(''),
     new Response(JSON.stringify({ choices: [{ message: { content: 'vrije tekst' } }] }), { status: 200 }),
+    new Response(JSON.stringify({ choices: [] }), { status: 200 }),
     new Response('{}', { status: 500 }),
-    new Response('{"error":{"code":"tool_use_failed"}}', { status: 400 }),
+    new Response('{"error":{"code":"json_validate_failed"}}', { status: 400 }),
   ];
   for (const response of cases) {
     const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => response });
@@ -900,38 +908,33 @@ async function captureRequest(record, kind = 'gids') {
   return captured;
 }
 
-test('regressie run #40: request-body heeft dezelfde vorm als de werkende AI-assistent (groq.ts)', async () => {
+test('regressie run #40: request-body heeft dezelfde basis als de werkende AI-assistent (groq.ts), met Structured Output in plaats van een tool', async () => {
   const { url, headers, body } = await captureRequest(RUN40_RECORD);
   assert.equal(url, 'https://api.groq.com/openai/v1/chat/completions');
   assert.deepEqual(Object.keys(headers).sort(), ['authorization', 'content-type']);
   assert.equal(headers['content-type'], 'application/json');
-  assert.deepEqual(Object.keys(body).sort(), ['max_tokens', 'messages', 'model', 'reasoning_effort', 'temperature', 'tool_choice', 'tools']);
+  assert.deepEqual(Object.keys(body).sort(), ['max_tokens', 'messages', 'model', 'reasoning_effort', 'response_format', 'temperature']);
   assert.equal(body.model, 'openai/gpt-oss-20b');
   assert.equal(body.temperature, 0.3);
   assert.equal(body.reasoning_effort, 'low');
   assert.equal(body.max_tokens, 3000);
   assert.deepEqual(body.messages.map((m) => Object.keys(m).sort()), [['content', 'role']]);
   assert.equal(typeof body.messages[0].content, 'string');
-  assert.deepEqual(Object.keys(body.tools[0]).sort(), ['function', 'type']);
-  assert.deepEqual(Object.keys(body.tools[0].function).sort(), ['description', 'name', 'parameters']);
-  assert.deepEqual(body.tool_choice, { type: 'function', function: { name: body.tools[0].function.name } });
-  // Dezelfde velden en waarden als in de assistent.
+  assert.deepEqual(body.response_format, ARTICLE_RESPONSE_FORMAT);
+  // Dezelfde endpoint, sleutel, model en instellingen als in de assistent.
   const groqTs = readFileSync(path.join(ROOT, 'src/lib/ai-providers/groq.ts'), 'utf8');
   for (const snippet of [
     "'https://api.groq.com/openai/v1/chat/completions'",
     'authorization: `Bearer ${apiKey}`',
     'temperature: 0.3',
     "reasoning_effort: 'low'",
-    "type: 'function',",
-    'parameters: tool.schema',
-    "tool_choice: { type: 'function', function: { name: tool.name } }",
     "const DEFAULT_MODEL = 'openai/gpt-oss-20b'",
   ]) assert.ok(groqTs.includes(snippet), `groq.ts bevat niet meer: ${snippet}`);
 });
 
 test('regressie run #40: het artikelschema gebruikt alleen standaard JSON Schema-sleutelwoorden', async () => {
   const { body } = await captureRequest(RUN40_RECORD);
-  const allowed = new Set(['type', 'properties', 'required', 'description', 'enum', 'items', 'maxItems']);
+  const allowed = new Set(['type', 'properties', 'required', 'additionalProperties', 'description', 'enum', 'items', 'maxItems']);
   const used = new Set();
   (function walk(schema) {
     for (const [key, value] of Object.entries(schema)) {
@@ -939,9 +942,9 @@ test('regressie run #40: het artikelschema gebruikt alleen standaard JSON Schema
       if (key === 'properties') Object.values(value).forEach(walk);
       else if (key === 'items') walk(value);
     }
-  })(body.tools[0].function.parameters);
+  })(body.response_format.json_schema.schema);
   for (const key of used) assert.ok(allowed.has(key), `onverwacht schema-sleutelwoord ${key}`);
-  for (const value of Object.values(body.tools[0].function.parameters.properties)) {
+  for (const value of Object.values(body.response_format.json_schema.schema.properties)) {
     const types = Array.isArray(value.type) ? value.type : [value.type];
     assert.ok(types.every((t) => ['string', 'boolean', 'array', 'null'].includes(t)));
     if (value.enum) assert.ok(value.enum.every((v) => typeof v === 'string' && v.length > 0));
@@ -1038,6 +1041,9 @@ function schemaErrors(schema, value, at = '') {
   if (schema.enum && !schema.enum.includes(value)) errors.push(`${at}: value must be one of the enum values`);
   if (typeOf(value) === 'object' && schema.properties) {
     for (const key of schema.required ?? []) if (!(key in value)) errors.push(`${at}: missing property '${key}'`);
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(value)) if (!(key in schema.properties)) errors.push(`${at}: additional property '${key}' not allowed`);
+    }
     for (const [key, v] of Object.entries(value)) {
       if (schema.properties[key]) errors.push(...schemaErrors(schema.properties[key], v, `${at}/${key}`));
     }
@@ -1053,7 +1059,7 @@ async function articleSchema() {
   let schema;
   await generateAvydoArticle(RECORD, 'toelichting', {
     apiKey: 'k', now: NOW,
-    fetchImpl: async (_url, opts) => { schema = JSON.parse(opts.body).tools[0].function.parameters; return aiResponse(AI_INPUT); },
+    fetchImpl: async (_url, opts) => { schema = JSON.parse(opts.body).response_format.json_schema.schema; return aiResponse(AI_INPUT); },
   });
   return schema;
 }
@@ -1082,12 +1088,16 @@ test('regressie run #41: voldoendeInformatie true + redenOnvoldoende null → sc
   assert.equal('redenOnvoldoende' in result.article, false);
 });
 
-test('schema: voldoendeInformatie true zonder redenOnvoldoende → geldig; normale artikelrespons blijft werken en doorstaat de validatie', async () => {
+test('schema (strict): redenOnvoldoende moet aanwezig zijn (null mag); normale artikelrespons blijft werken en doorstaat de validatie', async () => {
   const schema = await articleSchema();
   const { redenOnvoldoende, ...withoutReason } = RUN41_ARGUMENTS;
   assert.equal(redenOnvoldoende, null);
-  assert.deepEqual(schemaErrors(schema, withoutReason), []);
+  // Strict mode: elk veld verplicht, dus ook redenOnvoldoende (als null).
+  assert.deepEqual(schemaErrors(schema, withoutReason), [": missing property 'redenOnvoldoende'"]);
   assert.deepEqual(schemaErrors(schema, AI_INPUT), []);
+  // Komt het veld toch niet mee, dan verwerkt de parser het artikel gewoon.
+  const lenient = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(withoutReason) });
+  assert.equal(lenient.ok, true);
   const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse(AI_INPUT) });
   assert.equal(result.ok, true);
   assert.deepEqual(validateAvydoArticle(result.article, RECORD, VALID_CONTEXT).errors, []);
@@ -1118,13 +1128,14 @@ test('schema: voldoendeInformatie false zonder bruikbare reden (null, leeg of on
 
 test('schema: alleen redenOnvoldoende mag null zijn; alle artikelvelden blijven verplicht en strikt getypeerd', async () => {
   const schema = await articleSchema();
-  assert.deepEqual(schema.required, ['voldoendeInformatie', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags']);
+  assert.deepEqual(schema.required, ['voldoendeInformatie', 'redenOnvoldoende', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags']);
   const nullable = Object.entries(schema.properties).filter(([, v]) => Array.isArray(v.type) && v.type.includes('null')).map(([k]) => k);
   assert.deepEqual(nullable, ['redenOnvoldoende']);
   assert.deepEqual(schema.properties.redenOnvoldoende.type, ['string', 'null']);
   for (const field of schema.required) {
     const errors = schemaErrors(schema, { ...RUN41_ARGUMENTS, [field]: null });
-    assert.ok(errors.some((e) => e.startsWith(`/${field}: expected`)), `${field} mag niet null zijn`);
+    if (field === 'redenOnvoldoende') assert.deepEqual(errors, [], 'redenOnvoldoende mag null zijn');
+    else assert.ok(errors.some((e) => e.startsWith(`/${field}: expected`)), `${field} mag niet null zijn`);
     const { [field]: _omitted, ...missing } = RUN41_ARGUMENTS;
     assert.ok(schemaErrors(schema, missing).includes(`: missing property '${field}'`), `${field} moet verplicht blijven`);
   }
@@ -1318,4 +1329,123 @@ test('bronlaag-PR-tekst: afgewezen en uitgestelde bronnen met reden, zonder bron
     rmSync(contentDir, { recursive: true, force: true });
     rmSync(sourcesDir, { recursive: true, force: true });
   }
+});
+
+// --- Regressie run #45: strict Structured Outputs ---
+//
+// Run #45: Groq weigerde de tool-call ("missing properties:
+// 'voldoendeInformatie', 'title', /tags: maxItems: got 16, want 6"). Het
+// artikel komt nu als strict Structured Output (json_schema, strict: true):
+// Groq dwingt het schema af tijdens het genereren. Deze tests controleren
+// dat het schema strict-geschikt is én dat het op de juiste plek in de
+// daadwerkelijke Groq-request staat.
+
+function walkObjects(schema, visit, at = '') {
+  if (schema && typeof schema === 'object' && !Array.isArray(schema)) {
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    if (types.includes('object')) visit(schema, at || '/');
+    for (const [key, value] of Object.entries(schema.properties ?? {})) walkObjects(value, visit, `${at}/${key}`);
+    if (schema.items) walkObjects(schema.items, visit, `${at}/items`);
+  }
+}
+
+test('strict Structured Output: response_format json_schema met strict true en het artikelschema, in de daadwerkelijke request; geen tools', async () => {
+  const { body } = await captureRequest(RUN43_RECORD);
+  assert.equal(body.response_format.type, 'json_schema');
+  assert.equal(body.response_format.json_schema.strict, true);
+  assert.equal(body.response_format.json_schema.name, ARTICLE_SCHEMA_NAME);
+  assert.match(body.response_format.json_schema.name, /^[a-zA-Z0-9_-]{1,64}$/);
+  assert.deepEqual(body.response_format.json_schema.schema, ARTICLE_SCHEMA);
+  assert.equal('tools' in body, false);
+  assert.equal('tool_choice' in body, false);
+  assert.equal(JSON.stringify(body).includes('tool_calls'), false);
+});
+
+test('strict Structured Output: elk object heeft additionalProperties false en alle properties in required; redenOnvoldoende als union met null', async () => {
+  const { body } = await captureRequest(RUN43_RECORD);
+  const schema = body.response_format.json_schema.schema;
+  let objects = 0;
+  walkObjects(schema, (obj, at) => {
+    objects += 1;
+    assert.equal(obj.additionalProperties, false, `${at}: additionalProperties`);
+    assert.deepEqual([...obj.required].sort(), Object.keys(obj.properties).sort(), `${at}: niet alle properties required`);
+  });
+  assert.equal(objects, 1);
+  assert.deepEqual(schema.properties.redenOnvoldoende.type, ['string', 'null']);
+  // Geen veld is ruimer gemaakt: alleen redenOnvoldoende accepteert null.
+  for (const [key, value] of Object.entries(schema.properties)) {
+    if (key !== 'redenOnvoldoende') assert.equal(Array.isArray(value.type), false, key);
+  }
+  assert.equal(schema.properties.tags.maxItems, 6);
+  assert.deepEqual(schema.properties.tags.items, { type: 'string' });
+});
+
+test('regressie run #45: het schema keurt precies de output van run #45 af (ontbrekende voldoendeInformatie en title, 16 tags)', async () => {
+  const { body } = await captureRequest(RUN43_RECORD);
+  const schema = body.response_format.json_schema.schema;
+  const { voldoendeInformatie: _v, title: _t, ...run45 } = { ...RUN43_GENERATED, tags: Array.from({ length: 16 }, (_, i) => `tag ${i + 1}`) };
+  assert.deepEqual(schemaErrors(schema, run45), [
+    ": missing property 'voldoendeInformatie'",
+    ": missing property 'title'",
+    '/tags: maxItems 6',
+  ]);
+  const { voldoendeInformatie: _only, ...noFlag } = RUN43_GENERATED;
+  assert.deepEqual(schemaErrors(schema, noFlag), [": missing property 'voldoendeInformatie'"]);
+  const { title: _title, ...noTitle } = RUN43_GENERATED;
+  assert.deepEqual(schemaErrors(schema, noTitle), [": missing property 'title'"]);
+  assert.deepEqual(schemaErrors(schema, { ...RUN43_GENERATED, tags: Array.from({ length: 7 }, (_, i) => `t${i}`) }), ['/tags: maxItems 6']);
+  assert.deepEqual(schemaErrors(schema, { ...RUN43_GENERATED, tags: Array.from({ length: 6 }, (_, i) => `t${i}`) }), []);
+  assert.deepEqual(schemaErrors(schema, { ...RUN43_GENERATED, extra: 'x' }), [": additional property 'extra' not allowed"]);
+});
+
+test('strict Structured Output: een volledige geldige output (max. 6 tags) wordt uit message.content verwerkt en doorstaat validateAvydoArticle', async () => {
+  const { body } = await captureRequest(RUN43_RECORD);
+  const output = { ...AI_INPUT, tags: ['btw', 'aangifte', 'kleine ondernemers', 'kor', 'vereenvoudiging', 'consultatie'] };
+  assert.deepEqual(schemaErrors(body.response_format.json_schema.schema, output), []);
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => groqResponse(JSON.stringify(output)) });
+  assert.equal(result.ok, true);
+  assert.equal(result.article.tags.length, 6);
+  assert.deepEqual(validateAvydoArticle(result.article, RECORD, VALID_CONTEXT).errors, []);
+  // Afgekapt antwoord (max_tokens): geen artikel, met finish_reason in de reden.
+  const truncated = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => groqResponse('{"voldoendeInformatie": true, "title": "Afge', { finishReason: 'length' }) });
+  assert.deepEqual([truncated.ok, truncated.reason], [false, 'AI-respons bevat ongeldige JSON (finish_reason=length)']);
+});
+
+test('strict Structured Output: onvoldoende informatie, overlap en bronstatus werken zoals voorheen', async () => {
+  // Onvoldoende informatie (met reden) → geen artikel.
+  const insufficient = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: 'k', now: NOW, fetchImpl: async () => aiResponse({ ...AI_INPUT, voldoendeInformatie: false, redenOnvoldoende: 'Alleen een verwijzing.' }) });
+  assert.deepEqual([insufficient.ok, insufficient.reason], [false, 'bron bevat onvoldoende informatie: Alleen een verwijzing.']);
+  // Overlap → bron afgewezen, volgende run geen Groq-aanroep (run #43).
+  const { contentDir, sourcesDir } = run43Dirs();
+  try {
+    const first = await run43({ contentDir, sourcesDir });
+    assert.equal(first.groqCalls, 1);
+    assert.equal(first.record.processingStatus, 'afgewezen');
+    assert.equal((await run43({ contentDir, sourcesDir })).groqCalls, 0);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+  // Geldig artikel → artikel geschreven, bron verwerkt.
+  const { run, articles, records } = await runPipelineWith(AI_INPUT);
+  assert.equal(run.created.length, 1);
+  assert.equal(articles.length, 1);
+  assert.equal(records[0].processingStatus, 'verwerkt');
+});
+
+test('strict Structured Output: een Groq-fout bij schema-validatie wordt veilig gelogd (geen sleutel)', async () => {
+  const errorBody = JSON.stringify({ error: { message: 'Generated JSON does not match the expected schema.', type: 'invalid_request_error', code: 'json_validate_failed', failed_generation: '{"title": "x"}' } });
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: FAKE_KEY, now: NOW, fetchImpl: async () => new Response(errorBody, { status: 400 }) });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /HTTP 400 type=invalid_request_error code=json_validate_failed melding: Generated JSON does not match/);
+  assert.equal(result.errorDetail.failedGeneration, '{"title": "x"}');
+  assert.ok(!JSON.stringify(result).includes(FAKE_KEY));
+});
+
+test('workflow: geen wijziging nodig voor Structured Outputs (zelfde GROQ_API_KEY en modelvariabelen)', () => {
+  const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
+  assert.match(wf, /GROQ_API_KEY: \$\{\{ secrets\.GROQ_API_KEY \}\}/);
+  assert.match(wf, /KENNISCENTRUM_MODEL: \$\{\{ vars\.KENNISCENTRUM_MODEL \}\}/);
+  assert.match(wf, /GROQ_MODEL: \$\{\{ vars\.GROQ_MODEL \}\}/);
+  assert.doesNotMatch(readFileSync(path.join(ROOT, 'scripts/kenniscentrum/editorial.mjs'), 'utf8'), /tool_choice|tool_calls/);
 });

@@ -7,10 +7,12 @@
 // GitHub Action zet het resultaat in een Pull Request; zonder geslaagd
 // artikel komt er geen Pull Request.
 //
-// De AI-aanroep gaat naar Groq (gratis tier), met een verplichte tool en
-// JSON-schema volgens hetzelfde patroon als de AI-assistent in
-// src/lib/ai-providers/groq.ts, zodat de output gestructureerd is in plaats
-// van uit vrije tekst gevist. groq.ts zelf wordt niet hergebruikt: dat is
+// De AI-aanroep gaat naar Groq (gratis tier; zelfde endpoint, sleutel en
+// standaardmodel als de AI-assistent in src/lib/ai-providers/groq.ts). Het
+// artikel komt terug als Structured Output (response_format json_schema,
+// strict): Groq dwingt het schema af tijdens het genereren, zodat verplichte
+// velden niet kunnen ontbreken en arraygrenzen niet worden overschreden
+// (runs #41 en #45). groq.ts zelf wordt niet hergebruikt: dat is
 // Astro/TypeScript (import.meta.env), dit is een los Node-script.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -67,31 +69,36 @@ export function parsePendingSourceUrls(prs) {
 
 // --- Prompt en AI-aanroep ---
 
-const ARTICLE_TOOL = {
-  name: 'avydo_artikel',
-  description: 'Lever het Avydo-artikel op, of geef aan dat de bron onvoldoende informatie bevat.',
-  parameters: {
-    type: 'object',
-    properties: {
-      voldoendeInformatie: { type: 'boolean', description: 'false als de brontekst te weinig concrete informatie bevat voor een betrouwbaar artikel' },
-      // Alleen inhoudelijk bij voldoendeInformatie=false. Het model zet het
-      // veld bij een voldoende bron soms op null; Groq keurt de hele
-      // tool-call dan af als het schema alleen een string toestaat (run #41).
-      redenOnvoldoende: {
-        type: ['string', 'null'],
-        description: 'Alleen bij voldoendeInformatie=false: korte reden waarom de bron onvoldoende is. Bij voldoendeInformatie=true: null.',
-      },
-      title: { type: 'string', description: 'Eigen titel, 30-90 tekens, niet de brontitel.' },
-      summary: { type: 'string', description: 'Eigen samenvatting in 1-2 zinnen, 80-300 tekens.' },
-      body: { type: 'string', description: 'Artikeltekst in markdown met ## tussenkoppen, zonder # hoofdtitel en zonder links.' },
-      relevance: { type: 'string', description: '"Wat betekent dit voor u?": 1-3 zinnen; de eerste zin draagt de kern.' },
-      status: { type: 'string', enum: ['geen', ...ARTICLE_STATUSES], description: 'Fase volgens de bron; "geen" voor geldende, gewone informatie.' },
-      category: { type: 'string', enum: CATEGORIES },
-      audiences: { type: 'array', items: { type: 'string', enum: AUDIENCES } },
-      tags: { type: 'array', items: { type: 'string' }, maxItems: 6 },
+// Het artikelschema voor Groq's strict Structured Outputs. Strict mode vraagt:
+// elk veld in `required`, `additionalProperties: false`, en optionele waarden
+// als union met null. Velden, typen, enums en de tag-grens zijn dezelfde als
+// in de eerdere tool-definitie (avydo_artikel).
+export const ARTICLE_SCHEMA_NAME = 'avydo_artikel';
+export const ARTICLE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    voldoendeInformatie: { type: 'boolean', description: 'false als de brontekst te weinig concrete informatie bevat voor een betrouwbaar artikel' },
+    // Alleen inhoudelijk bij voldoendeInformatie=false; anders null (run #41).
+    redenOnvoldoende: {
+      type: ['string', 'null'],
+      description: 'Alleen bij voldoendeInformatie=false: korte reden waarom de bron onvoldoende is. Bij voldoendeInformatie=true: null.',
     },
-    required: ['voldoendeInformatie', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'],
+    title: { type: 'string', description: 'Eigen titel, 30-90 tekens, niet de brontitel.' },
+    summary: { type: 'string', description: 'Eigen samenvatting in 1-2 zinnen, 80-300 tekens.' },
+    body: { type: 'string', description: 'Artikeltekst in markdown met ## tussenkoppen, zonder # hoofdtitel en zonder links.' },
+    relevance: { type: 'string', description: '"Wat betekent dit voor u?": 1-3 zinnen; de eerste zin draagt de kern.' },
+    status: { type: 'string', enum: ['geen', ...ARTICLE_STATUSES], description: 'Fase volgens de bron; "geen" voor geldende, gewone informatie.' },
+    category: { type: 'string', enum: CATEGORIES },
+    audiences: { type: 'array', items: { type: 'string', enum: AUDIENCES } },
+    tags: { type: 'array', items: { type: 'string' }, maxItems: 6 },
   },
+  required: ['voldoendeInformatie', 'redenOnvoldoende', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'],
+};
+
+export const ARTICLE_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  json_schema: { name: ARTICLE_SCHEMA_NAME, strict: true, schema: ARTICLE_SCHEMA },
 };
 
 function formatDate(value) {
@@ -204,11 +211,11 @@ export async function generateAvydoArticle(record, kind, { apiKey, now, model = 
         temperature: 0.3,
         max_tokens: MAX_OUTPUT_TOKENS,
         // Zie groq.ts: zonder deze parameter kan het redeneermodel een groot
-        // deel van max_tokens aan redeneren besteden vóór de tool-call.
+        // deel van max_tokens aan redeneren besteden vóór de eigenlijke output.
         reasoning_effort: 'low',
         messages: [{ role: 'user', content: buildArticlePrompt(record, kind, now) }],
-        tools: [{ type: 'function', function: ARTICLE_TOOL }],
-        tool_choice: { type: 'function', function: { name: ARTICLE_TOOL.name } },
+        // Structured Outputs en tools gaan bij Groq niet samen: geen tools.
+        response_format: ARTICLE_RESPONSE_FORMAT,
       }),
     });
     if (!res.ok) {
@@ -221,14 +228,16 @@ export async function generateAvydoArticle(record, kind, { apiKey, now, model = 
       return { ok: false, reason: `AI-aanroep mislukt (model "${model}"): Groq ${summary}`, errorDetail };
     }
     const data = await res.json();
-    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
-    const rawArgs = toolCall?.function?.name === ARTICLE_TOOL.name ? toolCall.function.arguments : undefined;
-    if (typeof rawArgs !== 'string') return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
+    const choice = data?.choices?.[0];
+    // finish_reason in de reden: "length" = afgekapt door max_tokens.
+    const finish = choice?.finish_reason ? ` (finish_reason=${choice.finish_reason})` : '';
+    const content = choice?.message?.content;
+    if (typeof content !== 'string' || content.trim() === '') return { ok: false, reason: `AI-respons bevat geen gestructureerd artikel${finish}` };
     let input;
     try {
-      input = JSON.parse(rawArgs);
+      input = JSON.parse(content);
     } catch {
-      return { ok: false, reason: 'AI-respons bevat ongeldige JSON' };
+      return { ok: false, reason: `AI-respons bevat ongeldige JSON${finish}` };
     }
     if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, reason: 'AI-respons bevat geen gestructureerd artikel' };
     if (input.voldoendeInformatie !== true) {
