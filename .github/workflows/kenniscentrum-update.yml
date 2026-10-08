@@ -6,9 +6,15 @@ name: Kenniscentrum bijwerken
 #   → vaste validatie → tests + build → Pull Request
 #
 # Er wordt nooit rechtstreeks naar de live branch gepusht. Alleen als er een
-# gevalideerd Avydo-artikel is, komt er een Pull Request; een mens beslist
-# met de merge of het live gaat. Geen geschikt onderwerp, of mislukte
-# generatie/validatie: geen Pull Request (zie de job summary voor de reden).
+# gevalideerd Avydo-artikel is, komt er een artikel-Pull Request (artikel +
+# zijn eigen bronrecord); een mens beslist met de merge of het live gaat.
+# Geen geschikt onderwerp, of mislukte generatie/validatie: geen artikel-PR
+# (zie de job summary voor de reden).
+#
+# Alle overige bronlaagwijzigingen (nieuwe bronrecords, afgewezen bronnen)
+# staan in één doorlopende bronlaag-PR (branch kenniscentrum/bronlaag). Zolang
+# die openstaat, gaat elke run van die bronlaag uit, zodat een afgewezen bron
+# niet elke dag opnieuw naar de redactie (Groq) gaat.
 #
 # Zie scripts/kenniscentrum/fetch-articles.mjs en editorial.mjs.
 
@@ -54,6 +60,28 @@ jobs:
           gh pr list --state all --limit 200 --json headRefName,body,mergedAt > "$RUNNER_TEMP/kenniscentrum-prs.json" \
             || echo '[]' > "$RUNNER_TEMP/kenniscentrum-prs.json"
 
+      # De bronlaag-PR is altijd één commit bovenop de live branch; die
+      # wijziging wordt hier toegepast. Lukt dat niet (conflict), dan gaat de
+      # run uit van de bronlaag op de live branch.
+      - name: Openstaande bronlaag-PR toepassen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open_pr=$(gh pr list --head kenniscentrum/bronlaag --state open --json number --jq '.[0].number' || true)
+          if [ -z "$open_pr" ]; then
+            echo "Geen open bronlaag-PR."
+            exit 0
+          fi
+          git fetch --no-tags --depth=2 origin kenniscentrum/bronlaag
+          if git diff FETCH_HEAD~1 FETCH_HEAD -- src/content/bronnen | git apply --3way; then
+            echo "Bronlaag uit PR #$open_pr toegepast."
+          else
+            echo "::warning::Bronlaag-PR #$open_pr kon niet worden toegepast; deze run gaat uit van de bronlaag op de live branch."
+            git reset -q --hard HEAD
+            git clean -fdq -- src/content/bronnen
+          fi
+          git reset -q
+
       - name: Bronnen ophalen en Avydo-artikel voorbereiden
         id: fetch
         env:
@@ -91,6 +119,37 @@ jobs:
             echo 'Geen resultaatbestand gevonden (onverwachte scriptfout).' >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Bronlaagwijzigingen, behalve de bronrecords van een nieuw artikel (die
+      # gaan mee in de artikel-PR), naar de doorlopende bronlaag-PR. Gebouwd
+      # met een aparte index: de werkmap en de gewone index blijven ongemoeid.
+      - name: Bronlaag-PR bijwerken
+        if: steps.fetch.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          article_records=$(node -p "(() => { try { return (require('./.kenniscentrum-run-result.json').editorial?.created ?? []).map((c) => c.sourceRecordId).filter(Boolean).join(' ') } catch { return '' } })()")
+          export GIT_INDEX_FILE="$RUNNER_TEMP/bronlaag.index"
+          git read-tree HEAD
+          git add -A -- src/content/bronnen
+          for id in $article_records; do git reset -q HEAD -- "src/content/bronnen/$id.json"; done
+          if git diff --cached --quiet HEAD -- src/content/bronnen; then
+            echo "Geen bronlaagwijzigingen."
+            exit 0
+          fi
+          tree=$(git write-tree)
+          commit=$(git -c user.name="avydo-kenniscentrum-bot" -c user.email="actions@github.com" \
+            commit-tree "$tree" -p HEAD -m "Kenniscentrum: bronlaag bijwerken ($(date -u +%Y-%m-%d))")
+          unset GIT_INDEX_FILE
+          git push --force origin "$commit:refs/heads/kenniscentrum/bronlaag"
+          open_pr=$(gh pr list --head kenniscentrum/bronlaag --state open --json number --jq '.[0].number')
+          if [ -n "$open_pr" ]; then
+            gh pr edit "$open_pr" --body-file .kenniscentrum-bronlaag-pr.md
+          else
+            gh pr create --base "$GITHUB_REF_NAME" --head kenniscentrum/bronlaag \
+              --title "Kenniscentrum: bronlaag bijwerken" \
+              --body-file .kenniscentrum-bronlaag-pr.md
+          fi
+
       - name: Tests en build
         if: steps.fetch.outputs.created != '0'
         run: |
@@ -105,8 +164,13 @@ jobs:
           branch="kenniscentrum/avydo-$(date -u +%Y-%m-%d)-${GITHUB_RUN_ID}"
           git config user.name "avydo-kenniscentrum-bot"
           git config user.email "actions@github.com"
+          article_records=$(node -p "(require('./.kenniscentrum-run-result.json').editorial?.created ?? []).map((c) => c.sourceRecordId).filter(Boolean).join(' ')")
           git checkout -b "$branch"
-          git add src/content/kenniscentrum src/content/bronnen
+          # Alleen het artikel en zijn eigen bronrecord; overige
+          # bronlaagwijzigingen staan in de bronlaag-PR.
+          git reset -q
+          git add src/content/kenniscentrum
+          for id in $article_records; do git add "src/content/bronnen/$id.json"; done
           git commit -m "$(cat .kenniscentrum-pr-title.txt)"
           git push -u origin "$branch"
           gh pr create --base "$GITHUB_REF_NAME" --head "$branch" \

@@ -11,7 +11,7 @@
 // Geen netwerk, geen echte AI-aanroep.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,10 @@ import {
   MAX_OUTPUT_TOKENS,
   describeGroqError,
   redactSecrets,
+  buildSourceLayerPullRequestBody,
+  SOURCE_LAYER_BRANCH,
 } from './editorial.mjs';
+import { findOverlappingArticle } from './fetch-articles.mjs';
 import { estimateTokens } from '../../src/lib/token-estimate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -734,7 +737,48 @@ test('workflow: de dagelijkse run maakt alleen bij een geslaagd artikel een Pull
   assert.match(wf, /gh pr create/);
   assert.match(wf, /npm run kenniscentrum:test/);
   assert.match(wf, /npm run build/);
-  assert.equal((wf.match(/git push/g) ?? []).length, 1);
+  // Twee pushes, allebei naar een kenniscentrum/-branch: de artikel-PR en de
+  // doorlopende bronlaag-PR. Nooit naar de live branch.
+  const pushes = wf.match(/git push[^\n]*/g) ?? [];
+  assert.deepEqual(pushes, ['git push --force origin "$commit:refs/heads/kenniscentrum/bronlaag"', 'git push -u origin "$branch"']);
+  assert.match(wf, /branch="kenniscentrum\/avydo-/);
+  assert.doesNotMatch(wf, /git push[^\n]*(GITHUB_REF_NAME|main|claude\/)/);
+});
+
+test('workflow: bronlaagwijzigingen uit een run zonder artikel gaan naar één doorlopende bronlaag-PR; de artikel-PR bevat alleen het artikel en zijn eigen bronrecord', () => {
+  const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
+  const step = (name) => {
+    const start = wf.indexOf(`- name: ${name}`);
+    assert.ok(start >= 0, name);
+    const next = wf.indexOf('\n      - name: ', start + 1);
+    return wf.slice(start, next < 0 ? undefined : next);
+  };
+  assert.equal(SOURCE_LAYER_BRANCH, 'kenniscentrum/bronlaag');
+  // Vóór de import: een open bronlaag-PR toepassen (één commit bovenop live), met terugval bij een conflict.
+  const overlay = step('Openstaande bronlaag-PR toepassen');
+  assert.ok(wf.indexOf('- name: Openstaande bronlaag-PR toepassen') < wf.indexOf('- name: Bronnen ophalen en Avydo-artikel voorbereiden'));
+  assert.match(overlay, /gh pr list --head kenniscentrum\/bronlaag --state open/);
+  assert.match(overlay, /git fetch --no-tags --depth=2 origin kenniscentrum\/bronlaag/);
+  assert.match(overlay, /git diff FETCH_HEAD~1 FETCH_HEAD -- src\/content\/bronnen \| git apply --3way/);
+  assert.match(overlay, /git reset -q --hard HEAD/);
+  // Na de import: bronlaag-PR bijwerken via een aparte index, zonder de bronrecords van een nieuw artikel.
+  const layer = step('Bronlaag-PR bijwerken');
+  assert.ok(wf.indexOf('- name: Bronlaag-PR bijwerken') < wf.indexOf('- name: Tests en build'));
+  assert.match(layer, /if: steps\.fetch\.outcome == 'success'/);
+  assert.match(layer, /export GIT_INDEX_FILE=/);
+  assert.match(layer, /git add -A -- src\/content\/bronnen/);
+  assert.match(layer, /sourceRecordId/);
+  assert.match(layer, /git reset -q HEAD -- "src\/content\/bronnen\/\$id\.json"/);
+  assert.match(layer, /git diff --cached --quiet HEAD -- src\/content\/bronnen/);
+  assert.match(layer, /commit-tree "\$tree" -p HEAD/);
+  assert.match(layer, /gh pr edit "\$open_pr" --body-file \.kenniscentrum-bronlaag-pr\.md/);
+  assert.match(layer, /gh pr create --base "\$GITHUB_REF_NAME" --head kenniscentrum\/bronlaag/);
+  // Artikel-PR: index leeg, dan alleen artikelen en de eigen bronrecords.
+  const article = step('Pull Request maken');
+  assert.match(article, /git reset -q\n\s+git add src\/content\/kenniscentrum\n/);
+  assert.match(article, /for id in \$article_records; do git add "src\/content\/bronnen\/\$id\.json"; done/);
+  assert.doesNotMatch(article, /git add src\/content\/kenniscentrum src\/content\/bronnen/);
+  assert.match(readFileSync(path.join(ROOT, '.gitignore'), 'utf8'), /^\.kenniscentrum-bronlaag-pr\.md$/m);
 });
 
 // --- Regressie: de Kenniscentrum-redactie hangt niet meer af van Anthropic ---
@@ -1093,4 +1137,185 @@ test('prompt: voldoendeInformatie is leidend; redenOnvoldoende alleen bij false,
   assert.match(prompt, /voldoendeInformatie is leidend/);
   assert.match(prompt, /zet voldoendeInformatie op false en geef in redenOnvoldoende kort aan waarom/);
   assert.match(prompt, /zet voldoendeInformatie op true en zet redenOnvoldoende op null/);
+});
+
+// --- Regressie run #43: onderwerp al gedekt door een bestaand Avydo-artikel ---
+//
+// Run #43: de bron "Jaarrekening wel of niet deponeren?" kwam door de
+// selectie (titeloverlap met de bestaande gids 0,25 < 0,4), maar de door Groq
+// gegenereerde titel overlapte wél met "De jaarrekening: wat zijn uw
+// verplichtingen als ondernemer?". De validatie blijft het vangnet; de bron
+// wordt daarna als "al gedekt" afgewezen, zodat een volgende run hem niet
+// opnieuw naar Groq stuurt.
+
+const HAND_GUIDE_FILE = '2026-10-01-de-jaarrekening-wat-zijn-uw-verplichtingen-als-ondernemer.md';
+const HAND_GUIDE_TITLE = 'De jaarrekening: wat zijn uw verplichtingen als ondernemer?';
+const RUN43_RECORD = {
+  sourceUrl: 'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
+  sourceName: 'KVK',
+  title: 'Jaarrekening wel of niet deponeren?',
+  description: 'Bv’s, nv’s, coöperaties en onderlinge waarborgmaatschappijen zijn voorbeelden van rechtsvormen die verplicht zijn de jaarrekening te deponeren. Voor eenmanszaken geldt deze verplichting niet.',
+  body: [
+    'Bv’s, nv’s, coöperaties en onderlinge waarborgmaatschappijen zijn voorbeelden van rechtsvormen die verplicht zijn de jaarrekening te deponeren bij KVK.',
+    'Ook vof’s en cv’s waarvan de beherende vennoten buitenlandse kapitaalvennootschappen zijn, moeten deponeren.',
+    'Verenigingen en stichtingen met een onderneming deponeren als de omzet in twee opeenvolgende boekjaren boven de grens komt.',
+    'Voor eenmanszaken geldt deze verplichting niet.',
+    'Een dochtermaatschappij hoeft geen eigen jaarrekening te deponeren als de moedermaatschappij zich aansprakelijk stelt met een 403-verklaring en een groepsjaarrekening deponeert waarin de cijfers van de dochter zijn opgenomen.',
+  ].join('\n\n'),
+  sourceLastModified: '2025-08-26T00:00:00.000Z',
+  fetchedAt: '2026-10-08T19:59:45.000Z',
+  category: 'Administratie & jaarrekening',
+  priority: 'praktisch',
+  audiences: ['bv-dga'],
+  processingStatus: 'kandidaat',
+};
+// Een titel zoals in run #43: overlapt met de bestaande gids.
+const RUN43_GENERATED = {
+  ...AI_INPUT,
+  title: 'De jaarrekening: welke verplichtingen gelden voor ondernemers?',
+  category: 'Administratie & jaarrekening',
+  status: 'geen',
+  redenOnvoldoende: null,
+};
+
+async function run43({ contentDir, sourcesDir, aiInput = RUN43_GENERATED }) {
+  const logs = [];
+  let groqCalls = 0;
+  const run = await runEditorialPipeline({
+    contentDir, sourcesDir, now: NOW, apiKey: 'k', log: (l) => logs.push(l), aiCallSpacingMs: 0,
+    fetchImpl: async (url) => {
+      if (isGroq(url)) { groqCalls += 1; return aiResponse(aiInput); }
+      return new Response('<html></html>', { status: 200 });
+    },
+  });
+  return { run, logs, groqCalls, record: readSourceRecords(sourcesDir).find((r) => r.sourceUrl === RUN43_RECORD.sourceUrl) };
+}
+
+function run43Dirs() {
+  const contentDir = tempDir('content-run43');
+  const sourcesDir = tempDir('sources-run43');
+  writeFileSync(path.join(contentDir, HAND_GUIDE_FILE), readFileSync(path.join(CONTENT_DIR, HAND_GUIDE_FILE), 'utf8'));
+  writeSourceRecord(sourcesDir, RUN43_RECORD);
+  return { contentDir, sourcesDir };
+}
+
+test('regressie run #43: de selectie laat de bron door (brontitel overlapt niet: precheck niet strenger dan de validatie)', () => {
+  const guide = { file: HAND_GUIDE_FILE, title: HAND_GUIDE_TITLE, category: 'Administratie & jaarrekening', sourceUrl: 'https://www.kvk.nl/deponeren/' };
+  assert.equal(findOverlappingArticle(RUN43_RECORD.title, RUN43_RECORD.category, [guide]), null);
+  const c = classifyCandidate(RUN43_RECORD, { now: NOW, avydoArticles: [guide] });
+  assert.deepEqual([c.eligible, c.tier, c.kind], [true, 3, 'gids']);
+  // De gegenereerde titel overlapt wél: dat vangt de validatie.
+  assert.equal(findOverlappingArticle(RUN43_GENERATED.title, RUN43_GENERATED.category, [guide])?.file, HAND_GUIDE_FILE);
+});
+
+test('regressie run #43: validatie-overlap → geen artikel, bron afgewezen als "al gedekt" met het bestaande artikel en de gegenereerde titel; logging toont beide', async () => {
+  const { contentDir, sourcesDir } = run43Dirs();
+  try {
+    const { run, logs, groqCalls, record } = await run43({ contentDir, sourcesDir });
+    assert.equal(groqCalls, 1);
+    assert.equal(run.created.length, 0);
+    assert.equal(run.pullRequest, null);
+    assert.deepEqual(readdirSync(contentDir), [HAND_GUIDE_FILE]);
+    assert.equal(record.processingStatus, 'afgewezen');
+    assert.equal(record.rejectionReason, `onderwerp al gedekt door bestaand Avydo-artikel "${HAND_GUIDE_TITLE}" (${HAND_GUIDE_FILE}); gegenereerde titel: "${RUN43_GENERATED.title}"`);
+    const text = logs.join('\n');
+    assert.match(text, /validatie mislukt, geen publicatievoorstel \(gegenereerde titel: "De jaarrekening: welke verplichtingen gelden voor ondernemers\?"\)/);
+    assert.ok(text.includes(`overlapt met bestaand Avydo-artikel "${HAND_GUIDE_TITLE}" (${HAND_GUIDE_FILE})`));
+    assert.ok(text.includes(`bron afgewezen: onderwerp al gedekt door bestaand Avydo-artikel "${HAND_GUIDE_TITLE}"`));
+    assert.equal(run.summary.failed[0].generatedTitle, RUN43_GENERATED.title);
+    assert.ok(run.summary.rejectedSources.some((r) => r.sourceUrl === RUN43_RECORD.sourceUrl && /al gedekt/.test(r.reason)));
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+test('regressie run #43: een volgende run kiest de afgewezen bron niet opnieuw en roept Groq niet aan', async () => {
+  const { contentDir, sourcesDir } = run43Dirs();
+  try {
+    assert.equal((await run43({ contentDir, sourcesDir })).groqCalls, 1);
+    const second = await run43({ contentDir, sourcesDir });
+    assert.equal(second.groqCalls, 0);
+    assert.equal(second.run.summary.selected, 0);
+    assert.equal(second.run.summary.candidates, 0);
+    assert.equal(second.record.processingStatus, 'afgewezen');
+    assert.ok(second.run.summary.noArticleReason);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+test('precheck vóór Groq: een bron waarvan de titel al overlapt met een bestaand Avydo-artikel wordt in de selectie afgewezen, zonder Groq-aanroep', async () => {
+  const contentDir = tempDir('content-precheck');
+  const sourcesDir = tempDir('sources-precheck');
+  writeFileSync(path.join(contentDir, HAND_GUIDE_FILE), readFileSync(path.join(CONTENT_DIR, HAND_GUIDE_FILE), 'utf8'));
+  writeSourceRecord(sourcesDir, { ...RUN43_RECORD, sourceUrl: 'https://www.kvk.nl/deponeren/verplichtingen/', title: 'De jaarrekening: welke verplichtingen gelden voor ondernemers?' });
+  try {
+    const { run, groqCalls } = await run43({ contentDir, sourcesDir });
+    assert.equal(groqCalls, 0);
+    assert.equal(run.summary.selected, 0);
+    const record = readSourceRecords(sourcesDir)[0];
+    assert.equal(record.processingStatus, 'afgewezen');
+    assert.equal(record.rejectionReason, `onderwerp al behandeld in Avydo-artikel "${HAND_GUIDE_TITLE}" (${HAND_GUIDE_FILE})`);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+test('verwant onderwerp blijft mogelijk: dezelfde jaarrekening-bron met een eigen, niet-overlappende titel levert gewoon een artikel op', async () => {
+  const { contentDir, sourcesDir } = run43Dirs();
+  const own = {
+    ...RUN43_GENERATED,
+    title: 'Deponeringsplicht per rechtsvorm en de vrijstelling voor dochtermaatschappijen',
+    summary: 'Welke rechtsvormen hun jaarrekening bij KVK moeten deponeren, en wanneer een dochtermaatschappij daarvan is vrijgesteld.',
+    body: [
+      '## Welke rechtsvormen moeten deponeren?',
+      'Bv’s, nv’s, coöperaties en onderlinge waarborgmaatschappijen moeten de jaarrekening deponeren bij KVK. Ook vof’s en cv’s waarvan de beherende vennoten buitenlandse kapitaalvennootschappen zijn, moeten deponeren. Verenigingen en stichtingen met een onderneming deponeren als de omzet in twee opeenvolgende boekjaren boven de grens komt. Voor eenmanszaken geldt deze verplichting niet.',
+      '## Vrijstelling voor een dochtermaatschappij',
+      'Een dochtermaatschappij hoeft geen eigen jaarrekening te deponeren als de moedermaatschappij zich aansprakelijk stelt met een 403-verklaring en een groepsjaarrekening deponeert waarin de cijfers van de dochter zijn opgenomen. Bespreek met uw adviseur of dat voor uw groep verstandig is.',
+    ].join('\n\n'),
+    relevance: 'Heeft u een bv of een groep met dochtermaatschappijen, dan bepaalt de rechtsvorm of u moet deponeren en of een vrijstelling mogelijk is.',
+  };
+  try {
+    const { run, groqCalls, record } = await run43({ contentDir, sourcesDir, aiInput: own });
+    assert.equal(groqCalls, 1);
+    assert.deepEqual(run.summary.failed, []);
+    assert.equal(run.created.length, 1);
+    assert.equal(record.processingStatus, 'verwerkt');
+    assert.equal(run.summary.created[0].sourceRecordId, record.id);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+test('validatie geeft de overlap gestructureerd terug (of null); andere validatiefouten laten de bron kandidaat', async () => {
+  const guide = { file: HAND_GUIDE_FILE, title: HAND_GUIDE_TITLE, category: 'Administratie & jaarrekening', sourceUrl: 'https://www.kvk.nl/deponeren/' };
+  const withOverlap = validateAvydoArticle({ ...VALID_ARTICLE, title: RUN43_GENERATED.title, category: 'Administratie & jaarrekening' }, RECORD, { ...VALID_CONTEXT, avydoArticles: [guide] });
+  assert.deepEqual([withOverlap.overlap.file, withOverlap.overlap.title], [HAND_GUIDE_FILE, HAND_GUIDE_TITLE]);
+  assert.equal(validateAvydoArticle(VALID_ARTICLE, RECORD, VALID_CONTEXT).overlap, null);
+  // Geen overlap maar wel een feitfout: tijdelijke afwijzing, de bron blijft kandidaat (bestaand gedrag).
+  const { run, records, logs } = await runPipelineWith({ ...AI_INPUT, body: `${AI_INPUT.body}\n\nDe boete is € 5.000.` });
+  assert.equal(run.created.length, 0);
+  assert.equal(records[0].processingStatus, 'kandidaat');
+  assert.ok(logs.some((l) => l.includes(`(gegenereerde titel: "${AI_INPUT.title}")`)));
+  assert.ok(!logs.some((l) => /bron afgewezen/.test(l)));
+});
+
+test('bronlaag-PR-tekst: afgewezen en uitgestelde bronnen met reden, zonder bronmarkering (sluiten blokkeert geen bron)', async () => {
+  const { contentDir, sourcesDir } = run43Dirs();
+  try {
+    const { run } = await run43({ contentDir, sourcesDir });
+    const body = buildSourceLayerPullRequestBody(run.summary, { totalRecorded: 3 }, NOW);
+    assert.match(body, /Doorlopend voorstel voor de bronlaag/);
+    assert.match(body, /Nieuwe bronrecords: 3/);
+    assert.match(body, /### Afgewezen\n\n- Jaarrekening wel of niet deponeren\?: onderwerp al gedekt door bestaand Avydo-artikel/);
+    assert.doesNotMatch(body, new RegExp(PR_SOURCE_MARKER));
+    assert.deepEqual(parsePendingSourceUrls([{ headRefName: SOURCE_LAYER_BRANCH, mergedAt: null, body }]), []);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
 });

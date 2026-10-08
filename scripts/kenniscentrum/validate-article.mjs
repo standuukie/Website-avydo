@@ -238,5 +238,7 @@ export function validateAvydoArticle(article, record, { now, avydoArticles, sour
   if ((article.tags ?? []).length === 0) warnings.push('geen tags');
   if ((article.audiences ?? []).length === 0) warnings.push('geen doelgroep');
 
-  return { ok: errors.length === 0, errors, warnings };
+  // `overlap` (of null) naast de foutmelding, zodat de redactiestap de bron
+  // als "al gedekt" kan vastleggen en het overlappende artikel kan loggen.
+  return { ok: errors.length === 0, errors, warnings, overlap: overlap ?? null };
 }

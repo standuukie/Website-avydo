@@ -358,6 +358,37 @@ export function buildPullRequest(created, summary, now) {
   return { title, body: `${parts.join('\n')}\n` };
 }
 
+// --- Bronlaag-PR ---
+
+// Bronstatussen uit een run worden alleen bewaard via git. Een run zonder
+// artikel zet de bronlaagwijzigingen daarom in één doorlopende Pull Request
+// (branch kenniscentrum/bronlaag, zie de workflow). Deze tekst bevat bewust
+// géén PR_SOURCE_MARKER: sluiten van deze PR mag geen bron blokkeren.
+export const SOURCE_LAYER_BRANCH = 'kenniscentrum/bronlaag';
+
+export function buildSourceLayerPullRequestBody(summary, { totalRecorded = 0 } = {}, now = new Date()) {
+  const lines = [
+    `Doorlopend voorstel voor de bronlaag (\`src/content/bronnen/\`), laatst bijgewerkt ${formatDate(now)}.`,
+    '',
+    '> Alleen bronrecords: verwerkingsstatus en afwijsreden van officiële bronnen. Geen artikelen. Zolang deze PR openstaat, gaat elke dagelijkse run uit van deze bronlaag, zodat afgewezen bronnen niet opnieuw naar de redactie (Groq) gaan. Mergen legt de statussen vast.',
+    '',
+    '## Laatste run',
+    '',
+    `- Nieuwe bronrecords: ${totalRecorded}`,
+    `- Kandidaten bekeken: ${summary?.candidates ?? 0}, gekozen: ${summary?.selected ?? 0}`,
+  ];
+  if (summary?.rejectedSources?.length) {
+    lines.push('', '### Afgewezen', '', ...summary.rejectedSources.map((r) => `- ${r.title}: ${r.reason}`));
+  }
+  if (summary?.deferredSources?.length) {
+    lines.push('', '### Uitgesteld (blijft kandidaat)', '', ...summary.deferredSources.map((r) => `- ${r.title}: ${r.reason}`));
+  }
+  if (summary?.failed?.length) {
+    lines.push('', '### Geen artikel', '', ...summary.failed.map((f) => `- ${f.title}: ${f.reason}`));
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 // --- Orkestratie ---
 
 /**
@@ -384,6 +415,7 @@ export async function runEditorialPipeline({
 
   const created = [];
   const failed = [];
+  const rejectedAfterGeneration = [];
   let aiCalls = 0;
   for (const [index, { record, kind, tier, reason }] of selected.entries()) {
     log(`  > gekozen (groep ${tier}, ${kind}): ${record.title} — ${reason}`);
@@ -410,8 +442,18 @@ export async function runEditorialPipeline({
     }
     const validation = validateAvydoArticle(generated.article, record, { now, avydoArticles, sourceReachable });
     if (!validation.ok) {
-      log(`    validatie mislukt, geen publicatievoorstel:\n${validation.errors.map((e) => `      · ${e}`).join('\n')}`);
-      failed.push({ title: record.title, reason: `validatie mislukt: ${validation.errors.join('; ')}` });
+      const generatedTitle = generated.article.title;
+      log(`    validatie mislukt, geen publicatievoorstel (gegenereerde titel: "${generatedTitle}"):\n${validation.errors.map((e) => `      · ${e}`).join('\n')}`);
+      if (validation.overlap) {
+        // Het onderwerp is al gedekt door een bestaand Avydo-artikel (zelfde
+        // overlapcontrole als de validatie). Blijvend: de bron wordt
+        // afgewezen, zodat een volgende run hem niet opnieuw naar Groq stuurt.
+        const rejectionReason = `onderwerp al gedekt door bestaand Avydo-artikel "${validation.overlap.title}" (${validation.overlap.file}); gegenereerde titel: "${generatedTitle}"`;
+        updateSourceRecord(sourcesDir, record.sourceUrl, { processingStatus: 'afgewezen', rejectionReason });
+        rejectedAfterGeneration.push({ record, reason: rejectionReason });
+        log(`    bron afgewezen: ${rejectionReason}`);
+      }
+      failed.push({ title: record.title, generatedTitle, reason: `validatie mislukt: ${validation.errors.join('; ')}` });
       continue;
     }
     mkdirSync(contentDir, { recursive: true });
@@ -431,8 +473,12 @@ export async function runEditorialPipeline({
     selected: selected.length,
     rejected: rejected.length,
     deferred: deferred.length,
-    created: created.map((c) => ({ slug: c.slug, title: c.article.title, sourceUrl: c.record.sourceUrl, kind: c.kind, status: c.article.status ?? null })),
+    created: created.map((c) => ({ slug: c.slug, title: c.article.title, sourceUrl: c.record.sourceUrl, sourceRecordId: c.record.id, kind: c.kind, status: c.article.status ?? null })),
     failed,
+    // Bronnen die deze run blijvend zijn afgewezen: bij de selectie, of na
+    // de redactie omdat het onderwerp al door een Avydo-artikel is gedekt.
+    rejectedSources: [...rejected, ...rejectedAfterGeneration].map(({ record, reason }) => ({ title: record.title, sourceUrl: record.sourceUrl, reason })),
+    deferredSources: deferred.map(({ record, reason }) => ({ title: record.title, sourceUrl: record.sourceUrl, reason })),
     noArticleReason: created.length === 0 ? (noTopicReason ?? 'generatie of validatie mislukt') : null,
   };
   return { created, summary, pullRequest: created.length > 0 ? buildPullRequest(created, summary, now) : null };

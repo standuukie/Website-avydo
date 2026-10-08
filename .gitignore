@@ -9,6 +9,7 @@ dist/
 .kenniscentrum-run-result.json
 .kenniscentrum-pr.md
 .kenniscentrum-pr-title.txt
+.kenniscentrum-bronlaag-pr.md
 
 # dependencies
 node_modules/

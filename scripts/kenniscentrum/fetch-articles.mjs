@@ -1912,6 +1912,8 @@ async function main() {
       ranAt: now.toISOString(),
     }, null, 2),
   );
+  const { buildSourceLayerPullRequestBody } = await import('./editorial.mjs');
+  writeFileSync(path.resolve(__dirname, '../../.kenniscentrum-bronlaag-pr.md'), buildSourceLayerPullRequestBody(editorial.summary, { totalRecorded }, now));
   if (editorial.pullRequest) {
     writeFileSync(path.resolve(__dirname, '../../.kenniscentrum-pr.md'), editorial.pullRequest.body);
     writeFileSync(path.resolve(__dirname, '../../.kenniscentrum-pr-title.txt'), editorial.pullRequest.title);
