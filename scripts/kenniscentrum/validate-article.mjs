@@ -154,6 +154,174 @@ export function checkStatus(article, sourceText, now) {
   return errors;
 }
 
+// --- Brongetrouwheid (generiek) ---
+//
+// Deterministische hulpcontroles naast de prompt (die de inhoudelijke
+// sturing draagt). Ze leveren aandachtspunten (warnings) voor de redacteur
+// in de Pull Request en blokkeren niet: zonder semantiek is niet zeker vast
+// te stellen of een claim of weglating door de bron gedragen wordt (zo is
+// "dit is de geldende regel" bij een geverifieerde status juist correct).
+
+// Actualiteits-/statusclaims die alleen mogen als de bron ze zelf doet.
+const CURRENCY_CLAIMS = [
+  /\bgeldt (?:momenteel|op dit moment|nu|thans)\b/gi,
+  /\b(?:is|zijn) (?:momenteel|op dit moment|thans) (?:van kracht|geldig|actueel|van toepassing)\b/gi,
+  /\bgeldende (?:regelgeving|wetgeving|regels?)\b/gi,
+  /\b(?:is|zijn) (?:nog steeds |nog altijd )?actueel\b/gi,
+];
+
+/** Actualiteits-/statusclaims in het artikel die de bron niet zelf maakt. */
+export function findUnsupportedCurrencyClaims(articleText, sourceText) {
+  const source = normalizeText(sourceText);
+  const text = normalizeText(articleText);
+  const found = [];
+  for (const re of CURRENCY_CLAIMS) {
+    for (const m of text.matchAll(re)) {
+      // Een ontkenning ("nog geen geldende regel", "niet actueel") is geen claim.
+      if (/\b(?:geen|niet)\s+(?:\S+\s+)?$/.test(text.slice(Math.max(0, m.index - 20), m.index))) continue;
+      if (!source.includes(m[0]) && !found.includes(m[0])) found.push(m[0]);
+    }
+  }
+  return found;
+}
+
+const DETAIL_STOPWORDS = new Set([
+  'de', 'het', 'een', 'en', 'of', 'van', 'voor', 'met', 'bij', 'op', 'aan', 'in', 'te', 'die', 'dat', 'dit',
+  'deze', 'als', 'om', 'naar', 'over', 'uit', 'niet', 'ook', 'wel', 'zijn', 'is', 'wordt', 'worden', 'kan',
+  'moet', 'moeten', 'hun', 'zij', 'je', 'u', 'uw', 'er', 'dan', 'wanneer', 'waarvan', 'waarbij', 'mits',
+  'tenzij', 'indien', 'alleen', 'hebben', 'heeft', 'jaar', 'per', 'tot', 'nog', 'al', 'meer', 'minder',
+]);
+
+// Grove Nederlandse stam: meervoud eraf en dubbele klinkers samen, zodat
+// "rechtspersoon"/"rechtspersonen" en "eenmanszaak"/"eenmanszaken" gelijk zijn.
+function detailStem(word) {
+  let w = word;
+  if (w.length > 6 && w.endsWith('en')) w = w.slice(0, -2);
+  else if (w.length > 5 && w.endsWith('s')) w = w.slice(0, -1);
+  return w.replace(/([aeou])\1/g, '$1');
+}
+
+function significantWords(text) {
+  return normalizeText(text)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !DETAIL_STOPWORDS.has(w))
+    .map(detailStem);
+}
+
+// Een bijzin/voorwaarde na een zelfstandig naamwoordgroep:
+// "<groep> die/waarvan/mits/tenzij/indien/als/wanneer <voorwaarde>".
+const QUALIFIER_RE = /(?<![\p{L}\d])([^.;:\n]{6,90}?)\s+(die|waarvan|waarbij|mits|tenzij|indien|als|wanneer|alleen als)\s+([^.;\n]{8,200})/giu;
+
+/**
+ * Groepen of regels die in de bron een voorwaarde hebben, maar in het
+ * artikel zonder die voorwaarde terugkomen (verbreding).
+ */
+export function findDroppedQualifiers(articleText, sourceText) {
+  const sentences = sentencesOf(articleText).map((s) => new Set(significantWords(s)));
+  const out = [];
+  for (const line of String(sourceText ?? '').split(/\n+|(?<=[.;])\s+/)) {
+    for (const m of line.matchAll(QUALIFIER_RE)) {
+      // Een aankondiging van een opsomming ("aan de volgende voorwaarden:")
+      // is zelf geen voorwaarde; de opsomming erna wordt los bekeken.
+      if (/:\s*$/.test(m[3])) continue;
+      const head = significantWords(m[1]).slice(-3);
+      const qualifier = [...new Set(significantWords(m[3]))].filter((w) => w.length > 4);
+      if (head.length < 2 || qualifier.length < 2) continue;
+      const hits = sentences.filter((words) => head.every((w) => words.has(w)));
+      if (hits.length === 0) continue;
+      // Behouden = minstens de helft van de inhoudswoorden van de voorwaarde
+      // staat in dezelfde zin.
+      const kept = hits.some((words) => qualifier.filter((w) => words.has(w)).length * 2 >= qualifier.length);
+      if (!kept) out.push(`${m[1].trim()} ${m[2]} ${m[3].trim()}`.replace(/^[-•*]\s*/, '').replace(/\s+/g, ' ').slice(0, 160));
+    }
+  }
+  return [...new Set(out)];
+}
+
+const LEGAL_REF_RE = /\bartikel\s+\d+[a-z]?(?:[.:]\d+[a-z]?)*(?:\s+lid\s+\d+)?(?:\s+(?:van\s+)?(?:het|de))?\s+(?:burgerlijk wetboek|bw|wet\s+[a-z][a-z -]{2,40}?|awr|awb)\b/gi;
+const DEADLINE_RE = /\bbinnen\s+(\d+|een|twee|drie|vier|vijf|zes|acht|tien|twaalf)\s+(dagen|dag|weken|week|maanden|maand|jaar)\b/gi;
+// Publieke instanties waar iets wordt aangevraagd, ingediend of gedeponeerd.
+const AUTHORITIES = [
+  ['rijksdienst voor ondernemend nederland', 'rvo'],
+  ['belastingdienst'],
+  ['kamer van koophandel', 'kvk'],
+  ['uwv'],
+  ['douane'],
+  ['dienst uitvoering onderwijs', 'duo'],
+  ['autoriteit persoonsgegevens'],
+  ['autoriteit financiële markten', 'afm'],
+  ['de nederlandsche bank', 'dnb'],
+  ['gemeente'],
+];
+const PROCEDURE_RE = /aanvra(?:ag|gen)|aanvraagt|\bvraagt\b[^.]*\baan\b|indienen|ingediend|\b(?:dient|dienen)\b[^.]*\bin\b|deponeren|gedeponeerd|melden|aanmelden|inschrijven/i;
+
+function mentions(text, names) {
+  const t = normalizeText(text);
+  return names.some((n) => new RegExp(`\\b${n}\\b`, 'i').test(t));
+}
+
+/**
+ * Procedurele details uit de bron die in het artikel ontbreken: wettelijke
+ * verwijzingen, termijnen ("binnen 30 dagen") en de instantie waar een
+ * aanvraag/deponering loopt.
+ */
+export function findMissingSourceDetails(articleText, sourceText) {
+  const article = normalizeText(articleText);
+  const missing = [];
+  for (const m of normalizeText(sourceText).matchAll(LEGAL_REF_RE)) {
+    const ref = m[0].replace(/\s+/g, ' ');
+    const number = ref.match(/artikel\s+\S+/)[0];
+    if (!article.includes(number)) missing.push(`wettelijke verwijzing "${ref}"`);
+  }
+  for (const m of normalizeText(sourceText).matchAll(DEADLINE_RE)) {
+    if (!article.includes(m[0])) missing.push(`termijn "${m[0]}"`);
+  }
+  for (const sentence of sentencesOf(sourceText)) {
+    if (!PROCEDURE_RE.test(sentence)) continue;
+    for (const names of AUTHORITIES) {
+      if (mentions(sentence, names) && !mentions(articleText, names)) missing.push(`instantie "${names[0]}" (${sentence.slice(0, 80).trim()}…)`);
+    }
+  }
+  return [...new Set(missing)];
+}
+
+// Zinnen die een groep uitzonderen: "… hoeven niet …", "geldt niet voor …".
+const EXCLUSION_RE = /\b(?:hoeft|hoeven|hoef)\b[^.]*\bniet\b|\bniet\b[^.]*\b(?:verplicht|nodig)\b|\bgeldt\b[^.]*\bniet\b|\bvrijgesteld\b|\buitgezonderd\b|\bniet van toepassing\b/i;
+
+/**
+ * Gekozen doelgroepen die de bron (of het artikel) in een uitsluitende zin
+ * noemt, op basis van de bestaande doelgroeptrefwoorden.
+ */
+export function findExcludedAudiences(audiences, sourceText, articleText = '') {
+  const out = [];
+  const sentences = [...sentencesOf(sourceText), ...sentencesOf(articleText)]
+    .filter((s) => EXCLUSION_RE.test(s))
+    .map((s) => ({ s, words: new Set(significantWords(s)) }));
+  for (const audience of audiences ?? []) {
+    const keywords = (audienceKeywords[audience] ?? []).map((k) => significantWords(k)).filter((w) => w.length > 0);
+    const hit = sentences.find(({ words }) => keywords.some((kw) => kw.every((w) => words.has(w))));
+    if (hit) out.push({ audience, sentence: hit.s.slice(0, 140) });
+  }
+  return out;
+}
+
+/**
+ * True als de samenvatting een opsomming (4+ onderdelen) bevat die vrijwel
+ * geheel al in de artikeltekst staat.
+ */
+export function summaryRepeatsList(summary, body) {
+  const bodyWords = new Set(significantWords(body));
+  for (const sentence of sentencesOf(summary)) {
+    const items = sentence.split(/,|\s+en\s+|\s+of\s+/).map((p) => significantWords(p)).filter((w) => w.length > 0);
+    if (items.length < 4) continue;
+    const repeated = items.filter((words) => words.filter((w) => bodyWords.has(w)).length >= Math.ceil(words.length / 2));
+    if (repeated.length / items.length >= 0.75) return true;
+  }
+  return false;
+}
+
 function dutchDate(value) {
   if (!value) return '';
   const d = new Date(value);
@@ -234,6 +402,18 @@ export function validateAvydoArticle(article, record, { now, avydoArticles, sour
   }
   const overlap = findOverlappingArticle(title, article.category, avydoArticles);
   if (overlap) errors.push(`overlapt met bestaand Avydo-artikel "${overlap.title}" (${overlap.file})`);
+
+  // Brongetrouwheid
+  const allText = `${title}\n${summary}\n${body}\n${relevance}`;
+  for (const claim of findUnsupportedCurrencyClaims(allText, sourceText)) {
+    warnings.push(`statusclaim "${claim}" staat niet zo in de bron`);
+  }
+  for (const q of findDroppedQualifiers(allText, sourceText)) warnings.push(`voorwaarde uit de bron mogelijk weggevallen: "${q}"`);
+  for (const d of findMissingSourceDetails(allText, sourceText)) warnings.push(`detail uit de bron ontbreekt: ${d}`);
+  for (const { audience, sentence } of findExcludedAudiences(article.audiences, sourceText, body)) {
+    warnings.push(`doelgroep "${audience}" wordt in een uitsluitende zin genoemd: "${sentence}"`);
+  }
+  if (summaryRepeatsList(summary, body)) warnings.push('samenvatting herhaalt een opsomming uit de artikeltekst');
 
   if ((article.tags ?? []).length === 0) warnings.push('geen tags');
   if ((article.audiences ?? []).length === 0) warnings.push('geen doelgroep');

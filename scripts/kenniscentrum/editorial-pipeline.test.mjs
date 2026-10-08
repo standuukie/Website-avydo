@@ -29,6 +29,11 @@ import {
   findUnsupportedFacts,
   checkStatus,
   titleSimilarity,
+  findUnsupportedCurrencyClaims,
+  findDroppedQualifiers,
+  findMissingSourceDetails,
+  findExcludedAudiences,
+  summaryRepeatsList,
   ARTICLE_STATUSES,
 } from './validate-article.mjs';
 import {
@@ -48,6 +53,7 @@ import {
   describeGroqError,
   redactSecrets,
   buildSourceLayerPullRequestBody,
+  buildPullRequest,
   SOURCE_LAYER_BRANCH,
 } from './editorial.mjs';
 import { findOverlappingArticle } from './fetch-articles.mjs';
@@ -1448,4 +1454,150 @@ test('workflow: geen wijziging nodig voor Structured Outputs (zelfde GROQ_API_KE
   assert.match(wf, /KENNISCENTRUM_MODEL: \$\{\{ vars\.KENNISCENTRUM_MODEL \}\}/);
   assert.match(wf, /GROQ_MODEL: \$\{\{ vars\.GROQ_MODEL \}\}/);
   assert.doesNotMatch(readFileSync(path.join(ROOT, 'scripts/kenniscentrum/editorial.mjs'), 'utf8'), /tool_choice|tool_calls/);
+});
+
+// --- Brongetrouwheid (generiek; naar aanleiding van PR #2) ---
+//
+// PR #2 liet een voorwaarde weg (een groep werd breder dan in de bron),
+// koos doelgroepen die de bron uitsluit, veranderde wie iets moet doen,
+// liet een wettelijke verwijzing en de aanvraaginstantie weg, herhaalde
+// een opsomming in de samenvatting en voegde een statusclaim toe. De prompt
+// draagt de sturing; deze controles maken de bekende patronen zichtbaar
+// als aandachtspunt in de Pull Request. Bewust andere onderwerpen dan de
+// jaarrekening: het gaat om de contracten, niet om die ene bron.
+
+const FIDELITY_RECORD = {
+  ...RECORD,
+  sourceName: 'Rijksoverheid',
+  title: 'Nieuwe meldplicht voor verhuurders van bedrijfsruimte',
+  description: 'Verhuurders van bedrijfsruimte moeten nieuwe huurovereenkomsten melden.',
+  body: [
+    'Verhuurders van bedrijfsruimte moeten een nieuwe huurovereenkomst melden.',
+    'De meldplicht geldt voor verhuurders met meer dan drie panden die in de gemeente staan ingeschreven als beroepsmatige verhuurder.',
+    'Voor eenmanszaken geldt deze meldplicht niet.',
+    'De melding moet binnen vier weken na het sluiten van de overeenkomst worden gedaan.',
+    'De melding dient u in bij de Rijksdienst voor Ondernemend Nederland.',
+    'Een uitzondering is mogelijk op grond van artikel 7:290 van het Burgerlijk Wetboek.',
+    'In uitzonderlijke gevallen kan de verhuurder uitstel aanvragen.',
+  ].join('\n\n'),
+};
+const fidelitySource = `${FIDELITY_RECORD.title}\n${FIDELITY_RECORD.body}`;
+
+test('brongetrouw: de prompt draagt de generieke regels (voorwaarden, details, actor/modaliteit, actiepunten, geen eigen claims, samenvatting, doelgroepen) en vraagt geen vaste statuskop meer', () => {
+  const prompt = buildArticlePrompt(FIDELITY_RECORD, 'toelichting', NOW);
+  const rules = prompt.slice(prompt.indexOf('BRONGETROUW SCHRIJVEN'), prompt.indexOf('BRON\nOrganisatie'));
+  assert.ok(rules.length > 0, 'sectie BRONGETROUW SCHRIJVEN ontbreekt');
+  for (const re of [
+    /voorwaarden, uitzonderingen en kwalificaties/i,
+    /nooit een bredere, onvoorwaardelijke regel/i,
+    /termijnen, bevoegde partijen, de instantie .* wettelijke verwijzingen/i,
+    /verander niet wie volgens de bron iets moet doen/i,
+    /modaliteit .*niet sterker of zwakker/i,
+    /niet alsof de lezer zelf een rechtspersoon/i,
+    /Actiepunten: alleen op basis van wat de bron expliciet zegt/i,
+    /geen status- of actualiteitsclaims/i,
+    /herhaal geen opsomming/i,
+    /Vul niet alle doelgroepen in/i,
+    /Geen enkele doelgroep is ook goed/i,
+  ]) assert.match(rules, re);
+  assert.doesNotMatch(prompt, /wat de huidige status is/);
+  assert.match(prompt, /alleen als de bron die noemt/);
+  // De bronzinnen met voorwaarde, actor, termijn en instantie gaan volledig mee.
+  for (const line of FIDELITY_RECORD.body.split('\n\n')) assert.ok(prompt.includes(line), line);
+});
+
+test('brongetrouw: het schema dwingt geen minimumaantal doelgroepen af; een lege lijst is geldig en geeft alleen een waarschuwing', async () => {
+  const schema = await articleSchema();
+  assert.equal(schema.properties.audiences.minItems, undefined);
+  assert.match(schema.properties.audiences.description, /aantoonbaar relevant/);
+  assert.deepEqual(schemaErrors(schema, { ...AI_INPUT, audiences: [] }), []);
+  const result = validateAvydoArticle({ ...VALID_ARTICLE, audiences: [] }, RECORD, VALID_CONTEXT);
+  assert.equal(result.ok, true);
+  assert.ok(result.warnings.includes('geen doelgroep'));
+});
+
+test('brongetrouw 1: een voorwaarde bij een groep mag niet wegvallen (verbreding wordt gemeld; behouden voorwaarde niet)', () => {
+  const broad = 'De meldplicht geldt voor verhuurders met meer dan drie panden. Zij moeten elke nieuwe huurovereenkomst melden.';
+  assert.equal(findDroppedQualifiers(broad, fidelitySource).length, 1);
+  assert.match(findDroppedQualifiers(broad, fidelitySource)[0], /verhuurders met meer dan drie panden die in de gemeente staan ingeschreven/);
+  const kept = 'De meldplicht geldt alleen voor verhuurders met meer dan drie panden die in de gemeente als beroepsmatige verhuurder zijn ingeschreven.';
+  assert.deepEqual(findDroppedQualifiers(kept, fidelitySource), []);
+  // Een aankondiging van een opsomming ("aan de volgende voorwaarden:") is zelf geen voorwaarde.
+  assert.deepEqual(findDroppedQualifiers('Een dochterbedrijf hoeft niet te melden als:', 'Een dochterbedrijf hoeft niet te melden, als het aan de volgende voorwaarden voldoet:'), []);
+});
+
+test('brongetrouw 2: een doelgroep die de bron uitsluit wordt gemeld; een niet-uitgesloten doelgroep niet', () => {
+  const excluded = findExcludedAudiences(['zzp', 'bv-dga', 'mkb-ondernemer'], fidelitySource);
+  assert.deepEqual(excluded.map((e) => e.audience), ['zzp']);
+  assert.match(excluded[0].sentence, /eenmanszaken geldt deze meldplicht niet/);
+  assert.deepEqual(findExcludedAudiences(['bv-dga'], fidelitySource), []);
+  // Werkt ook via het artikel zelf ("hoeven niet").
+  assert.deepEqual(findExcludedAudiences(['werkgever'], 'Algemene informatie.', 'Werkgevers hoeven deze melding niet te doen.').map((e) => e.audience), ['werkgever']);
+});
+
+test('brongetrouw 3: wie iets moet doen en hoe stellig — de bronzinnen gaan mee en de prompt verbiedt een andere actor of modaliteit', () => {
+  // Dit is niet deterministisch te bewijzen; de prompt draagt het. Wel vast:
+  // de bron met actor en modaliteit staat volledig in de prompt, en de regel
+  // geldt voor elke bron (geen onderwerpspecifieke tekst).
+  for (const record of [FIDELITY_RECORD, RECORD]) {
+    const prompt = buildArticlePrompt(record, 'toelichting', NOW);
+    assert.match(prompt, /verander niet wie volgens de bron iets moet doen/i);
+    assert.match(prompt, /"in uitzonderlijke gevallen"/);
+  }
+  assert.ok(buildArticlePrompt(FIDELITY_RECORD, 'toelichting', NOW).includes('In uitzonderlijke gevallen kan de verhuurder uitstel aanvragen.'));
+  assert.doesNotMatch(buildArticlePrompt(FIDELITY_RECORD, 'toelichting', NOW).slice(0, buildArticlePrompt(FIDELITY_RECORD, 'toelichting', NOW).indexOf('BRON\nOrganisatie')), /jaarrekening|deponeren|dochtermaatschappij/i);
+});
+
+test('brongetrouw 4-6: een termijn, de aanvraaginstantie en een wettelijke verwijzing uit de bron worden gemeld als ze ontbreken', () => {
+  const without = 'Verhuurders moeten een nieuwe huurovereenkomst melden. In bepaalde gevallen is een uitzondering mogelijk.';
+  const missing = findMissingSourceDetails(without, fidelitySource);
+  assert.ok(missing.some((m) => /termijn "binnen vier weken"/.test(m)), missing.join(' | '));
+  assert.ok(missing.some((m) => /instantie "rijksdienst voor ondernemend nederland"/.test(m)), missing.join(' | '));
+  assert.ok(missing.some((m) => /wettelijke verwijzing "artikel 7:290 van het burgerlijk wetboek"/.test(m)), missing.join(' | '));
+  const withDetails = 'U meldt de overeenkomst binnen vier weken bij de RVO. Een uitzondering kan op grond van artikel 7:290 BW.';
+  assert.deepEqual(findMissingSourceDetails(withDetails, fidelitySource), []);
+  // Een instantie die de bron alleen terloops noemt (geen aanvraag/indiening) telt niet.
+  assert.deepEqual(findMissingSourceDetails('Tekst.', 'De Belastingdienst publiceerde cijfers.'), []);
+});
+
+test('brongetrouw 7: een samenvatting die een opsomming uit de tekst herhaalt wordt gemeld; een kernconclusie niet', () => {
+  const body = 'De plicht geldt voor bv’s, nv’s, coöperaties, verenigingen en stichtingen met een onderneming.';
+  assert.equal(summaryRepeatsList('De plicht geldt voor bv’s, nv’s, coöperaties, verenigingen en stichtingen.', body), true);
+  assert.equal(summaryRepeatsList('Vooral rechtspersonen moeten melden; eenmanszaken niet.', body), false);
+});
+
+test('brongetrouw 8: een status-/actualiteitsclaim die de bron niet maakt wordt gemeld; een ontkenning of een claim uit de bron niet', () => {
+  assert.deepEqual(findUnsupportedCurrencyClaims('De meldplicht geldt momenteel als geldende regelgeving.', fidelitySource), ['geldt momenteel', 'geldende regelgeving']);
+  assert.deepEqual(findUnsupportedCurrencyClaims('Dit is een voorstel, nog geen geldende regel.', fidelitySource), []);
+  assert.deepEqual(findUnsupportedCurrencyClaims('De regeling geldt momenteel voor iedereen.', 'De regeling geldt momenteel voor iedereen.'), []);
+});
+
+test('brongetrouw: PR #2-achtige fouten blokkeren niet maar komen als aandachtspunten in de validatie en de Pull Request-tekst', async () => {
+  const article = {
+    title: 'Meldplicht voor verhuurders van bedrijfsruimte: wat verandert er?',
+    summary: 'Verhuurders moeten nieuwe huurovereenkomsten melden. Dit is de kern van de nieuwe meldplicht voor verhuurders van bedrijfsruimte.',
+    body: [
+      '## Wat is de meldplicht?',
+      'Verhuurders van bedrijfsruimte moeten een nieuwe huurovereenkomst melden. De meldplicht geldt voor verhuurders met meer dan drie panden.',
+      '## Wat moet u doen?',
+      'Meld een nieuwe huurovereenkomst. Overweeg uitstel als dat beter uitkomt.',
+      '## Status',
+      'De meldplicht geldt momenteel als geldende regelgeving voor alle verhuurders met meer dan drie panden, ook als u als eenmanszaak verhuurt. Dit heeft gevolgen voor uw administratie en uw planning.',
+      '## Voor wie is dit relevant?',
+      'Voor verhuurders van bedrijfsruimte die nieuwe huurovereenkomsten sluiten. Zij moeten elke nieuwe overeenkomst melden, zodat duidelijk is welke panden worden verhuurd en door wie. Kijk daarom goed naar uw eigen situatie en de panden die u verhuurt.',
+    ].join('\n\n'),
+    relevance: 'Verhuurt u bedrijfsruimte, dan moet u nieuwe huurovereenkomsten melden. Dit heeft invloed op uw administratieve lasten.',
+    status: undefined,
+    category: 'Ondernemen & rechtsvormen',
+    audiences: ['zzp', 'mkb-ondernemer'],
+    tags: ['meldplicht'],
+  };
+  const result = validateAvydoArticle(article, FIDELITY_RECORD, { ...VALID_CONTEXT, avydoArticles: [] });
+  assert.deepEqual(result.errors, []);
+  const w = result.warnings.join('\n');
+  for (const re of [/statusclaim "geldt momenteel"/, /voorwaarde uit de bron mogelijk weggevallen/, /termijn "binnen vier weken"/, /instantie "rijksdienst voor ondernemend nederland"/, /wettelijke verwijzing "artikel 7:290/, /doelgroep "zzp" wordt in een uitsluitende zin genoemd/]) {
+    assert.match(w, re);
+  }
+  const pr = buildPullRequest([{ slug: 'x', record: FIDELITY_RECORD, kind: 'toelichting', reason: 'test', article, validation: result }], { candidates: 1, selected: 1, failed: [] }, NOW);
+  assert.match(pr.body, /aandachtspunten: .*statusclaim "geldt momenteel"/);
 });

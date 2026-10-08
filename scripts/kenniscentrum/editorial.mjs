@@ -85,12 +85,12 @@ export const ARTICLE_SCHEMA = {
       description: 'Alleen bij voldoendeInformatie=false: korte reden waarom de bron onvoldoende is. Bij voldoendeInformatie=true: null.',
     },
     title: { type: 'string', description: 'Eigen titel, 30-90 tekens, niet de brontitel.' },
-    summary: { type: 'string', description: 'Eigen samenvatting in 1-2 zinnen, 80-300 tekens.' },
+    summary: { type: 'string', description: 'Eigen samenvatting in 1-2 zinnen, 80-300 tekens: de kernconclusie, geen herhaling van een opsomming uit de tekst.' },
     body: { type: 'string', description: 'Artikeltekst in markdown met ## tussenkoppen, zonder # hoofdtitel en zonder links.' },
-    relevance: { type: 'string', description: '"Wat betekent dit voor u?": 1-3 zinnen; de eerste zin draagt de kern.' },
+    relevance: { type: 'string', description: '"Wat betekent dit voor u?": 1-3 zinnen; de eerste zin draagt de kern. Alleen gevolgen die uit de bron volgen.' },
     status: { type: 'string', enum: ['geen', ...ARTICLE_STATUSES], description: 'Fase volgens de bron; "geen" voor geldende, gewone informatie.' },
     category: { type: 'string', enum: CATEGORIES },
-    audiences: { type: 'array', items: { type: 'string', enum: AUDIENCES } },
+    audiences: { type: 'array', items: { type: 'string', enum: AUDIENCES }, description: 'Alleen doelgroepen voor wie de bron aantoonbaar relevant is; geen doelgroep die de bron uitsluit; leeg mag.' },
     tags: { type: 'array', items: { type: 'string' }, maxItems: 6 },
   },
   required: ['voldoendeInformatie', 'redenOnvoldoende', 'title', 'summary', 'body', 'relevance', 'status', 'category', 'audiences', 'tags'],
@@ -116,8 +116,8 @@ export function buildArticlePrompt(record, kind, now) {
 Het is een eigen Avydo-artikel, geen samenvatting of kopie van de bron: leg in eigen woorden en in begrijpelijk Nederlands (u-vorm) uit
 - wat er gebeurt of wat de regel is;
 - waarom dit relevant is en voor wie;
-- wat ondernemers moeten weten of doen;
-- wat de huidige status is.
+- wat ondernemers moeten weten of doen, voor zover de bron dat zegt;
+- de fase of ingangsdatum, alleen als de bron die noemt (een aparte statuskop is niet nodig).
 Gebruik duidelijke tussenkoppen (##). Kort is goed als de bron weinig zegt; minimaal ongeveer 150 woorden.
 
 STRIKTE REGELS
@@ -128,6 +128,15 @@ STRIKTE REGELS
 - Presenteer gevolgen niet als feit als de bron dat niet zegt; formuleer voorzichtig ("kan gevolgen hebben voor").
 - Geen links, geen HTML, geen hoofdtitel (#) in de tekst.
 - Kies status "geen" alleen voor gewone, geldende informatie.
+
+BRONGETROUW SCHRIJVEN
+- Voorwaarden: neem voorwaarden, uitzonderingen en kwalificaties uit de bron mee ("als", "wanneer", "tenzij", "alleen", "mits", "in bepaalde gevallen", "onder de volgende voorwaarden"). Maak van een voorwaardelijke regel nooit een bredere, onvoorwaardelijke regel. Elke groep of categorie in het artikel heeft dezelfde voorwaarden als in de bron.
+- Details: behoud termijnen, bevoegde partijen, de instantie waar iets wordt aangevraagd of ingediend en wettelijke verwijzingen wanneer ze nodig zijn om de regel goed toe te passen. Kort alleen in als betekenis en toepasbaarheid gelijk blijven; wees bij uitzonderingen en vrijstellingen extra precies.
+- Wie en hoe stellig: verander niet wie volgens de bron iets moet doen. Behoud de modaliteit van de bron ("moet", "kan", "mag", "alleen", "in uitzonderlijke gevallen"); maak die niet sterker of zwakker. Spreek de lezer aan als ondernemer ("als uw bedrijf ..."), niet alsof de lezer zelf een rechtspersoon of instantie is.
+- Actiepunten: alleen op basis van wat de bron expliciet zegt. Beschrijft de bron alleen een feit, voeg dan geen eigen advies toe.
+- Geen eigen claims: geen status- of actualiteitsclaims ("geldt momenteel", "is actueel", "geldende regelgeving") en geen gevolgen voor de lezer die de bron niet noemt. Een datum uit de bron gebruikt u alleen waarvoor de bron hem gebruikt (een bijwerkdatum van de pagina is geen ingangsdatum).
+- Samenvatting: de kernconclusie in 1-2 zinnen; herhaal geen opsomming die al in de tekst staat. Vermijd dubbele inhoud tussen inleiding, tekst en samenvatting.
+- Doelgroepen: kies alleen doelgroepen voor wie de bron of het artikel aantoonbaar relevant is (zzp = zelfstandige zonder personeel/eenmanszaak; bv-dga = bv en directeur-grootaandeelhouder; werkgever = onderneming met personeel; starter = startende ondernemer; mkb-ondernemer = ondernemer in het midden- en kleinbedrijf). Vul niet alle doelgroepen in omdat ze algemeen bij ondernemen passen; sluit een groep uit die de bron uitzondert. Geen enkele doelgroep is ook goed.
 - voldoendeInformatie is leidend. Bevat de bron te weinig concrete informatie: zet voldoendeInformatie op false en geef in redenOnvoldoende kort aan waarom. Is de bron voldoende: zet voldoendeInformatie op true en zet redenOnvoldoende op null.
 
 BRON
