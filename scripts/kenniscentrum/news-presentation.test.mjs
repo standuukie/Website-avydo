@@ -1,16 +1,17 @@
 // Redactionele weergave van het Kenniscentrum (2026-10-07): sjabloon-duidingen
-// niet tonen, nieuws en naslag scheiden, statusbadges, de Intermediairdagen
-// uit de nieuwsselectie en de Rijksoverheid-brontekst met echte tussenkoppen.
+// niet tonen, één overzicht zonder scheiding tussen nieuws en naslag
+// (2026-10-08), statusbadges, de Intermediairdagen uit de selectie en de
+// Rijksoverheid-brontekst met echte tussenkoppen.
 // Alles hier is weergave; de AI-context en -retrieval blijven ongewijzigd.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as presentation from '../../src/lib/news-presentation.mjs';
 import {
   GENERIC_RELEVANCE_TEXTS,
   hasOwnRelevance,
-  isReferenceArticle,
   isHeadingBlock,
   sourceBodyBlocks,
   STATUS_LABELS,
@@ -83,39 +84,41 @@ test('sjabloon-duidingen komen alleen voor bij automatisch opgehaalde KVK-/Belas
   }
 });
 
-test('nieuws en naslag: gidsen en KVK-kennisartikelen zijn naslag, nieuwsberichten nieuws', () => {
+// Fase 1 (2026-10-08): het Kenniscentrum is één verzameling artikelen. Het
+// veld contentType staat nog in schema en content, maar wordt nergens meer
+// gelezen voor een nieuws/naslag-scheiding.
+test('één Kenniscentrum: geen scheiding tussen nieuws en naslag', () => {
+  assert.equal('isReferenceArticle' in presentation, false);
+
+  const index = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/index.astro'), 'utf8');
+  const card = readFileSync(path.join(ROOT, 'src/components/kenniscentrum/ArticleCard.astro'), 'utf8');
+  const page = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/[...slug].astro'), 'utf8');
+  for (const text of [index, card, page]) {
+    assert.doesNotMatch(text, /isReferenceArticle|contentType|data-kind|\bnaslag\b/i);
+  }
+  for (const pattern of [/newsArticles/, /DEFAULT_KIND/, /activeKind/, /kindExplicit/, /effectiveKind/, /matchesKind/, /'soort'/]) {
+    assert.doesNotMatch(index, pattern);
+  }
+  assert.doesNotMatch(page, />Soort</);
+
+  // Uitgelicht en de eerste reeks komen uit de volledige (zichtbare) collectie.
+  assert.match(index, /getCollection\('kenniscentrum', \(\{ data \}\) => !data\.hidden\)/);
+  assert.match(index, /pickHighlighted\(allArticles, 4\)/);
+  assert.match(index, /allArticles\.slice\(0, INITIAL_VISIBLE\)/);
+  assert.match(index, /\{allArticles\.map\(\(article\) =>/);
+
+  // De overige filters, zoeken en "Toon meer" blijven bestaan.
+  for (const pattern of [/data-category-filter/, /data-source-filter/, /data-audience-filter/, /id="kc-search"/, /id="kc-load-more"/]) {
+    assert.match(index, pattern);
+  }
+  for (const param of ['categorie', 'bron', 'doelgroep', 'q']) {
+    assert.match(index, new RegExp(`params\\.set\\('${param}'`));
+  }
+
+  // De eigen gidsen blijven gewoon artikelen in dezelfde verzameling.
   const guides = ACTIVE.filter((a) => a.avydoContent === 'gids');
   assert.equal(guides.length, 12);
-  for (const a of guides) {
-    assert.ok(a.file.startsWith('2026-10-01-'), a.file);
-    assert.equal(a.contentType, 'naslag', a.file);
-    assert.equal(isReferenceArticle(a), true);
-  }
-  // Opschoonronde 2026-10-07: berichten die inmiddels als naslag functioneren.
-  for (const file of [
-    '2026-09-15-wat-betekent-prinsjesdag-voor-jouw-bedrijf.md',
-    '2025-11-03-nieuw-vanaf-2026-herziening-btw-aftrek-bij-investeringsdiensten.md',
-    '2025-10-30-vanaf-1-januari-2026-btw-tarief-logies-omhoog-naar-21.md',
-    '2025-01-29-hogere-boetes-bij-illegale-arbeid.md',
-    '2023-12-11-nieuwe-overeenkomst-met-belgie-geeft-duidelijkheid-bij-thuiswerkende-werknemers.md',
-  ]) {
-    assert.equal(isReferenceArticle(byFile(file)), true, file);
-  }
-  // #25 (Wat betekent Prinsjesdag) is sinds de KVK-opschoning verborgen: 16 zichtbaar.
-  assert.equal(ACTIVE.filter((a) => a.contentType === 'naslag').length, 16);
-  assert.equal(isReferenceArticle(byFile('2025-03-31-kvk-opstelportaal-voor-middelgroot-verdwijnt.md')), false);
-  const kvkNews = ACTIVE.filter((a) => a.sourceName === 'KVK' && a.contentType === 'nieuws');
-  assert.equal(kvkNews.length, 3);
-  // Rijksoverheid is nieuws, behalve de twee berichten die inmiddels als naslag functioneren.
-  const roNaslag = ACTIVE_RO.filter((a) => isReferenceArticle(a)).map((a) => a.file).sort();
-  assert.deepEqual(roNaslag, [
-    '2023-12-11-nieuwe-overeenkomst-met-belgie-geeft-duidelijkheid-bij-thuiswerkende-werknemers.md',
-    '2025-01-29-hogere-boetes-bij-illegale-arbeid.md',
-  ]);
-  // Zonder veld: KVK = naslag, andere bronnen = nieuws.
-  assert.equal(isReferenceArticle({ sourceName: 'KVK' }), true);
-  assert.equal(isReferenceArticle({ sourceName: 'Belastingdienst' }), false);
-  assert.equal(isReferenceArticle({ sourceName: 'KVK', contentType: 'nieuws' }), false);
+  for (const a of guides) assert.ok(a.file.startsWith('2026-10-01-'), a.file);
 });
 
 test('Intermediairdagen staan niet meer in de nieuwsselectie, maar blijven bestaan voor deduplicatie', () => {
@@ -275,8 +278,7 @@ test('weergave: geen sjabloonduiding, geen dubbele samenvatting en een juiste br
   assert.match(page, /Brontekst: <strong/);
   assert.match(page, /data-outdated-notice/);
   const index = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/index.astro'), 'utf8');
-  assert.match(index, /data-kind-filter="nieuws"/);
-  assert.match(index, /pickHighlighted\(newsArticles/);
+  assert.match(index, /pickHighlighted\(allArticles/);
   assert.doesNotMatch(index, /korte, eigen uitleg/);
   for (const text of [card, page, index]) {
     assert.doesNotMatch(text, />[^<{]*\b(je|jij|jou|jouw)\b[^<]*</i, 'UI-tekst in je-vorm');

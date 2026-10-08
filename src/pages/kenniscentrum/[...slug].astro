@@ -5,7 +5,7 @@ import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
 import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
 import { safeJsonLd } from '@/lib/seo';
-import { dateIsSourceLastModified, hasOwnRelevance, isReferenceArticle, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
+import { dateIsSourceLastModified, hasOwnRelevance, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
 
 export async function getStaticPaths() {
   const articles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
@@ -37,7 +37,6 @@ const showRelevance = hasOwnRelevance(relevance);
 const statusLabel = status ? STATUS_LABELS[status] : undefined;
 const isOutdated = Boolean(supersededBy) || (status != null && OUTDATED_STATUSES.has(status));
 const successor = supersededBy ? allArticles.find((a) => a.data.sourceUrl === supersededBy) : undefined;
-const isReference = isReferenceArticle(article.data);
 // KVK-datum = "laatst gewijzigd" van de bronpagina, geen publicatiedatum.
 const dateIsLastModified = dateIsSourceLastModified(article.data);
 // Bronnaam in een lopende zin ("informatie van de Belastingdienst").
@@ -188,7 +187,6 @@ const structuredData = {
         <div class="card p-6">
           <h2 class="font-display text-lg font-semibold text-ink-900">In het kort</h2>
           <dl class="mt-4 space-y-3 text-sm">
-            <div class="flex justify-between gap-4"><dt class="text-ink-600">Soort</dt><dd class="font-semibold text-ink-900">{isReference ? 'Naslag' : 'Nieuws'}</dd></div>
             {statusLabel && (
               <div class="flex justify-between gap-4"><dt class="text-ink-600">Status</dt><dd class="font-semibold text-ink-900">{statusLabel}</dd></div>
             )}

@@ -5,7 +5,6 @@ import PageHero from '@/components/PageHero.astro';
 import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
 import { audienceOptions, pickHighlighted } from '@/lib/kenniscentrum';
-import { isReferenceArticle } from '@/lib/news-presentation.mjs';
 import { resourceLinks } from '@/data/links';
 import { company } from '@/data/company';
 
@@ -17,13 +16,10 @@ allArticles.sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.val
 const categories = [...new Set(allArticles.map((a) => a.data.category))].sort();
 const bronnen = [...new Set(allArticles.map((a) => a.data.sourceName))].sort();
 
-// Nieuws en naslag (evergreen uitleg) worden apart getoond, zodat naslag
-// met een recente wijzigingsdatum niet bovenaan "Laatste nieuws" belandt.
-const newsArticles = allArticles.filter((a) => !isReferenceArticle(a.data));
-const highlighted = pickHighlighted(newsArticles, 4);
-// Eerste reeks zonder JavaScript: de nieuwste nieuwsberichten (gelijk aan de
+const highlighted = pickHighlighted(allArticles, 4);
+// Eerste reeks zonder JavaScript: de nieuwste artikelen (gelijk aan de
 // standaardweergave van het filterscript).
-const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) => a.id));
+const initiallyVisible = new Set(allArticles.slice(0, INITIAL_VISIBLE).map((a) => a.id));
 
 ---
 
@@ -106,11 +102,11 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
 
       <section class="section">
         <div class="container max-w-content">
-          <p class="eyebrow">Nieuws en naslag</p>
+          <p class="eyebrow">Kenniscentrum</p>
           <div class="mask-reveal mt-3 overflow-hidden" data-reveal="mask">
-            <h2 class="mask-reveal-inner pb-1 font-display text-2xl font-semibold leading-[1.1] text-ink-900 sm:text-3xl">Laatste nieuws</h2>
+            <h2 class="mask-reveal-inner pb-1 font-display text-2xl font-semibold leading-[1.1] text-ink-900 sm:text-3xl">Alle artikelen</h2>
           </div>
-          <p class="mt-2 text-ink-600 leading-relaxed max-w-2xl">Nieuwste eerst. Onder <em>Naslag</em> vindt u uitleg over regels die langer gelden. Zoek of filter hieronder om snel te vinden wat voor u relevant is.</p>
+          <p class="mt-2 text-ink-600 leading-relaxed max-w-2xl">Nieuwste eerst. Zoek of filter hieronder om snel te vinden wat voor u relevant is.</p>
 
           <div class="mt-6 lg:hidden">
             <button
@@ -126,15 +122,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
           </div>
 
           <div id="kc-filters-panel" class="hidden lg:block mt-6 space-y-5">
-            <div>
-              <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-kind-heading">Soort</span>
-              <div class="flex flex-wrap gap-2" role="group" aria-labelledby="kc-kind-heading" id="kind-filters">
-                <button type="button" data-kind-filter="nieuws" class="filter-chip is-active" aria-pressed="true">Nieuws ({newsArticles.length})</button>
-                <button type="button" data-kind-filter="naslag" class="filter-chip" aria-pressed="false">Naslag ({allArticles.length - newsArticles.length})</button>
-                <button type="button" data-kind-filter="alles" class="filter-chip" aria-pressed="false">Alles</button>
-              </div>
-            </div>
-
             <div>
               <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-category-heading">Categorie</span>
               <div class="flex flex-wrap gap-2" role="group" aria-labelledby="kc-category-heading" id="category-filters">
@@ -236,8 +223,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
   const categoryButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-category-filter]'));
   const sourceButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-source-filter]'));
   const audienceButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-audience-filter]'));
-  const kindButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-kind-filter]'));
-  const DEFAULT_KIND = 'nieuws';
   const clearFiltersBtn = document.getElementById('kc-clear-filters');
   const filtersToggle = document.getElementById('kc-filters-toggle');
   const filtersPanel = document.getElementById('kc-filters-panel');
@@ -252,11 +237,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
   let activeCategory = resolveParam(categoryButtons, 'categoryFilter', initialParams.get('categorie'));
   let activeSource = resolveParam(sourceButtons, 'sourceFilter', initialParams.get('bron'));
   let activeAudience = resolveParam(audienceButtons, 'audienceFilter', initialParams.get('doelgroep'));
-  // Zonder eigen keuze toont het overzicht nieuws; bij zoeken of filteren
-  // wordt in nieuws én naslag gezocht, zodat niets onvindbaar wordt.
-  let activeKind = resolveParam(kindButtons, 'kindFilter', initialParams.get('soort'));
-  let kindExplicit = Boolean(activeKind);
-  if (!activeKind) activeKind = DEFAULT_KIND;
   const initialQuery = initialParams.get('q') ?? '';
   if (searchInput && initialQuery) searchInput.value = initialQuery;
 
@@ -275,7 +255,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
     if (activeCategory) params.set('categorie', activeCategory);
     if (activeSource) params.set('bron', activeSource);
     if (activeAudience) params.set('doelgroep', activeAudience);
-    if (kindExplicit && activeKind !== DEFAULT_KIND) params.set('soort', activeKind);
     const query = searchInput?.value.trim() ?? '';
     if (query) params.set('q', query);
     const qs = params.toString();
@@ -285,16 +264,13 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
 
   function updateActiveFilterCount() {
     if (!activeFilterCountEl) return;
-    const kindRefinement = kindExplicit && activeKind !== DEFAULT_KIND ? activeKind : '';
-    const count = [activeCategory, activeSource, activeAudience, searchInput?.value.trim(), kindRefinement].filter(Boolean).length;
+    const count = [activeCategory, activeSource, activeAudience, searchInput?.value.trim()].filter(Boolean).length;
     activeFilterCountEl.textContent = count > 0 ? `${count} actief` : '';
   }
 
   function applyFilters() {
     const query = (searchInput?.value ?? '').trim().toLowerCase();
     const anyRefinement = Boolean(activeCategory) || Boolean(activeSource) || Boolean(query) || Boolean(activeAudience);
-    const effectiveKind = kindExplicit || !(activeCategory || activeSource || query) ? activeKind : 'alles';
-    setActiveButton(kindButtons, 'kindFilter', effectiveKind);
     let visibleCount = 0;
     let matchCount = 0;
 
@@ -306,7 +282,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
       const summary = article?.getAttribute('data-summary') ?? '';
       const tags = article?.getAttribute('data-tags') ?? '';
       const audiences = (article?.getAttribute('data-audiences') ?? '').split(' ').filter(Boolean);
-      const kind = article?.getAttribute('data-kind') ?? 'nieuws';
 
       const matchesCategory = !activeCategory || category === activeCategory;
       const matchesSource = !activeSource || source === activeSource;
@@ -316,10 +291,9 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
         || category.toLowerCase().includes(query)
         || source.toLowerCase().includes(query)
         || tags.includes(query);
-      const matchesKind = effectiveKind === 'alles' || kind === effectiveKind;
-      const matches = matchesCategory && matchesSource && matchesQuery && matchesKind;
+      const matches = matchesCategory && matchesSource && matchesQuery;
       if (matches) matchCount += 1;
-      // Zonder verfijning eerst een eerste reeks per gekozen soort tonen.
+      // Zonder verfijning eerst een eerste reeks tonen.
       const withinInitialBatch = showAll || anyRefinement || matchCount <= initialVisible;
 
       const visible = matches && withinInitialBatch;
@@ -344,15 +318,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
   setActiveButton(categoryButtons, 'categoryFilter', activeCategory);
   setActiveButton(sourceButtons, 'sourceFilter', activeSource);
   setActiveButton(audienceButtons, 'audienceFilter', activeAudience);
-
-  kindButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      activeKind = btn.dataset.kindFilter ?? DEFAULT_KIND;
-      kindExplicit = true;
-      showAll = false;
-      applyFilters();
-    });
-  });
 
   categoryButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -389,8 +354,6 @@ const initiallyVisible = new Set(newsArticles.slice(0, INITIAL_VISIBLE).map((a) 
     activeCategory = '';
     activeSource = '';
     activeAudience = '';
-    activeKind = DEFAULT_KIND;
-    kindExplicit = false;
     if (searchInput) searchInput.value = '';
     setActiveButton(categoryButtons, 'categoryFilter', '');
     setActiveButton(sourceButtons, 'sourceFilter', '');

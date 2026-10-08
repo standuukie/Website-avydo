@@ -1,4 +1,4 @@
-// Weergave van Kenniscentrum-artikelen op de nieuwspagina en artikelpagina's
+// Weergave van Kenniscentrum-artikelen op de overzichtspagina en artikelpagina's
 // (2026-10-07). Uitsluitend presentatie: de opgeslagen content (en daarmee de
 // AI-context en -retrieval) blijft ongewijzigd. Los .mjs-bestand (zelfde
 // patroon als knowledge-match.mjs) zodat dit zonder Astro-runtime getest kan
@@ -26,18 +26,6 @@ export const GENERIC_RELEVANCE_TEXTS = new Set([
 export function hasOwnRelevance(relevance) {
   const text = (relevance ?? '').trim();
   return text.length > 0 && !GENERIC_RELEVANCE_TEXTS.has(text);
-}
-
-/**
- * Nieuws of naslag. Expliciet via `contentType` in de frontmatter; zonder
- * dat veld zijn KVK-artikelen naslag (de bron levert KVK-kennisartikelen,
- * evergreen uitleg met de sitemap-wijzigingsdatum als datum) en is al het
- * andere nieuws.
- * @param {{ contentType?: 'nieuws' | 'naslag', sourceName: string }} data
- */
-export function isReferenceArticle(data) {
-  if (data.contentType) return data.contentType === 'naslag';
-  return data.sourceName === 'KVK';
 }
 
 /** Weergavelabels voor de optionele, redactioneel gezette `status`. */

@@ -1,7 +1,7 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
-import { dateIsSourceLastModified, hasOwnRelevance, isReferenceArticle, STATUS_LABELS, OUTDATED_STATUSES } from '@/lib/news-presentation.mjs';
+import { dateIsSourceLastModified, hasOwnRelevance, STATUS_LABELS, OUTDATED_STATUSES } from '@/lib/news-presentation.mjs';
 
 interface Props {
   article: CollectionEntry<'kenniscentrum'>;
@@ -11,7 +11,6 @@ const { article, highlighted = false } = Astro.props;
 const { title, category, priority, publishedAt, summary, relevance, sourceName, audiences, tags, status, avydoContent } = article.data;
 // Alleen een eigen duiding tonen; een sjabloonzin van de nieuwsengine niet.
 const showRelevance = hasOwnRelevance(relevance);
-const isReference = isReferenceArticle(article.data);
 const statusLabel = status ? STATUS_LABELS[status] : undefined;
 const statusIsOutdated = status ? OUTDATED_STATUSES.has(status) : false;
 // KVK-datum = "laatst gewijzigd" van de bronpagina, geen publicatiedatum.
@@ -26,7 +25,6 @@ const dateIsLastModified = dateIsSourceLastModified(article.data);
   data-summary={summary.toLowerCase()}
   data-tags={tags.join(' ').toLowerCase()}
   data-audiences={audiences.join(' ')}
-  data-kind={isReference ? 'naslag' : 'nieuws'}
 >
   <div class="flex items-center gap-2 flex-wrap">
     {statusLabel && (
@@ -37,9 +35,6 @@ const dateIsLastModified = dateIsSourceLastModified(article.data);
         ]}
         data-status={status}
       >{statusLabel}</span>
-    )}
-    {isReference && (
-      <span class="inline-flex items-center rounded-full bg-ink-50 px-2.5 py-0.5 text-xs font-semibold text-ink-600" data-kind-badge>Naslag</span>
     )}
     {priority === 'belangrijk' && !statusIsOutdated && (
       <span class="inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">Belangrijk</span>
