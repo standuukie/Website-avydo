@@ -6,7 +6,7 @@ publishedAt: 2026-07-21T10:02:27.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/starten/alles-wat-je-moet-weten-over-het-btw-nummer/"
 summary: "Als je een bedrijf start, krijg je een btw-nummer van de Belastingdienst. Lees hier wat het is, waar je het gebruikt en hoe je het krijgt."
-relevance: "Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+relevance: "Let op: het btw-id is een ander nummer dan het omzetbelastingnummer, dat u bij de start van uw bedrijf ook van de Belastingdienst krijgt. Het btw-id hoort op uw facturen; het omzetbelastingnummer gebruikt u in uw contact met de Belastingdienst (zie ‘Wat is een omzetbelastingnummer (ob-nummer)?’)."
 tags: []
 audiences: []
 featured: false
