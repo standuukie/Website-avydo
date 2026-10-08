@@ -42,7 +42,10 @@ import {
   GROQ_CHAT_COMPLETIONS_URL,
   DEFAULT_MODEL,
   MAX_OUTPUT_TOKENS,
+  describeGroqError,
+  redactSecrets,
 } from './editorial.mjs';
+import { estimateTokens } from '../../src/lib/token-estimate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -796,4 +799,156 @@ test('redactierun (Groq): twee onderwerpen → wachttijd tussen de twee AI-aanro
     rmSync(contentDir, { recursive: true, force: true });
     rmSync(sourcesDir, { recursive: true, force: true });
   }
+});
+
+// --- Regressie run #40: Groq HTTP 400 zonder foutmelding in de log ---
+//
+// Run #40 logde alleen "AI-aanroep mislukt (HTTP 400, model ...)". De
+// request zelf is hieronder vastgelegd en vergeleken met de werkende
+// AI-assistent (groq.ts); Groq's eigen foutmelding komt nu in de log.
+
+const FAKE_KEY = 'gsk_testsleutelABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const RUN40_RECORD = {
+  ...RECORD,
+  sourceName: 'KVK',
+  sourceUrl: 'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
+  title: 'Jaarrekening wel of niet deponeren?',
+  sourcePublishedAt: undefined,
+  sourceLastModified: '2025-08-26T00:00:00.000Z',
+  body: `${SOURCE_BODY}\n\n`.repeat(30).slice(0, 4701),
+};
+const RUN40_400_BODY = JSON.stringify({
+  error: {
+    message: 'Failed to call a function. Please adjust your prompt. See \'failed_generation\' for more details.',
+    type: 'invalid_request_error',
+    code: 'tool_use_failed',
+    failed_generation: '{"name": "avydo_artikel", "arguments": {"title": "Jaarrekening',
+  },
+});
+
+async function captureRequest(record, kind = 'gids') {
+  let captured;
+  await generateAvydoArticle(record, kind, {
+    apiKey: FAKE_KEY, now: NOW,
+    fetchImpl: async (url, opts) => { captured = { url, headers: opts.headers, body: JSON.parse(opts.body) }; return aiResponse(AI_INPUT); },
+  });
+  return captured;
+}
+
+test('regressie run #40: request-body heeft dezelfde vorm als de werkende AI-assistent (groq.ts)', async () => {
+  const { url, headers, body } = await captureRequest(RUN40_RECORD);
+  assert.equal(url, 'https://api.groq.com/openai/v1/chat/completions');
+  assert.deepEqual(Object.keys(headers).sort(), ['authorization', 'content-type']);
+  assert.equal(headers['content-type'], 'application/json');
+  assert.deepEqual(Object.keys(body).sort(), ['max_tokens', 'messages', 'model', 'reasoning_effort', 'temperature', 'tool_choice', 'tools']);
+  assert.equal(body.model, 'openai/gpt-oss-20b');
+  assert.equal(body.temperature, 0.3);
+  assert.equal(body.reasoning_effort, 'low');
+  assert.equal(body.max_tokens, 3000);
+  assert.deepEqual(body.messages.map((m) => Object.keys(m).sort()), [['content', 'role']]);
+  assert.equal(typeof body.messages[0].content, 'string');
+  assert.deepEqual(Object.keys(body.tools[0]).sort(), ['function', 'type']);
+  assert.deepEqual(Object.keys(body.tools[0].function).sort(), ['description', 'name', 'parameters']);
+  assert.deepEqual(body.tool_choice, { type: 'function', function: { name: body.tools[0].function.name } });
+  // Dezelfde velden en waarden als in de assistent.
+  const groqTs = readFileSync(path.join(ROOT, 'src/lib/ai-providers/groq.ts'), 'utf8');
+  for (const snippet of [
+    "'https://api.groq.com/openai/v1/chat/completions'",
+    'authorization: `Bearer ${apiKey}`',
+    'temperature: 0.3',
+    "reasoning_effort: 'low'",
+    "type: 'function',",
+    'parameters: tool.schema',
+    "tool_choice: { type: 'function', function: { name: tool.name } }",
+    "const DEFAULT_MODEL = 'openai/gpt-oss-20b'",
+  ]) assert.ok(groqTs.includes(snippet), `groq.ts bevat niet meer: ${snippet}`);
+});
+
+test('regressie run #40: het artikelschema gebruikt alleen standaard JSON Schema-sleutelwoorden', async () => {
+  const { body } = await captureRequest(RUN40_RECORD);
+  const allowed = new Set(['type', 'properties', 'required', 'description', 'enum', 'items', 'maxItems']);
+  const used = new Set();
+  (function walk(schema) {
+    for (const [key, value] of Object.entries(schema)) {
+      used.add(key);
+      if (key === 'properties') Object.values(value).forEach(walk);
+      else if (key === 'items') walk(value);
+    }
+  })(body.tools[0].function.parameters);
+  for (const key of used) assert.ok(allowed.has(key), `onverwacht schema-sleutelwoord ${key}`);
+  for (const value of Object.values(body.tools[0].function.parameters.properties)) {
+    assert.ok(['string', 'boolean', 'array'].includes(value.type));
+    if (value.enum) assert.ok(value.enum.every((v) => typeof v === 'string' && v.length > 0));
+  }
+});
+
+test('regressie run #40: request (volledige KVK-brontekst) plus max_tokens blijft onder Groq\'s 8.000 tokens/minuut', async () => {
+  for (const record of [RUN40_RECORD, { ...RUN40_RECORD, body: 'x'.repeat(20000) }]) {
+    const { body } = await captureRequest(record);
+    assert.ok(body.messages[0].content.includes(record.body.slice(0, 9000)));
+    assert.ok(estimateTokens(JSON.stringify(body)) + body.max_tokens < 8000);
+  }
+});
+
+test('regressie run #40: HTTP 400 van Groq → geen artikel, maar wel Groq\'s eigen foutmelding (type, code, melding) in de reden en de log', async () => {
+  const logs = [];
+  const contentDir = tempDir('content-400');
+  const sourcesDir = tempDir('sources-400');
+  writeSourceRecord(sourcesDir, RECORD);
+  try {
+    const run = await runEditorialPipeline({
+      contentDir, sourcesDir, now: NOW, apiKey: FAKE_KEY, log: (l) => logs.push(l), aiCallSpacingMs: 0,
+      fetchImpl: async (url) => (isGroq(url)
+        ? new Response(RUN40_400_BODY, { status: 400, headers: { 'content-type': 'application/json', 'x-request-id': 'req_01abc' } })
+        : new Response('<html></html>', { status: 200 })),
+    });
+    assert.equal(run.created.length, 0);
+    assert.equal(run.pullRequest, null);
+    assert.deepEqual(readdirSync(contentDir), []);
+    const reason = run.summary.failed[0].reason;
+    assert.match(reason, /HTTP 400/);
+    assert.match(reason, /type=invalid_request_error/);
+    assert.match(reason, /code=tool_use_failed/);
+    assert.match(reason, /melding: Failed to call a function/);
+    assert.match(reason, /request-id=req_01abc/);
+    assert.match(reason, /model "openai\/gpt-oss-20b"/);
+    const text = logs.join('\n');
+    assert.match(text, /geen artikel: AI-aanroep mislukt .*code=tool_use_failed/);
+    assert.match(text, /Groq failed_generation \(ingekort\): \{"name": "avydo_artikel"/);
+    assert.ok(!text.includes(FAKE_KEY));
+    assert.ok(!JSON.stringify(run.summary).includes(FAKE_KEY));
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+test('veilige foutlogging: de API-sleutel en Authorization-headers komen nooit in de reden of log, ook niet als Groq ze terugstuurt', async () => {
+  const echo = JSON.stringify({ error: { message: `Invalid API Key ${FAKE_KEY} (Authorization: Bearer ${FAKE_KEY})`, type: 'invalid_request_error', code: 'invalid_api_key', failed_generation: `authorization: "Bearer ${FAKE_KEY}"` } });
+  const result = await generateAvydoArticle(RECORD, 'toelichting', { apiKey: FAKE_KEY, now: NOW, fetchImpl: async () => new Response(echo, { status: 401 }) });
+  assert.equal(result.ok, false);
+  const all = JSON.stringify(result);
+  assert.ok(!all.includes(FAKE_KEY));
+  assert.ok(!all.includes('gsk_'));
+  assert.doesNotMatch(all, /Bearer (?!\[VERWIJDERD\])/);
+  assert.match(result.reason, /HTTP 401/);
+  assert.match(result.reason, /code=invalid_api_key/);
+  // Ook een andere sleutelvorm dan gsk_ wordt verwijderd zodra die gelijk is aan de gebruikte sleutel.
+  assert.equal(redactSecrets('sleutel geheim-12345678 hier', 'geheim-12345678'), 'sleutel [VERWIJDERD] hier');
+  assert.equal(redactSecrets('Authorization: Bearer abc.def', undefined), 'Authorization: [VERWIJDERD]');
+});
+
+test('veilige foutlogging: niet-JSON-antwoord en lange antwoorden worden ingekort weergegeven; 429 houdt zijn limietgedrag', async () => {
+  const plain = describeGroqError(400, '<html>Bad Request</html>');
+  assert.equal(plain.summary, 'HTTP 400 antwoord: <html>Bad Request</html>');
+  assert.equal(plain.failedGeneration, undefined);
+  const long = describeGroqError(400, JSON.stringify({ error: { message: 'x'.repeat(5000), code: 'c', failed_generation: 'y'.repeat(5000) } }));
+  assert.ok(long.summary.length <= 800);
+  assert.ok(long.failedGeneration.length <= 1500);
+  const limited = await generateAvydoArticle(RECORD, 'toelichting', {
+    apiKey: FAKE_KEY, now: NOW,
+    fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'Rate limit reached for model openai/gpt-oss-20b', type: 'tokens', code: 'rate_limit_exceeded' } }), { status: 429 }),
+  });
+  assert.equal(limited.rateLimited, true);
+  assert.match(limited.reason, /HTTP 429 type=tokens code=rate_limit_exceeded melding: Rate limit reached/);
 });

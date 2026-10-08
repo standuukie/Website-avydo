@@ -127,6 +127,53 @@ BRONTEKST
 ${sourceText}`;
 }
 
+// --- Veilige Groq-foutmelding ---
+
+// Groq geeft bij een fout JSON terug: { error: { message, type, code, param?,
+// failed_generation? } }. Dat komt in de Actions-log, zodat een fout als die
+// van run #40 (HTTP 400 zonder verdere uitleg) te herleiden is. Nooit de
+// sleutel of een Authorization-header: die worden weggefilterd, ook als
+// Groq ze ooit zou terugsturen.
+const MAX_ERROR_SUMMARY_CHARS = 800;
+const MAX_FAILED_GENERATION_CHARS = 1500;
+
+export function redactSecrets(text, apiKey) {
+  let out = String(text ?? '');
+  // Alleen een sleutel van realistische lengte: een korte waarde (zoals in
+  // tests) zou anders gewone tekst verminken.
+  if (apiKey && String(apiKey).length >= 8) out = out.split(String(apiKey)).join('[VERWIJDERD]');
+  return out
+    .replace(/gsk_[A-Za-z0-9]{8,}/g, '[VERWIJDERD]')
+    .replace(/(authorization["']?\s*[:=]\s*["']?)[^"',}\s]+(\s+[^"',}\s]+)?/gi, '$1[VERWIJDERD]')
+    .replace(/Bearer\s+[^\s"',}]+/gi, 'Bearer [VERWIJDERD]');
+}
+
+/**
+ * Zet een niet-2xx-antwoord van Groq om in loggable tekst.
+ * @returns {{ summary: string, failedGeneration?: string }}
+ */
+export function describeGroqError(status, bodyText, { apiKey, requestId } = {}) {
+  let error;
+  try {
+    error = JSON.parse(bodyText)?.error;
+  } catch {
+    error = undefined;
+  }
+  const parts = [`HTTP ${status}`];
+  if (error && typeof error === 'object') {
+    for (const key of ['type', 'code', 'param']) if (error[key]) parts.push(`${key}=${error[key]}`);
+    if (error.message) parts.push(`melding: ${error.message}`);
+  } else if (bodyText) {
+    parts.push(`antwoord: ${bodyText}`);
+  }
+  if (requestId) parts.push(`request-id=${requestId}`);
+  const summary = redactSecrets(parts.join(' '), apiKey).replace(/\s+/g, ' ').slice(0, MAX_ERROR_SUMMARY_CHARS);
+  const failedGeneration = typeof error?.failed_generation === 'string' && error.failed_generation
+    ? redactSecrets(error.failed_generation, apiKey).slice(0, MAX_FAILED_GENERATION_CHARS)
+    : undefined;
+  return failedGeneration ? { summary, failedGeneration } : { summary };
+}
+
 /** Model voor de redactiestap: KENNISCENTRUM_MODEL, anders GROQ_MODEL, anders het standaardmodel. */
 export function resolveModel(env = process.env) {
   return env.KENNISCENTRUM_MODEL || env.GROQ_MODEL || DEFAULT_MODEL;
@@ -134,8 +181,8 @@ export function resolveModel(env = process.env) {
 
 /**
  * Laat het Avydo-artikel schrijven via Groq. Geeft { ok: true, article } of
- * { ok: false, reason, rateLimited? } — nooit een exception. Geen retries:
- * bij een fout (ook een 429) komt er gewoon geen artikel.
+ * { ok: false, reason, rateLimited?, errorDetail? } — nooit een exception.
+ * Geen retries: bij een fout (ook een 429) komt er gewoon geen artikel.
  */
 export async function generateAvydoArticle(record, kind, { apiKey, now, model = DEFAULT_MODEL, fetchImpl = fetch }) {
   if (!apiKey) return { ok: false, reason: 'GROQ_API_KEY ontbreekt; geen AI-aanroep en geen artikel gegenereerd' };
@@ -158,10 +205,15 @@ export async function generateAvydoArticle(record, kind, { apiKey, now, model = 
         tool_choice: { type: 'function', function: { name: ARTICLE_TOOL.name } },
       }),
     });
-    if (res.status === 429) {
-      return { ok: false, rateLimited: true, reason: 'Groq-limiet bereikt (HTTP 429); geen artikel, geen nieuwe poging in deze run' };
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      const { summary, failedGeneration } = describeGroqError(res.status, text, { apiKey, requestId: res.headers?.get?.('x-request-id') });
+      const errorDetail = failedGeneration ? { failedGeneration } : undefined;
+      if (res.status === 429) {
+        return { ok: false, rateLimited: true, reason: `Groq-limiet bereikt (${summary}); geen artikel, geen nieuwe poging in deze run`, errorDetail };
+      }
+      return { ok: false, reason: `AI-aanroep mislukt (model "${model}"): Groq ${summary}`, errorDetail };
     }
-    if (!res.ok) return { ok: false, reason: `AI-aanroep mislukt (HTTP ${res.status}, model "${model}")` };
     const data = await res.json();
     const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
     const rawArgs = toolCall?.function?.name === ARTICLE_TOOL.name ? toolCall.function.arguments : undefined;
@@ -334,6 +386,9 @@ export async function runEditorialPipeline({
     const generated = await generateAvydoArticle(record, kind, { apiKey, now, model, fetchImpl });
     if (!generated.ok) {
       log(`    geen artikel: ${generated.reason}`);
+      if (generated.errorDetail?.failedGeneration) {
+        log(`    Groq failed_generation (ingekort): ${generated.errorDetail.failedGeneration}`);
+      }
       failed.push({ title: record.title, reason: generated.reason });
       if (generated.rateLimited) {
         // Gecontroleerd stoppen: geen verdere AI-aanroepen deze run. De
