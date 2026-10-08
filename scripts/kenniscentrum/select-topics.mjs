@@ -14,8 +14,9 @@
 // Een KVK-lastmod telt nooit als nieuwsdatum.
 //
 // Geen embeddings: overlap met bestaande Avydo-artikelen gaat via dezelfde
-// titel-Jaccard als bij de KVK-import (findOverlappingArticle).
-import { classifyKvkRelevance, findOverlappingArticle } from './fetch-articles.mjs';
+// titel-Jaccard als bij de KVK-import (findOverlappingArticle), aangevuld
+// met een controle op jaargebonden onderwerpen (findSameOrNewerYearArticle).
+import { classifyKvkRelevance, findOverlappingArticle, kvkSignificantWords } from './fetch-articles.mjs';
 import { SourceUrlSet } from './source-records.mjs';
 
 export const MAX_TOPICS_PER_RUN = 2;
@@ -32,6 +33,48 @@ const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 
 
 // Signalen van (aangekondigde) wet- en regelgeving of een wijziging.
 const REGELGEVING_SIGNAL = /wetsvoorstel|wetswijziging|nieuwe wet|internetconsultatie|consultatie|belastingplan|aangenomen|in werking|inwerkingtreding|treedt .{0,40}in werking|gaat gelden|wordt verplicht|verplicht per|per 1 [a-z]+ 20\d\d|vanaf 1 [a-z]+ 20\d\d|met ingang van|afgeschaft|afschaffing|verhoging|verlaging|maatregel|voornemen|kabinet wil/i;
+
+// --- Jaargebonden onderwerpen (tarieven, cijfers, bedragen per jaar) ---
+//
+// Een bron met een jaartal in de titel ("Belastingtarieven en cijfers van
+// 2025") is een jaarlijkse actualisatie. Bestaat er al een Avydo-artikel over
+// hetzelfde onderwerp voor datzelfde of een later jaar, dan is de bron
+// verouderd of dubbel. De titel-Jaccard mist dat (andere formulering, het
+// jaartal zelf telt mee), dus hier: jaartallen eruit, en de onderwerpwoorden
+// van de bron moeten (vrijwel) allemaal in de titel van het bestaande
+// artikel voorkomen. Categorie telt niet mee: hetzelfde jaarlijkse onderwerp
+// kan onder een andere categorie zijn ingedeeld.
+export const SAME_TOPIC_WORD_COVERAGE = 0.75;
+const YEAR_IN_TEXT = /\b(20\d{2})\b/g;
+
+function yearsIn(text) {
+  return [...String(text ?? '').matchAll(YEAR_IN_TEXT)].map((m) => Number(m[1]));
+}
+
+function topicWords(text) {
+  return new Set(kvkSignificantWords(String(text ?? '').replace(YEAR_IN_TEXT, ' ')).filter((w) => !/^\d+$/.test(w)));
+}
+
+/**
+ * Bestaand Avydo-artikel over hetzelfde jaargebonden onderwerp voor hetzelfde
+ * of een later jaar dan de bron, of null. Alleen voor bronnen met een
+ * jaartal in de titel.
+ */
+export function findSameOrNewerYearArticle(title, avydoArticles) {
+  const years = yearsIn(title);
+  if (years.length === 0) return null;
+  const sourceYear = Math.max(...years);
+  const words = topicWords(title);
+  if (words.size < 2) return null;
+  for (const article of avydoArticles) {
+    const articleYears = yearsIn(article.title);
+    if (articleYears.length === 0 || Math.max(...articleYears) < sourceYear) continue;
+    const articleWords = topicWords(article.title);
+    const covered = [...words].filter((w) => articleWords.has(w)).length;
+    if (covered / words.size >= SAME_TOPIC_WORD_COVERAGE) return { ...article, year: Math.max(...articleYears), sourceYear };
+  }
+  return null;
+}
 
 function daysBetween(later, earlier) {
   return (later.getTime() - earlier.getTime()) / DAY_MS;
@@ -75,6 +118,11 @@ export function classifyCandidate(record, { now, avydoArticles }) {
   const overlap = findOverlappingArticle(record.title, record.category, avydoArticles);
   if (overlap) {
     return { eligible: false, permanent: true, reason: `onderwerp al behandeld in Avydo-artikel "${overlap.title}" (${overlap.file})` };
+  }
+  const yearly = findSameOrNewerYearArticle(record.title, avydoArticles);
+  if (yearly) {
+    const why = yearly.year > yearly.sourceYear ? `verouderd: er is al een Avydo-artikel voor ${yearly.year}` : `dubbel: er is al een Avydo-artikel voor ${yearly.year}`;
+    return { eligible: false, permanent: true, reason: `jaargebonden onderwerp over ${yearly.sourceYear}, ${why} ("${yearly.title}", ${yearly.file})` };
   }
 
   const futureDate = findFutureEffectiveDate(text, now);

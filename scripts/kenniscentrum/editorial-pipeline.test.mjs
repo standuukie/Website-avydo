@@ -23,7 +23,7 @@ import {
   updateSourceRecord,
   loadKnownSourceUrls,
 } from './source-records.mjs';
-import { selectTopics, classifyCandidate, findFutureEffectiveDate, MAX_TOPICS_PER_RUN } from './select-topics.mjs';
+import { selectTopics, classifyCandidate, findFutureEffectiveDate, findSameOrNewerYearArticle, MAX_TOPICS_PER_RUN } from './select-topics.mjs';
 import {
   validateAvydoArticle,
   findUnsupportedFacts,
@@ -281,6 +281,92 @@ test('selectie: twee kandidaten over hetzelfde onderwerp → alleen de eerste', 
   assert.equal(selected.length, 1);
 });
 
+// Regressie productie-run #38 (2026-10-08): "Belastingtarieven en cijfers van
+// 2025" werd als blijvende uitleg gekozen, terwijl er al een Avydo-artikel
+// over de tarieven van 2026 bestaat. De titel-Jaccard zag dat niet.
+function kvkYearRecord(year, overrides = {}) {
+  return {
+    ...kvkRecord,
+    sourceUrl: `https://www.kvk.nl/geldzaken/belastingtarieven-${year}/`,
+    title: `Belastingtarieven en cijfers van ${year}`,
+    description: `Alle belastingtarieven voor ondernemers in ${year} overzichtelijk bij elkaar, van inkomstenbelasting en btw tot box 3.`,
+    body: `${'De tarieven van de inkomstenbelasting, btw en vennootschapsbelasting op een rij. '.repeat(12)}`,
+    category: 'Fiscale actualiteit',
+    ...overrides,
+  };
+}
+const TARIEVEN_2026_ARTICLE = {
+  file: '2026-09-28-inzicht-in-de-belastingtarieven-en-cijfers-van-2026.md',
+  title: 'Belastingtarieven en cijfers voor ondernemers in 2026: waar vindt u het overzicht?',
+  category: 'Fiscale actualiteit',
+  sourceUrl: 'https://www.kvk.nl/geldzaken/belastingtarieven-2026/',
+};
+
+test('jaargebonden onderwerp: een oud jaar wordt niet gekozen als er al een nieuwer Avydo-artikel over hetzelfde onderwerp is (ook bij andere formulering of categorie)', () => {
+  const old = kvkYearRecord(2025);
+  assert.ok(findSameOrNewerYearArticle(old.title, [TARIEVEN_2026_ARTICLE]));
+  const c = classifyCandidate(old, { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.equal(c.eligible, false);
+  assert.match(c.reason, /jaargebonden onderwerp over 2025, verouderd: er is al een Avydo-artikel voor 2026/);
+  const otherCategory = classifyCandidate(kvkYearRecord(2025, { category: 'Inkomstenbelasting' }), { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.equal(otherCategory.eligible, false);
+  const { selected, rejected } = selectTopics([old], { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.equal(selected.length, 0);
+  assert.equal(rejected.length, 1);
+});
+
+test('jaargebonden onderwerp: hetzelfde jaar nogmaals is een dubbele actualisatie en wordt niet gekozen', () => {
+  // Hier vangt de bestaande titel-overlap het al (zelfde jaartal); de jaarcontrole zelf ziet het ook.
+  const c = classifyCandidate(kvkYearRecord(2026), { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.equal(c.eligible, false);
+  assert.match(c.reason, /al behandeld|dubbel: er is al een Avydo-artikel voor 2026/);
+  const sameYear = findSameOrNewerYearArticle('Belastingtarieven en cijfers van 2026', [TARIEVEN_2026_ARTICLE]);
+  assert.deepEqual([sameYear.year, sameYear.sourceYear], [2026, 2026]);
+});
+
+test('jaargebonden onderwerp: een nieuwer jaar, of een jaarlijks onderwerp zonder bestaand artikel, kan wél gekozen worden', () => {
+  const newer = classifyCandidate(kvkYearRecord(2027), { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.deepEqual([newer.eligible, newer.tier, newer.kind], [true, 3, 'gids']);
+  const noArticle = selectTopics([kvkYearRecord(2026)], { now: NOW, avydoArticles: OTHER_AVYDO_ARTICLES });
+  assert.deepEqual(noArticle.selected.map((s) => s.record.title), ['Belastingtarieven en cijfers van 2026']);
+  // Onderwerpen zonder jaartal en onderwerpen die maar deels overlappen blijven ongemoeid.
+  assert.equal(findSameOrNewerYearArticle('Jaarrekening wel of niet deponeren?', [TARIEVEN_2026_ARTICLE]), null);
+  assert.equal(findSameOrNewerYearArticle('Belastingplan 2026: nieuwe maatregelen voor werkgevers', [TARIEVEN_2026_ARTICLE]), null);
+});
+
+test('productie-run #38 nagespeeld: tarieven 2025 afgewezen, "Jaarrekening wel of niet deponeren?" wordt de enige blijvende uitleg, "Verklaringen deponeren" afgewezen', () => {
+  const jaarrekening = {
+    ...kvkRecord,
+    sourceUrl: 'https://www.kvk.nl/deponeren/jaarrekening-wel-of-niet-deponeren/',
+    title: 'Jaarrekening wel of niet deponeren?',
+    description: 'Of je een jaarrekening moet deponeren, hangt af van je rechtsvorm.',
+    body: `${'Een bv moet de jaarrekening deponeren bij KVK; een eenmanszaak niet. '.repeat(12)}`,
+    sourceLastModified: '2025-08-26T00:00:00.000Z',
+    category: 'Administratie & jaarrekening',
+  };
+  const verklaringen = {
+    ...kvkRecord,
+    sourceUrl: 'https://www.kvk.nl/deponeren/verklaringen-deponeren/',
+    title: 'Verklaringen deponeren',
+    description: 'Welke verklaringen deponeer je bij KVK?',
+    body: `${'Sommige verklaringen deponeer je bij KVK. '.repeat(20)}`,
+    sourceLastModified: '2025-01-07T00:00:00.000Z',
+    category: 'Administratie & jaarrekening',
+  };
+  const tarieven = kvkYearRecord(2025, { sourceLastModified: '2026-02-24T00:00:00.000Z' });
+  const second = { ...jaarrekening, sourceUrl: 'https://www.kvk.nl/deponeren/andere/', title: 'Btw-aangifte corrigeren: zo herstel je een fout', category: 'Btw', sourceLastModified: '2025-03-01T00:00:00.000Z' };
+  const result = selectTopics([tarieven, jaarrekening, verklaringen, second], { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.deepEqual(result.selected.map((s) => [s.record.title, s.kind]), [['Jaarrekening wel of niet deponeren?', 'gids']]);
+  // Maximaal één blijvende uitleg per dag: de andere geschikte gids wordt uitgesteld, niet afgewezen.
+  assert.ok(result.deferred.some((d) => d.record.title === 'Btw-aangifte corrigeren: zo herstel je een fout' && /blijvende uitleg/.test(d.reason)));
+  assert.match(result.rejected.find((r) => r.record.title === 'Verklaringen deponeren').reason, /zonder sterk fiscaal signaal/);
+  assert.match(result.rejected.find((r) => r.record.title.endsWith('2025')).reason, /jaargebonden/);
+  // Alleen tarieven 2025 en verklaringen: 0 artikelen is een geldige uitkomst.
+  const none = selectTopics([tarieven, verklaringen], { now: NOW, avydoArticles: [TARIEVEN_2026_ARTICLE] });
+  assert.equal(none.selected.length, 0);
+  assert.ok(none.noTopicReason);
+});
+
 test('selectie: alleen kandidaten; verwerkte en afgewezen records worden niet opnieuw gekozen (ook niet de echte bronlaag)', () => {
   const real = selectTopics(RECORDS, { now: NOW, avydoArticles: [] });
   assert.equal(real.selected.length, 0);
@@ -478,11 +564,33 @@ test('redactierun: geen geschikt onderwerp → 0 artikelen, geen Pull Request, "
   assert.ok(records[0].rejectionReason);
 });
 
-test('redactierun: zonder API-key ontstaat er geen artikel (en dus geen Pull Request)', async () => {
-  const { run, articles } = await runPipelineWith(AI_INPUT, { apiKey: '' });
-  assert.equal(run.created.length, 0);
-  assert.equal(run.pullRequest, null);
-  assert.deepEqual(articles, []);
+test('redactierun: zonder API-key ontstaat er geen (half) artikel en geen Pull Request; de bron blijft kandidaat en er wordt geen AI aangeroepen', async () => {
+  let aiCalls = 0;
+  const contentDir = tempDir('content-nokey');
+  const sourcesDir = tempDir('sources-nokey');
+  writeSourceRecord(sourcesDir, RECORD);
+  try {
+    const run = await runEditorialPipeline({
+      contentDir, sourcesDir, now: NOW, apiKey: '', log: () => {},
+      fetchImpl: async (url) => {
+        if (String(url).startsWith('https://api.anthropic.com/')) aiCalls += 1;
+        return new Response('<html></html>', { status: 200 });
+      },
+    });
+    assert.equal(aiCalls, 0);
+    assert.equal(run.created.length, 0);
+    assert.equal(run.pullRequest, null);
+    assert.match(run.summary.failed[0].reason, /ANTHROPIC_API_KEY ontbreekt/);
+    assert.deepEqual(readdirSync(contentDir), []);
+    assert.equal(readSourceRecords(sourcesDir)[0].processingStatus, 'kandidaat');
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+  // De workflow maakt alleen een PR als er een artikel is, en geeft de sleutel als secret door.
+  const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
+  assert.match(wf, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
+  assert.match(wf, /- name: Pull Request maken\n\s+if: steps\.fetch\.outputs\.created != '0'/);
 });
 
 test('openstaande of afgewezen redactie-PR\'s: hun bron-URL\'s worden niet opnieuw gekozen; gemergde PR\'s tellen niet', () => {

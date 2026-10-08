@@ -1645,7 +1645,7 @@ function kvkWordStem(word) {
   return word;
 }
 
-function kvkSignificantWords(text) {
+export function kvkSignificantWords(text) {
   return text
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
