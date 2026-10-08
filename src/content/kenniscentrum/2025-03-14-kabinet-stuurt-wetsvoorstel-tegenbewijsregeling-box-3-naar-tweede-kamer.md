@@ -1,5 +1,5 @@
 ---
-title: "Kabinet stuurt wetsvoorstel tegenbewijsregeling box 3 naar Tweede Kamer"
+title: "Tegenbewijsregeling box 3: te veel betaalde belasting terug bij lager werkelijk rendement"
 category: "Inkomstenbelasting"
 priority: "belangrijk"
 publishedAt: 2025-03-14T16:00:00.000Z

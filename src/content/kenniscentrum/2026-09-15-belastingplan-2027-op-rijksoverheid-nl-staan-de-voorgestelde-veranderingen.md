@@ -3,11 +3,11 @@ title: "Belastingplan 2027: wat is al bekend, en wat betekent dit voor uw ondern
 category: "Fiscale actualiteit"
 priority: "belangrijk"
 publishedAt: 2026-09-15T14:15:00.000Z
-updatedAt: 2026-10-01T09:00:00.000Z
+updatedAt: 2026-10-08T09:00:00.000Z
 sourceName: "Belastingdienst"
 sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/belastingplan-2027"
 summary: "Op Prinsjesdag (15 september 2026) heeft het kabinet het Belastingplan 2027 aangeboden aan de Tweede Kamer. De voorstellen zijn nog niet definitief: ze moeten eerst het volledige wetgevingsproces doorlopen. Dit artikel legt uit hoe dat proces werkt, welke fiscale thema's doorgaans in een Belastingplan zitten, en wat u als ondernemer, BV of DGA nu al kunt doen."
-relevance: "Omdat de concrete maatregelen pas definitief worden na behandeling door Tweede en Eerste Kamer, is het nu vooral zaak om te volgen welke thema's spelen en tijdig te inventariseren wat dit voor uw eigen situatie kan betekenen — niet om al te rekenen met cijfers die nog kunnen wijzigen."
+relevance: "Deze toelichting legt uit hoe het Belastingplan 2027 wet wordt: na indiening op 15 september 2026 behandelen eerst de Tweede en daarna de Eerste Kamer de voorstellen, en via amendementen kunnen onderdelen nog wijzigen. Pas na aanname en publicatie is een maatregel definitief. Welke voorstellen er voor ondernemers in staan, leest u in het bericht van de Rijksoverheid over het Belastingplan 2027."
 tags: ["prinsjesdag", "belastingplan", "belastingplan 2027", "wetgevingsproces", "fiscale actualiteit"]
 audiences: ["mkb-ondernemer", "bv-dga", "werkgever"]
 featured: true
@@ -30,6 +30,10 @@ De voorstellen die op Prinsjesdag worden gepresenteerd, zijn **nog niet aangenom
 5. **Bekrachtiging en publicatie** — pas dan is een maatregel definitief wet.
 
 Concrete bedragen, percentages en drempels die nu in de media of in voorlopige stukken circuleren, kunnen dus nog veranderen voordat de wet wordt aangenomen. Wij vermelden daarom bewust geen specifieke cijfers in dit artikel zolang die niet definitief vaststaan — dat voorkomt dat u plant op basis van een getal dat later weer wijzigt.
+
+## Welke voorstellen staan in het Belastingplan 2027?
+
+De concrete voorstellen voor ondernemers, onder meer over de innovatiebox, de energie-investeringsaftrek en de startersaftrek, zetten wij op een rij in [ons bericht over het Belastingplan 2027](/kenniscentrum/2026-09-15-belastingplan-2027-voorstellen-voor-beter-werkend-belastingstelsel-en-gezonde-ov). Dit artikel gaat over het traject daarna: wat er nog moet gebeuren voordat een voorstel wet is, en hoe u zich daarop voorbereidt.
 
 ## Welke thema's horen doorgaans bij een Belastingplan?
 

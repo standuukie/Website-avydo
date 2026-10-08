@@ -282,3 +282,52 @@ test('weergave: geen sjabloonduiding, geen dubbele samenvatting en een juiste br
     assert.doesNotMatch(text, />[^<{]*\b(je|jij|jou|jouw)\b[^<]*</i, 'UI-tekst in je-vorm');
   }
 });
+
+// Redactionele verbeteringsronde (2026-10-08) na de kwaliteitsaudit.
+test('redactie: geen los zichtbare HTML-entiteiten en geen afgekapte samenvattingen in zichtbare artikelen', () => {
+  for (const file of readdirSync(CONTENT_DIR).filter((f) => f.endsWith('.md'))) {
+    const text = readFileSync(path.join(CONTENT_DIR, file), 'utf8');
+    if (/^hidden: true$/m.test(text)) continue;
+    assert.doesNotMatch(text, /&(?:[a-zA-Z]+|#x?[0-9a-fA-F]+);/, file);
+    const summary = text.match(/^summary: "(.*)"$/m)?.[1] ?? '';
+    assert.doesNotMatch(summary, /(…|\.\.\.)$/, file);
+  }
+});
+
+test('redactie: status, titel, prioriteit en categorie sluiten aan op de audit', () => {
+  const get = (file, key) => readFileSync(path.join(CONTENT_DIR, file), 'utf8').match(new RegExp(`^${key}: "?(.*?)"?$`, 'm'))?.[1];
+  assert.match(get('2026-10-01-zelfstandigenwet-biedt-meer-duidelijkheid-en-erkenning-voor-zzp-ers.md', 'relevance'), /reageren kan tot en met 29 oktober/);
+  assert.doesNotMatch(get('2025-07-07-transacties-met-crypto-straks-meer-in-beeld-bij-belastingdienst.md', 'title'), /straks/);
+  assert.doesNotMatch(get('2025-03-14-kabinet-stuurt-wetsvoorstel-tegenbewijsregeling-box-3-naar-tweede-kamer.md', 'title'), /wetsvoorstel|Tweede Kamer/);
+  for (const file of [
+    '2026-09-23-je-bv-en-prinsjesdag-dit-zijn-de-belastingplannen.md',
+    '2026-09-16-prinsjesdag-2026-dit-verandert-er-voor-ondernemers.md',
+    '2026-07-06-dit-is-waarom-prinsjesdag-belangrijk-is.md',
+  ]) {
+    assert.notEqual(get(file, 'priority'), 'belangrijk', file);
+  }
+  assert.equal(get('2026-06-17-algemene-voorwaarden-deponeren.md', 'category'), 'Ondernemen & rechtsvormen');
+  assert.equal(get('2026-09-28-inzicht-in-de-belastingtarieven-en-cijfers-van-2026.md', 'category'), 'Fiscale actualiteit');
+  for (const file of [
+    '2026-09-08-zakelijke-post-alleen-digitaal-ontvangen-geef-nu-uw-keuze-door.md',
+    '2026-08-28-update-herstel-belastingrente-vennootschapsbelasting-massaal-bezwaar-gestart.md',
+    '2026-05-21-bestelauto-met-ondernemerstarief-en-vrachtauto-s-sinds-1-juli-2026-tijdelijk-min.md',
+    '2025-03-31-kvk-opstelportaal-voor-middelgroot-verdwijnt.md',
+  ]) {
+    assert.equal(hasOwnRelevance(get(file, 'relevance')), true, file);
+  }
+});
+
+test('redactie: interne links in artikelteksten verwijzen naar zichtbare artikelen', () => {
+  const visible = new Set(ACTIVE.map((a) => a.file.replace(/\.md$/, '')));
+  let links = 0;
+  for (const a of ACTIVE) {
+    for (const [, slug] of a.body.matchAll(/\]\(\/kenniscentrum\/([^)#?]+)\)/g)) {
+      links += 1;
+      assert.ok(visible.has(slug), `${a.file} → ${slug}`);
+    }
+  }
+  assert.ok(links >= 2);
+  const box3 = byFile('2026-10-01-box-3-hoe-wordt-uw-vermogen-belast.md');
+  assert.match(box3.body, /\/kenniscentrum\/2025-03-14-kabinet-stuurt-wetsvoorstel-tegenbewijsregeling-box-3-naar-tweede-kamer/);
+});

@@ -1,6 +1,6 @@
 ---
 title: "Inzicht in de belastingtarieven en cijfers van 2026"
-category: "Inkomstenbelasting"
+category: "Fiscale actualiteit"
 priority: "actueel"
 publishedAt: 2026-09-28T14:47:35.000Z
 sourceName: "KVK"

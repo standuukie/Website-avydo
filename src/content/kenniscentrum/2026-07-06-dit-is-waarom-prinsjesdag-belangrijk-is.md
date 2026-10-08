@@ -1,7 +1,7 @@
 ---
 title: "Dit is waarom Prinsjesdag belangrijk is"
 category: "Fiscale actualiteit"
-priority: "belangrijk"
+priority: "praktisch"
 publishedAt: 2026-07-06T12:05:28.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/wetten-en-regels/wat-ondernemers-moeten-weten-over-prinsjesdag/"

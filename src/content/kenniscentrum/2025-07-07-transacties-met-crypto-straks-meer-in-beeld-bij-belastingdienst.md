@@ -1,5 +1,5 @@
 ---
-title: "Transacties met crypto straks meer in beeld bij Belastingdienst"
+title: "Transacties met crypto meer in beeld bij Belastingdienst"
 category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2025-07-07T10:02:00.000Z

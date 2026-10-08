@@ -1,7 +1,7 @@
 ---
 title: "Prinsjesdag 2026: Dit verandert er voor ondernemers"
 category: "Fiscale actualiteit"
-priority: "belangrijk"
+priority: "praktisch"
 publishedAt: 2026-09-16T11:34:43.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/wetten-en-regels/prinsjesdag-2026-dit-verandert-er-voor-ondernemers/"

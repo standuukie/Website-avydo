@@ -1,7 +1,7 @@
 ---
 title: "Je bv en Prinsjesdag: dit zijn de belastingplannen"
 category: "Fiscale actualiteit"
-priority: "belangrijk"
+priority: "praktisch"
 publishedAt: 2026-09-23T11:52:44.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/wetten-en-regels/je-bv-en-prinsjesdag-dit-zijn-de-plannen/"

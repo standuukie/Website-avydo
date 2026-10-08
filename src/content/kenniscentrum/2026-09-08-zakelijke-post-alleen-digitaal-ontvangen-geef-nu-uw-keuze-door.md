@@ -6,7 +6,7 @@ publishedAt: 2026-09-08T06:00:00.000Z
 sourceName: "Belastingdienst"
 sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/zakelijke-post-alleen-digitaal-ontvangen-keuze-doorgeven"
 summary: "Bent u ondernemer? Steeds meer zakelijke brieven van de Belastingdienst komen digitaal beschikbaar. Wilt u zakelijke post van de Belastingdienst niet meer op papier ontvangen? U kunt nu uw keuze doorgeven in Mijn Belastingdienst Zakelijk."
-relevance: "Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+relevance: "Voor iedere ondernemer die post van de Belastingdienst krijgt: u kunt nu in Mijn Belastingdienst Zakelijk doorgeven dat u zakelijke post niet meer op papier wilt ontvangen. Het is een keuze, geen verplichting. Kiest u voor digitaal, kijk dan regelmatig in Mijn Belastingdienst Zakelijk, zodat u geen brief met een termijn mist."
 tags: []
 audiences: ["mkb-ondernemer"]
 featured: false

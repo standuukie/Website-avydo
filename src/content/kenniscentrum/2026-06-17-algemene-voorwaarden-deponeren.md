@@ -1,6 +1,6 @@
 ---
 title: "Algemene voorwaarden deponeren"
-category: "Administratie & jaarrekening"
+category: "Ondernemen & rechtsvormen"
 priority: "praktisch"
 publishedAt: 2026-06-17T14:04:08.000Z
 sourceName: "KVK"
