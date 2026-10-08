@@ -6,7 +6,7 @@ publishedAt: 2026-03-16T08:29:36.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/geldzaken/inkomstenbelasting-voor-ondernemers/"
 summary: "Inkomstenbelasting is de belasting die je over je inkomen betaalt. Lees hoe dit voor ondernemers werkt."
-relevance: "Dit kan gevolgen hebben voor uw aangifte inkomstenbelasting. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur."
+relevance: "De winst van uw eenmanszaak, vof of maatschap valt onder uw persoonlijke aangifte inkomstenbelasting (box 1). Die fiscale winst is niet automatisch gelijk aan de winst in uw boekhouding en kan lager uitvallen door de ondernemersaftrek; lees daarover onze gids ‘Ondernemersaftrek: welke fiscale aftrekposten gelden voor u als IB-ondernemer?’."
 tags: []
 audiences: ["mkb-ondernemer"]
 featured: false

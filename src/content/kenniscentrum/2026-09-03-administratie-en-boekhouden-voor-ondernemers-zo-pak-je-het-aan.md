@@ -6,7 +6,7 @@ publishedAt: 2026-09-03T11:58:54.000Z
 sourceName: "KVK"
 sourceUrl: "https://www.kvk.nl/geldzaken/administratie-en-boekhouden-voor-ondernemers/"
 summary: "Een goede administratie niet alleen verplicht, maar ook handig. Je krijgt inzicht in hoe je bedrijf ervoor staat, zodat je op tijd kunt bijsturen."
-relevance: "Dit kan relevant zijn voor uw jaarrekening of financiële administratie. Bespreek met uw accountant of dit gevolgen heeft voor uw onderneming."
+relevance: "Een administratie bijhouden is voor iedere ondernemer wettelijk verplicht, en een sluitende administratie is de basis voor juiste belastingaangiften. Houd zakelijke en privé-uitgaven gescheiden en werk uw administratie doorlopend bij; dat maakt ook de jaarlijkse aanlevering aan uw accountant een stuk eenvoudiger."
 tags: []
 audiences: ["mkb-ondernemer"]
 featured: false
