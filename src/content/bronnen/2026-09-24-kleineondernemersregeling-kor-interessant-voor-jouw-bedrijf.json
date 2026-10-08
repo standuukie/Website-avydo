@@ -1,0 +1,15 @@
+{
+  "sourceUrl": "https://www.kvk.nl/geldzaken/kleineondernemersregeling-gebruiken/",
+  "sourceName": "KVK",
+  "title": "Kleineondernemersregeling (KOR) interessant voor jouw bedrijf?",
+  "description": "Met de KOR hoef je geen btw af te dragen als je omzet onder de €20.000 per jaar blijft. Ontdek of de KOR bij je onderneming past.",
+  "sourceLastModified": "2026-09-24T09:06:08.000Z",
+  "fetchedAt": "2026-10-01T15:27:34.457Z",
+  "category": "Btw",
+  "priority": "actueel",
+  "audiences": [
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

@@ -1,0 +1,16 @@
+{
+  "sourceUrl": "https://www.kvk.nl/starten/boekhouder-of-niet/",
+  "sourceName": "KVK",
+  "title": "Boekhouder of niet?",
+  "description": "In Kwestie van Kiezen leggen we startende ondernemers een keuze voor. Vandaag: Boekhouder of niet?",
+  "sourceLastModified": "2026-02-19T08:25:51.000Z",
+  "fetchedAt": "2026-10-01T19:43:23.333Z",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [
+    "starter",
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

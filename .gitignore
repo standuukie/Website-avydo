@@ -7,6 +7,8 @@ dist/
 
 # kenniscentrum fetch script run output
 .kenniscentrum-run-result.json
+.kenniscentrum-pr.md
+.kenniscentrum-pr-title.txt
 
 # dependencies
 node_modules/

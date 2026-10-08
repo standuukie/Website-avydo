@@ -10,7 +10,7 @@
 // "e-facturatie/rapportage"-nieuws eerder ten onrechte wegfilterde.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,7 +63,7 @@ import {
 // "relevant" zou komen een onparsebare datum mee: publishItem() geeft dan
 // altijd null terug vóórdat writeArticle() wordt aangeroepen (zie
 // fetch-articles.mjs), dus stages.relevant kan veilig getest worden zonder
-// dat stages.published ooit een echt bestand wegschrijft. Dit is dezelfde,
+// dat stages.recorded ooit een echt bestand wegschrijft. Dit is dezelfde,
 // reeds bestaande "nooit fabricage"-vangrail in publishItem, niet een nieuw
 // mechanisme voor deze tests.
 async function withMockedFetch(handler, fn) {
@@ -788,7 +788,7 @@ test('processRssSource telt elke afwijzingsreden apart en sluitend op fetched (d
   assert.equal(result.stages.reasons.irrelevant, 1);
   assert.equal(result.stages.relevant, 1);
   // Ongeldige pubDate -> publishItem geeft null, nooit written (zie withMockedFetch-toelichting).
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
   assert.equal(result.stages.reasons.notEvaluated, 0);
   // Sluitendheid: elk fetched item valt in precies één van deze emmers.
   const { reasons } = result.stages;
@@ -817,7 +817,7 @@ test('processRssSource: items die nooit bekeken zijn doordat het budget al op wa
   assert.equal(result.stages.reasons.shortDescription, 0);
   assert.equal(result.stages.reasons.irrelevant, 0);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 // --- processSitemapSource: stages.reasons (Rijksoverheid) ---
@@ -866,7 +866,7 @@ test('processSitemapSource telt elke afwijzingsreden apart en sluitend op fetche
   assert.equal(result.stages.reasons.metadataRejected, 1);
   assert.equal(result.stages.reasons.irrelevant, 1);
   assert.equal(result.stages.relevant, 1);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
   assert.equal(result.stages.reasons.notEvaluated, 0);
   const { reasons } = result.stages;
   assert.equal(
@@ -906,6 +906,18 @@ test('processSitemapSource: items die nooit bekeken zijn doordat het budget al o
 // de module-level CONTENT_DIR-constante (eenmalig gelezen bij import, zie
 // fetch-articles.mjs) naar de tijdelijke map wijst.
 let kvkTestImportCounter = 0;
+
+// Bronrecords (JSON) die een process*Source-run in de geïsoleerde bronlaag
+// (<CONTENT_DIR>/bronnen) heeft geschreven. Sinds 2026-10-08 schrijft de
+// import geen zichtbare artikelen meer, alleen bronrecords.
+function writtenRecordsIn(contentDir) {
+  const dir = path.join(contentDir, 'bronnen');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(path.join(dir, f), 'utf8')));
+}
+function writtenArticlesIn(contentDir) {
+  return readdirSync(contentDir).filter((f) => f.endsWith('.md') && !f.startsWith('bestaand-'));
+}
 async function withIsolatedKvkModule(existingArticles, fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'kenniscentrum-kvk-test-'));
   for (const [i, { title, category }] of existingArticles.entries()) {
@@ -966,7 +978,7 @@ test('processKvkSource telt parseFailures als de artikelpagina geen betrouwbare 
   assert.equal(result.stages.reasons.parseFailures, 1);
   assert.equal(result.stages.parsed, 0);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 test('processKvkSource telt procedureServiceRejected op basis van de echte paginatitel, ook als de URL-slug dat niet liet zien', async () => {
@@ -982,7 +994,7 @@ test('processKvkSource telt procedureServiceRejected op basis van de echte pagin
   assert.equal(result.stages.parsed, 1);
   assert.equal(result.stages.reasons.procedureServiceRejected, 1);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 test('processKvkSource telt relevanceRejected als de echte titel+samenvatting op geen enkele categorie scoort', async () => {
@@ -998,7 +1010,7 @@ test('processKvkSource telt relevanceRejected als de echte titel+samenvatting op
   assert.equal(result.stages.parsed, 1);
   assert.equal(result.stages.reasons.relevanceRejected, 1);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 test('processKvkSource telt titleSignalDowngraded (informationeel) als alleen de samenvatting een signaal geeft, en telt het item alsnog als relevant', async () => {
@@ -1019,7 +1031,7 @@ test('processKvkSource telt titleSignalDowngraded (informationeel) als alleen de
   assert.equal(result.stages.reasons.relevanceRejected, 0);
   assert.equal(result.stages.reasons.overlapRejected, 0);
   assert.equal(result.stages.relevant, 1);
-  assert.equal(result.stages.published, 0); // ongeldige datum, geen schrijfactie
+  assert.equal(result.stages.recorded, 0); // ongeldige datum, geen schrijfactie
 });
 
 test('processKvkSource: kandidaten die door het pagina-ophaal-/run-budget nooit zijn opgehaald, tellen als notFetchedDueToLimit', async () => {
@@ -1035,7 +1047,7 @@ test('processKvkSource: kandidaten die door het pagina-ophaal-/run-budget nooit 
   assert.equal(result.stages.reasons.notFetchedDueToLimit, 1);
   assert.equal(result.stages.parsed, 0);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 test('processKvkSource telt overlapRejected bij een bestaand, inhoudelijk vergelijkbaar Kenniscentrum-artikel (zelfde bestaande overlap-algoritme, alleen nu geteld)', async () => {
@@ -1054,7 +1066,7 @@ test('processKvkSource telt overlapRejected bij een bestaand, inhoudelijk vergel
   assert.equal(result.stages.parsed, 1);
   assert.equal(result.stages.reasons.overlapRejected, 1);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 // --- Rijksoverheid: sitemap.xml (index) -> genummerde algemene sub-sitemaps ---
@@ -1145,7 +1157,7 @@ test('processSitemapSource (Rijksoverheid-poort via topic-API): ontdekt kandidat
   // bronvermelding is lastig zonder te schrijven; i.p.v. daarvan: ongeldige
   // datum op het relevante item voorkomt een echte schrijfactie, net als
   // bij de andere process*Source-tests in dit bestand.
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 // --- Regressie (2026-10-01): 'nba'-substring-false-positives + smalle
@@ -1903,7 +1915,7 @@ test('processSitemapSource (rijksoverheid-topic-api-variant): een kandidaat die 
   assert.equal(result.stages.fetched, 1);
   assert.equal(result.stages.reasons.duplicate, 1);
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 // --- Bestaande relevantie-flow blijft volledig van toepassing (geen bypass) ---
@@ -1937,7 +1949,7 @@ test('processSitemapSource (rijksoverheid-topic-api-variant): een topic-kandidaa
 
   assert.equal(result.stages.relevant, 1); // alleen het dividendstripping-artikel (via categoryKeyword 'dividend')
   assert.equal(result.stages.reasons.irrelevant, 1); // het vliegbelasting-artikel
-  assert.equal(result.stages.published, 0); // ongeldige datum voorkomt een echte schrijfactie (zelfde patroon als de andere tests in dit bestand)
+  assert.equal(result.stages.recorded, 0); // ongeldige datum voorkomt een echte schrijfactie (zelfde patroon als de andere tests in dit bestand)
 });
 
 // --- Empty/error response ---
@@ -2256,7 +2268,7 @@ test('rijksoverheid-topic-api leeftijdsgrens: een relevant ogend backlog-artikel
   assert.equal(result.stages.reasons.tooOld, 1);
   assert.equal(result.stages.parsed, 0); // nooit verder geëvalueerd
   assert.equal(result.stages.relevant, 0);
-  assert.equal(result.stages.published, 0);
+  assert.equal(result.stages.recorded, 0);
 });
 
 test('rijksoverheid-topic-api leeftijdsgrens: precies op de grens wordt doorgelaten naar de bestaande relevantiepoort', async () => {
@@ -2299,7 +2311,7 @@ test('leeftijdsgrens geldt niet voor Belastingdienst: een feed-item uit 2018 wor
     (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse('', 404)),
     () => mod.processRssSource(belastingdienst, new Set(), { count: 50 }),
   ));
-  assert.equal(result.stages.published, 1);
+  assert.equal(result.stages.recorded, 1);
   assert.equal(result.stages.reasons.tooOld, undefined);
 });
 
@@ -2320,13 +2332,12 @@ test('Rijksoverheid-bron: een gepubliceerd topic-API-artikel krijgt sourceName "
       }
       return htmlResponse('', 404);
     }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW));
-    assert.equal(result.stages.published, 1);
-    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
-    return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => readFileSync(path.join(dir, f), 'utf8'));
+    assert.equal(result.stages.recorded, 1);
+    return writtenRecordsIn(process.env.KENNISCENTRUM_CONTENT_DIR);
   });
   assert.equal(written.length, 1);
-  assert.match(written[0], /^sourceName: "Rijksoverheid"$/m);
-  assert.doesNotMatch(written[0], /fiscale topics/);
+  assert.equal(written[0].sourceName, 'Rijksoverheid');
+  assert.equal(written[0].processingStatus, 'kandidaat');
 });
 
 test('content: geen sourceName "Rijksoverheid (fiscale topics)" of "MKB-Nederland" meer; elk Rijksoverheid-artikel is een rijksoverheid.nl-nieuwsartikel', () => {
@@ -2393,7 +2404,7 @@ test('Rijksoverheid-limiet: publiceert maximaal 30 per run; duplicates en irrele
   assert.equal(result.stages.reasons.duplicate, 3);
   assert.equal(result.stages.reasons.irrelevant, 4);
   assert.equal(result.stages.reasons.tooOld, 0);
-  assert.equal(result.stages.published, 30);
+  assert.equal(result.stages.recorded, 30);
   assert.equal(result.added, 30);
   assert.equal(result.stages.reasons.notEvaluated, 3); // de laatste 3 relevante kandidaten volgen in een volgende run
 });
@@ -2408,7 +2419,7 @@ test('Rijksoverheid-limiet: het gedeelde totaalbudget per run blijft daarnaast g
     }
     return htmlResponse(`<html><head><title>Kabinet wijzigt regels box 3 ${url.split('/').pop()} | Rijksoverheid.nl</title><meta name="description" content="Het kabinet past de heffing in box 3 aan voor spaarders en beleggers."/></head></html>`);
   }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 5 }, TOPIC_TEST_NOW)));
-  assert.equal(result.stages.published, 5);
+  assert.equal(result.stages.recorded, 5);
 });
 
 test('Rijksoverheid-limiet: de 24-maandenregel blijft actief — te oude kandidaten worden vóór de limiet afgewezen en niet gepubliceerd', async () => {
@@ -2422,7 +2433,7 @@ test('Rijksoverheid-limiet: de 24-maandenregel blijft actief — te oude kandida
     }
     return htmlResponse(`<html><head><title>Kabinet wijzigt regels box 3 ${url.split('/').pop()} | Rijksoverheid.nl</title><meta name="description" content="Het kabinet past de heffing in box 3 aan voor spaarders en beleggers."/></head></html>`);
   }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW)));
-  assert.equal(result.stages.published, 3);
+  assert.equal(result.stages.recorded, 3);
   assert.equal(result.stages.reasons.tooOld, 2);
 });
 
@@ -2436,7 +2447,7 @@ test('Belastingdienst-limiet: blijft 10 per run, ook als een bronobject zelf een
       (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse('', 404)),
       () => mod.processRssSource(source, new Set(), { count: 50 }),
     ));
-    assert.equal(result.stages.published, 10);
+    assert.equal(result.stages.recorded, 10);
   }
 });
 
@@ -2456,7 +2467,7 @@ test('KVK-limiet: blijft 10 per run, ook als een bronobject zelf een hogere maxA
     }, () => mod.processKvkSource(source, new Set(), { count: 50 })));
     // Er zijn meer dan 10 kandidaten klaar om op te halen; de limiet stopt bij 10.
     assert.ok(result.stages.reasons.editorialCandidates > 10, `verwacht >10 KVK-kandidaten, kreeg ${result.stages.reasons.editorialCandidates}`);
-    assert.equal(result.stages.published, 10);
+    assert.equal(result.stages.recorded, 10);
   }
 });
 
@@ -2554,7 +2565,7 @@ for (const key of ['sowisRonde', 'sowisVoorbereiding', 'uitkeringsbedragenIoaz',
 // Volgorde in publishItem: categoryKeywords-treffer → categorie-hint van het
 // signaal dat het artikel relevant maakte → defaultCategory. Draait de
 // echte bronconfiguratie en leest de categorie uit het weggeschreven
-// artikel (geïsoleerde CONTENT_DIR).
+// bronrecord (geïsoleerde CONTENT_DIR met eigen bronlaag).
 
 async function publishedCategoryFor({ title, description, financien = false }) {
   return withIsolatedKvkModule([], async (mod) => {
@@ -2567,10 +2578,9 @@ async function publishedCategoryFor({ title, description, financien = false }) {
       const crumb = financien ? '<a href="/ministeries/ministerie-van-financien">Ministerie van Financiën</a>' : '';
       return htmlResponse(`<html><head><title>${title} | Rijksoverheid.nl</title><meta name="description" content="${description}"/></head><body>${crumb}</body></html>`);
     }, () => mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TOPIC_TEST_NOW));
-    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
-    const files = readdirSync(dir).filter((f) => f.endsWith('.md'));
-    assert.equal(files.length, 1, `verwacht één gepubliceerd artikel voor "${title}"`);
-    return readFileSync(path.join(dir, files[0]), 'utf8').match(/^category: "(.*)"$/m)?.[1];
+    const records = writtenRecordsIn(process.env.KENNISCENTRUM_CONTENT_DIR);
+    assert.equal(records.length, 1, `verwacht één bronrecord voor "${title}"`);
+    return records[0].category;
   });
 }
 
@@ -2652,17 +2662,10 @@ const RIJKSOVERHEID_LIKE_BODY = `<p>Nieuwsbericht 10-09-2026 | 14:30</p>
   <p>Een vierde alinea, zodat deze structuur voor de Rijksoverheid-extractie zeker een geldige hoofdtekst zou opleveren.</p>
   <h2>Heeft deze informatie u geholpen?</h2>`;
 
-function writtenFilesIn(dir) {
-  return readdirSync(dir).filter((f) => f.endsWith('.md') && !f.startsWith('bestaand-')).map((f) => readFileSync(path.join(dir, f), 'utf8'));
-}
-function bodyAndSummary(fileText) {
-  const [, frontmatter, body] = fileText.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  return { body, summary: frontmatter.match(/^summary: "(.*)"$/m)[1] };
-}
 
-test('regressie body-extractie: een KVK-artikel krijgt nog steeds de summary als markdown-body, ook met Rijksoverheid-achtige paginastructuur', async () => {
+test('KVK-import: geen zichtbaar artikel maar een bronrecord; de Rijksoverheid-extractor wordt niet gebruikt en zonder <main> is er geen hoofdtekst', async () => {
   const candidateLoc = 'https://www.kvk.nl/belastingen/btw-aangifte-doen-uitgelegd/';
-  const files = await withIsolatedKvkModule([], async (mod) => {
+  const { records, articles } = await withIsolatedKvkModule([], async (mod) => {
     // Zelfde structuur zou bij Rijksoverheid wél een body opleveren.
     assert.ok(mod.extractRijksoverheidArticleBody(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`));
     const result = await withMockedFetch(
@@ -2671,28 +2674,37 @@ test('regressie body-extractie: een KVK-artikel krijgt nog steeds de summary als
       )),
       () => mod.processKvkSource(fakeKvkSource, new Set(), { count: 50 }),
     );
-    assert.equal(result.stages.published, 1);
-    return writtenFilesIn(process.env.KENNISCENTRUM_CONTENT_DIR);
+    assert.equal(result.stages.recorded, 1);
+    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
+    return { records: writtenRecordsIn(dir), articles: writtenArticlesIn(dir) };
   });
-  assert.equal(files.length, 1);
-  const { body, summary } = bodyAndSummary(files[0]);
-  assert.equal(body, `\n${summary}\n`);
-  assert.equal(body.includes('eerste inhoudelijke alinea'), false);
+  assert.deepEqual(articles, []);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceUrl, candidateLoc);
+  assert.equal(records[0].body, undefined);
+  // KVK-lastmod is nooit een publicatiedatum.
+  assert.equal(records[0].sourcePublishedAt, undefined);
+  assert.equal(records[0].sourceLastModified, '2026-09-20T10:00:00.000Z');
+  assert.equal(records[0].priority, 'praktisch');
 });
 
-test('regressie body-extractie: een Belastingdienst-artikel (RSS) krijgt nog steeds de summary als markdown-body', async () => {
+test('Belastingdienst-import (RSS): bronrecord met de hoofdtekst van de bronpagina (<main>), geen zichtbaar artikel', async () => {
   const belastingdienst = sources.find((s) => s.id === 'belastingdienst-zakelijk');
   const feed = `<?xml version="1.0"?><rss><channel><item><title>Btw-aangifte: nieuwe termijnen</title><link>https://www.belastingdienst.nl/body-regressie</link><description>Een bericht over de btw-aangifte voor ondernemers en de nieuwe termijnen.</description><pubDate>Mon, 21 Sep 2026 00:00:00 GMT</pubDate></item></channel></rss>`;
-  const files = await withIsolatedKvkModule([], async (mod) => {
-    assert.ok(mod.extractRijksoverheidArticleBody(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`));
+  const page = `<html><body><nav><ul><li><a href="/">Home</a></li></ul></nav><main><h1>Btw-aangifte: nieuwe termijnen</h1>${RIJKSOVERHEID_LIKE_BODY.replace('<p>Nieuwsbericht 10-09-2026 | 14:30</p>', '')}</main><footer><p>Belastingdienst footer met genoeg tekst om anders mee te tellen in de extractie.</p></footer></body></html>`;
+  const { records, articles } = await withIsolatedKvkModule([], async (mod) => {
     const result = await withMockedFetch(
-      (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse(`<html><body>${RIJKSOVERHEID_LIKE_BODY}</body></html>`)),
+      (url) => (url === belastingdienst.feedUrl ? xmlResponse(feed) : htmlResponse(page)),
       () => mod.processRssSource(belastingdienst, new Set(), { count: 50 }),
     );
-    assert.equal(result.stages.published, 1);
-    return writtenFilesIn(process.env.KENNISCENTRUM_CONTENT_DIR);
+    assert.equal(result.stages.recorded, 1);
+    const dir = process.env.KENNISCENTRUM_CONTENT_DIR;
+    return { records: writtenRecordsIn(dir), articles: writtenArticlesIn(dir) };
   });
-  assert.equal(files.length, 1);
-  const { body, summary } = bodyAndSummary(files[0]);
-  assert.equal(body, `\n${summary}\n`);
+  assert.deepEqual(articles, []);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourceName, 'Belastingdienst');
+  assert.equal(records[0].sourcePublishedAt, '2026-09-21T00:00:00.000Z');
+  assert.match(records[0].body, /^Een eerste inhoudelijke alinea/);
+  assert.doesNotMatch(records[0].body, /footer|Home|Heeft deze informatie/);
 });

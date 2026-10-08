@@ -12,24 +12,12 @@
 // ("... Terug naar boven"), plus een Next.js-scriptpayload met dezelfde tekst.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { extractRijksoverheidArticleBody } from './fetch-articles.mjs';
 import { sources } from './sources.config.mjs';
-import {
-  splitFrontmatter,
-  replaceMarkdownBody,
-  findRijksoverheidArticles,
-  planBackfill,
-  applyBackfill,
-  parseArgs,
-  main as backfillMain,
-} from './backfill-rijksoverheid-body.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONTENT_DIR = path.resolve(__dirname, '../../src/content/kenniscentrum');
 
 const META = 'Minister Vijlbrief wil dat werkgevers geen huur meer op het minimumloon van werkenden mogen inhouden. Dit schrijft de minister in een brief aan de Tweede Kamer.';
 const PARAGRAPHS = [
@@ -239,8 +227,7 @@ test('"---" in de body kan geen frontmatter openen of afsluiten in het geschreve
   const body = extract({ content, documents: '' });
   assert.ok(body);
   const file = `---\ntitle: "Echt"\nsourceName: "Rijksoverheid"\n---\n\n${body}\n`;
-  const parts = splitFrontmatter(file);
-  assert.equal(parts.frontmatter, '---\ntitle: "Echt"\nsourceName: "Rijksoverheid"\n---\n');
+  assert.equal(file.match(/^---\n[\s\S]*?\n---\n/)[0], '---\ntitle: "Echt"\nsourceName: "Rijksoverheid"\n---\n');
   assert.equal(file.split('\n').filter((l) => l === '---').length, 2);
 });
 
@@ -293,8 +280,13 @@ async function runRijksoverheidPipeline(pageHtml) {
     };
     console.log = (...args) => logs.push(args.join(' '));
     const result = await mod.processSitemapSource(realTopicApiSource, new Set(), { count: 50 }, TEST_NOW);
-    const files = readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => readFileSync(path.join(dir, f), 'utf8'));
-    return { result, files, logs, pageFetches };
+    // Sinds 2026-10-08 schrijft de import bronrecords (bronlaag), geen artikelen.
+    const articles = readdirSync(dir).filter((f) => f.endsWith('.md'));
+    const recordsDir = path.join(dir, 'bronnen');
+    const records = existsSync(recordsDir)
+      ? readdirSync(recordsDir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(path.join(recordsDir, f), 'utf8')))
+      : [];
+    return { result, articles, records, logs, pageFetches };
   } finally {
     console.log = originalLog;
     globalThis.fetch = originalFetch;
@@ -312,31 +304,34 @@ const RELEVANT_PAGE = rijksoverheidPageHtml().replace(
   'Werkgevers mogen geen huur meer inhouden op het minimumloon van arbeidsmigranten; dit raakt de loonadministratie en de loonheffingen van werkgevers.',
 );
 
-test('pipeline: Rijksoverheid-artikel krijgt de geëxtraheerde body als markdown-body; frontmatter (incl. summary) gelijk aan de situatie zonder body', async () => {
+test('pipeline: Rijksoverheid-bron krijgt de geëxtraheerde hoofdtekst in het bronrecord; overige velden gelijk aan de situatie zonder hoofdtekst; geen zichtbaar artikel', async () => {
   const withBody = await runRijksoverheidPipeline(RELEVANT_PAGE);
   const withoutBody = await runRijksoverheidPipeline(RELEVANT_PAGE.replaceAll('Heeft deze informatie u geholpen?', 'Feedback'));
-  assert.equal(withBody.result.stages.published, 1);
-  assert.equal(withoutBody.result.stages.published, 1);
-  const a = splitFrontmatter(withBody.files[0]);
-  const b = splitFrontmatter(withoutBody.files[0]);
-  const stripFetchedAt = (fm) => fm.replace(/^fetchedAt: .*$/m, '');
-  assert.equal(stripFetchedAt(a.frontmatter), stripFetchedAt(b.frontmatter));
-  assert.equal(a.body, `\n${extractRijksoverheidArticleBody(RELEVANT_PAGE)}\n`);
-  // Zonder betrouwbare body: exact het oude gedrag, summary als body.
-  const summary = b.frontmatter.match(/^summary: "(.*)"$/m)[1];
-  assert.equal(b.body, `\n${summary}\n`);
+  assert.equal(withBody.result.stages.recorded, 1);
+  assert.equal(withoutBody.result.stages.recorded, 1);
+  assert.deepEqual(withBody.articles, []);
+  assert.deepEqual(withoutBody.articles, []);
+  const [a] = withBody.records;
+  const [b] = withoutBody.records;
+  assert.equal(a.body, extractRijksoverheidArticleBody(RELEVANT_PAGE));
+  assert.equal(b.body, undefined);
+  const rest = ({ body, fetchedAt, ...other }) => other;
+  assert.deepEqual(rest(a), rest(b));
+  assert.equal(a.sourceUrl, ARTICLE_URL);
+  assert.equal(a.processingStatus, 'kandidaat');
 });
 
 test('pipeline: geen extra HTTP-request voor de body (precies één paginafetch per artikel)', async () => {
   const { pageFetches, result } = await runRijksoverheidPipeline(RELEVANT_PAGE);
-  assert.equal(result.stages.published, 1);
+  assert.equal(result.stages.recorded, 1);
   assert.equal(pageFetches, 1);
 });
 
-test('pipeline: mislukte extractie slaat het artikel niet over (fallback op de summary)', async () => {
-  const { result, files } = await runRijksoverheidPipeline(RELEVANT_PAGE.replace(/Nieuwsbericht/g, 'Persbericht'));
-  assert.equal(result.stages.published, 1);
-  assert.equal(files.length, 1);
+test('pipeline: mislukte extractie slaat de bron niet over (bronrecord zonder hoofdtekst)', async () => {
+  const { result, records } = await runRijksoverheidPipeline(RELEVANT_PAGE.replace(/Nieuwsbericht/g, 'Persbericht'));
+  assert.equal(result.stages.recorded, 1);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].body, undefined);
 });
 
 test('logging: "body extracted (N tekens)" of "body extraction failed", plus één samenvattende regel per run', async () => {
@@ -345,114 +340,6 @@ test('logging: "body extracted (N tekens)" of "body extraction failed", plus é�
   assert.ok(ok.logs.includes(`    body extracted (${body.length} tekens)`), ok.logs.join('\n'));
   assert.ok(ok.logs.includes('  Body-extractie: 1 extracted, 0 failed'));
   const failed = await runRijksoverheidPipeline(RELEVANT_PAGE.replaceAll('Heeft deze informatie u geholpen?', 'Feedback'));
-  assert.ok(failed.logs.includes('    body extraction failed (summary als body)'));
+  assert.ok(failed.logs.includes('    body extraction failed (bron zonder hoofdtekst vastgelegd)'));
   assert.ok(failed.logs.includes('  Body-extractie: 0 extracted, 1 failed'));
-});
-
-// --- Backfill (alleen dry-run uitgevoerd; schrijven alleen in een tijdelijke map) ---
-
-function copyRijksoverheidArticlesToTemp() {
-  const dir = mkdtempSync(path.join(tmpdir(), 'kenniscentrum-backfill-test-'));
-  for (const { file } of findRijksoverheidArticles(CONTENT_DIR)) copyFileSync(path.join(CONTENT_DIR, file), path.join(dir, file));
-  return dir;
-}
-const snapshot = (dir) => Object.fromEntries(readdirSync(dir).sort().map((f) => [f, readFileSync(path.join(dir, f), 'utf8')]));
-const fixtureFetch = async () => RELEVANT_PAGE;
-
-test('backfill: vindt precies alle bestaande Rijksoverheid-artikelen (sourceName "Rijksoverheid"), elk met een rijksoverheid.nl-sourceUrl', () => {
-  const found = findRijksoverheidArticles(CONTENT_DIR);
-  const expected = readdirSync(CONTENT_DIR).filter((f) => f.endsWith('.md') && /^sourceName: "Rijksoverheid"$/m.test(readFileSync(path.join(CONTENT_DIR, f), 'utf8')));
-  assert.deepEqual(found.map((a) => a.file), expected.sort());
-  assert.ok(found.length >= 48, String(found.length));
-  assert.ok(found.every((a) => a.sourceUrl.startsWith('https://www.rijksoverheid.nl/actueel/nieuws/')));
-});
-
-test('backfill: dry-run is de standaard en wijzigt geen enkel bestand; toont per artikel bestandsnaam, lengte, status en eerste 100 tekens', async () => {
-  const dir = copyRijksoverheidArticlesToTemp();
-  try {
-    const before = snapshot(dir);
-    const logs = [];
-    const { plan, written } = await backfillMain([], { contentDir: dir, fetchHtml: fixtureFetch, delayMs: 0, log: (l) => logs.push(l) });
-    assert.equal(written, 0);
-    assert.deepEqual(snapshot(dir), before);
-    assert.equal(plan.length, Object.keys(before).length);
-    const first = plan[0];
-    assert.ok(logs.some((l) => l.includes(first.file) && l.includes(String(first.bodyLength)) && l.startsWith('extracted')));
-    assert.ok(logs.some((l) => l.trim() === first.preview));
-    assert.ok(first.preview.length <= 100);
-    assert.ok(logs.some((l) => l.includes('Dry-run: geen bestanden gewijzigd')));
-    // Expliciet --dry-run: idem.
-    const explicit = await backfillMain(['--dry-run'], { contentDir: dir, fetchHtml: fixtureFetch, delayMs: 0, log: () => {} });
-    assert.equal(explicit.written, 0);
-    assert.deepEqual(snapshot(dir), before);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('backfill: met --write blijft de frontmatter van elk artikel byte-voor-byte gelijk; alleen de markdown-body verandert', async () => {
-  const dir = copyRijksoverheidArticlesToTemp();
-  try {
-    const before = snapshot(dir);
-    const { written } = await backfillMain(['--write'], { contentDir: dir, fetchHtml: fixtureFetch, delayMs: 0, log: () => {} });
-    const after = snapshot(dir);
-    assert.equal(written, Object.keys(before).length);
-    const body = extractRijksoverheidArticleBody(RELEVANT_PAGE);
-    for (const file of Object.keys(before)) {
-      const b = splitFrontmatter(before[file]);
-      const a = splitFrontmatter(after[file]);
-      assert.equal(Buffer.compare(Buffer.from(a.frontmatter, 'utf8'), Buffer.from(b.frontmatter, 'utf8')), 0, file);
-      assert.equal(a.body, `\n${body}\n`, file);
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('backfill: bij mislukte extractie of fetchfout (fallback) wordt het bestand nooit gewijzigd, ook niet met --write', async () => {
-  const dir = copyRijksoverheidArticlesToTemp();
-  try {
-    const before = snapshot(dir);
-    let calls = 0;
-    const flakyFetch = async () => {
-      calls += 1;
-      if (calls % 2 === 0) throw new Error('netwerkfout');
-      return '<html><body><p>Geen nieuwsbericht-structuur.</p></body></html>';
-    };
-    const { plan, written } = await backfillMain(['--write'], { contentDir: dir, fetchHtml: flakyFetch, delayMs: 0, log: () => {} });
-    assert.equal(written, 0);
-    assert.ok(plan.every((e) => e.status === 'fallback' && e.newText === null));
-    assert.deepEqual(snapshot(dir), before);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('backfill: onbekende of tegenstrijdige opties worden geweigerd; zonder opties is het een dry-run', () => {
-  assert.deepEqual(parseArgs([]), { write: false });
-  assert.deepEqual(parseArgs(['--dry-run']), { write: false });
-  assert.deepEqual(parseArgs(['--write']), { write: true });
-  assert.throws(() => parseArgs(['--write', '--dry-run']));
-  assert.throws(() => parseArgs(['--force']));
-});
-
-test('backfill: replaceMarkdownBody behoudt de frontmatter letterlijk en gebruikt dezelfde opmaak als writeArticle', () => {
-  const original = '---\ntitle: "X"\nsupersededBy: "https://www.rijksoverheid.nl/a"\n---\n\nOude summary.\n';
-  const updated = replaceMarkdownBody(original, 'Nieuwe body.\n\nTweede alinea.');
-  assert.equal(updated, '---\ntitle: "X"\nsupersededBy: "https://www.rijksoverheid.nl/a"\n---\n\nNieuwe body.\n\nTweede alinea.\n');
-  assert.equal(replaceMarkdownBody('geen frontmatter', 'x'), null);
-});
-
-test('backfill: planBackfill wijzigt zelf nooit bestanden (alleen applyBackfill schrijft, en alleen "extracted")', async () => {
-  const dir = copyRijksoverheidArticlesToTemp();
-  try {
-    const before = snapshot(dir);
-    const plan = await planBackfill({ contentDir: dir, fetchHtml: fixtureFetch, delayMs: 0 });
-    assert.deepEqual(snapshot(dir), before);
-    const onlyFallback = plan.map((e) => ({ ...e, status: 'fallback' }));
-    assert.equal(applyBackfill(onlyFallback, dir), 0);
-    assert.deepEqual(snapshot(dir), before);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });

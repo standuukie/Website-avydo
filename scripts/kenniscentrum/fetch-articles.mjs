@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 /**
- * Haalt nieuwe artikelen op uit de geconfigureerde bronnen (RSS-feeds en
- * Google News-sitemaps, zie sources.config.mjs), filtert op relevantie voor
- * MKB-ondernemers, genereert een korte eigen samenvatting + "wat betekent
- * dit voor jou"-tekst, en schrijft nieuwe items weg als content-bestanden in
- * src/content/kenniscentrum/.
+ * Dagelijkse Kenniscentrum-run, in twee stappen:
+ *
+ * 1. Bron-ingestie: haalt nieuwe berichten op uit de geconfigureerde
+ *    officiële bronnen (zie sources.config.mjs), filtert op relevantie voor
+ *    MKB-ondernemers en legt elk relevant bericht vast als bronrecord in de
+ *    bronlaag (src/content/bronnen/, zie source-records.mjs). Een bronbericht
+ *    wordt nooit meer rechtstreeks een zichtbaar Kenniscentrum-artikel.
+ * 2. Redactie (zie editorial.mjs): kiest uit de bronlaag maximaal twee
+ *    onderwerpen, laat daar een eigen Avydo-artikel over schrijven en
+ *    controleert dat vóór het in src/content/kenniscentrum/ komt. Nul
+ *    artikelen is een normale uitkomst. De GitHub Action zet het resultaat
+ *    in een Pull Request; er wordt niets rechtstreeks gepubliceerd.
  *
  * Nooit fabricage: als een bron niet bereikbaar is, geen geldige feed/sitemap
  * levert, of onvoldoende informatie bevat, wordt die bron/dat item simpelweg
@@ -15,13 +22,14 @@
  * nooit de andere bronnen blokkeren of de hele run laten mislukken.
  *
  * Gebruik: node scripts/kenniscentrum/fetch-articles.mjs
- * Env: ANTHROPIC_API_KEY (optioneel) — indien gezet, wordt Claude Haiku
- *      gebruikt voor een betere samenvatting/relevantie-tekst. Zonder deze
- *      key valt het script terug op een extractieve samenvatting (de eigen
- *      tekst van de bron) + een sjabloon-tekst per categorie.
+ * Env: ANTHROPIC_API_KEY — nodig voor de redactiestap; zonder key worden
+ *      alleen bronrecords vastgelegd en ontstaat er geen artikel.
+ *      KENNISCENTRUM_PR_LIST_FILE (optioneel) — JSON van `gh pr list`, zodat
+ *      een bron uit een openstaand of afgewezen voorstel niet opnieuw wordt
+ *      gekozen.
  */
 import { XMLParser } from 'fast-xml-parser';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -32,11 +40,19 @@ import {
   maxArticlesPerRun,
   maxArticlesPerSourcePerRun,
 } from './sources.config.mjs';
+import { loadKnownSourceUrls, writeSourceRecord } from './source-records.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = process.env.KENNISCENTRUM_CONTENT_DIR
   ? path.resolve(process.env.KENNISCENTRUM_CONTENT_DIR)
   : path.resolve(__dirname, '../../src/content/kenniscentrum');
+// Bronlaag. Met een eigen KENNISCENTRUM_CONTENT_DIR (tests) standaard een
+// submap daarvan, zodat een test nooit in de echte bronlaag schrijft.
+const SOURCES_DIR = process.env.KENNISCENTRUM_SOURCES_DIR
+  ? path.resolve(process.env.KENNISCENTRUM_SOURCES_DIR)
+  : process.env.KENNISCENTRUM_CONTENT_DIR
+    ? path.join(CONTENT_DIR, 'bronnen')
+    : path.resolve(__dirname, '../../src/content/bronnen');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -59,13 +75,6 @@ export function stripHtml(input) {
     .trim();
 }
 
-function truncate(text, max) {
-  if (text.length <= max) return text;
-  const cut = text.slice(0, max);
-  const lastSpace = cut.lastIndexOf(' ');
-  return `${cut.slice(0, lastSpace > 0 ? lastSpace : max)}…`;
-}
-
 export function slugify(input) {
   return input
     .toLowerCase()
@@ -74,22 +83,6 @@ export function slugify(input) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
-}
-
-function yamlEscape(str) {
-  return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function loadExistingSourceUrls() {
-  const urls = new Set();
-  if (!existsSync(CONTENT_DIR)) return urls;
-  for (const file of readdirSync(CONTENT_DIR)) {
-    if (!file.endsWith('.md')) continue;
-    const text = readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-    const match = text.match(/^sourceUrl:\s*"([^"]*)"/m);
-    if (match) urls.add(match[1]);
-  }
-  return urls;
 }
 
 async function fetchWithTimeout(url, timeoutMs) {
@@ -359,6 +352,69 @@ export function extractRijksoverheidArticleBody(html) {
   return body;
 }
 
+// --- Belastingdienst en KVK: hoofdtekst van de bronpagina (2026-10-08) ---
+//
+// Generieke, behoudende extractie voor bronnen zonder vaste tekstmarkers
+// zoals Rijksoverheid ze heeft. Werkt uitsluitend binnen het <main>-element,
+// ná de <h1>, en stopt bij de eerste feedback-/deelvraag. Navigatie,
+// zijbalken, formulieren en kop-/voetteksten vallen vooraf weg, net als
+// lijstitems die alleen uit een link bestaan (menu's, "zie ook").
+// Dezelfde drempels als bij Rijksoverheid: te weinig tekst of te weinig
+// inhoudelijke alinea's = null. Dan is er geen betrouwbare brontekst en
+// komt de bron niet in aanmerking voor een Avydo-artikel (er wordt nooit
+// op basis van alleen de korte omschrijving geschreven).
+// Let op: de HTML van belastingdienst.nl en kvk.nl kon vanuit de
+// ontwikkelomgeving niet worden opgehaald; de opbrengst per run staat
+// daarom in de log ("hoofdtekst N tekens" / "geen betrouwbare hoofdtekst").
+const MAIN_CONTENT_EXCLUDED_BLOCKS = /<(nav|aside|header|footer|form|button|dialog)\b[\s\S]*?<\/\1\s*>/gi;
+const MAIN_CONTENT_END = /Heeft(?:\s|&nbsp;)+deze(?:\s|&nbsp;)+informatie|Was(?:\s|&nbsp;)+deze(?:\s|&nbsp;)+(?:informatie|pagina)|Deel(?:\s|&nbsp;)+deze(?:\s|&nbsp;)+pagina|Vond(?:\s|&nbsp;)+je(?:\s|&nbsp;)+dit/i;
+const LINK_ONLY_LIST_ITEM = /^\s*<a\b[^>]*>[\s\S]*?<\/a>\s*$/i;
+
+/**
+ * Hoofdtekst van een bronpagina (Belastingdienst, KVK) als markdown-tekst,
+ * of null als die niet betrouwbaar te extraheren is.
+ * @param {string} html
+ * @returns {string | null}
+ */
+export function extractMainContentBody(html) {
+  if (typeof html !== 'string' || html.length === 0) return null;
+  const cleaned = html.replace(/<!--[\s\S]*?-->/g, ' ').replace(NON_CONTENT_BLOCKS, ' ');
+  const main = cleaned.match(/<main\b[^>]*>([\s\S]*?)<\/main\s*>/i);
+  if (!main) return null;
+  let region = main[1].replace(MAIN_CONTENT_EXCLUDED_BLOCKS, ' ');
+  const h1 = region.match(/<\/h1\s*>/i);
+  if (h1) region = region.slice(h1.index + h1[0].length);
+  const end = region.match(MAIN_CONTENT_END);
+  if (end) region = region.slice(0, end.index);
+
+  const blocks = [];
+  for (const m of region.matchAll(/<(p|h2|h3|li)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)) {
+    const tag = m[1].toLowerCase();
+    if (tag === 'li' && LINK_ONLY_LIST_ITEM.test(m[2])) continue;
+    const text = rijksoverheidBlockText(m[2]);
+    if (!text) continue;
+    blocks.push({ tag, line: neutralizeMarkdownLine(tag === 'li' ? `- ${text}` : text) });
+  }
+
+  const body = truncateAtSentenceBoundary(blocks.map((b) => b.line).join('\n\n'), RIJKSOVERHEID_BODY_MAX_LENGTH);
+  if (!body || body.length < RIJKSOVERHEID_BODY_MIN_LENGTH) return null;
+  const paragraphs = blocks.filter((b) => b.tag === 'p' && b.line.length >= RIJKSOVERHEID_BODY_MIN_PARAGRAPH_LENGTH).length;
+  if (paragraphs < RIJKSOVERHEID_BODY_MIN_PARAGRAPHS) return null;
+  return body;
+}
+
+// Haalt een bronpagina op en geeft de hoofdtekst terug, of null (pagina niet
+// bereikbaar of tekst niet betrouwbaar te extraheren). Nooit een fout.
+async function fetchSourcePageBody(url) {
+  try {
+    const res = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+    if (!res.ok) return null;
+    return extractMainContentBody(await res.text());
+  } catch {
+    return null;
+  }
+}
+
 // `extractBody` (alleen voor de Rijksoverheid-bron) haalt uit dezelfde HTML
 // ook de hoofdtekst; geen extra request. Een fout in de extractie maakt
 // alleen `body` null, nooit de rest van de metadata.
@@ -514,7 +570,7 @@ export function matchesRelevanceSignal(text, rules = []) {
 
 // De `category`-hint van de eerste relevanceSignals-regel mét hint die op
 // deze tekst matcht (zelfde matcher als matchesRelevanceSignal), of
-// undefined. Zie publishItem: alleen gebruikt zonder categoryKeywords-treffer.
+// undefined. Zie recordSourceItem: alleen gebruikt zonder categoryKeywords-treffer.
 export function findRelevanceSignalCategory(text, rules = []) {
   const normalized = normalizeForTermRules(text);
   return rules.find((rule) => rule.category && matchesTermRule(normalized, rule))?.category;
@@ -560,151 +616,49 @@ export function pickPriority(text, pubDate) {
   return 'praktisch';
 }
 
-// Herzien op 2026-10-01, in lijn met de nieuwe categorie-indeling (zie
-// src/content/config.ts en categoryKeywords in sources.config.mjs).
-const RELEVANCE_TEMPLATES = {
-  'Fiscale actualiteit': 'Dit kan gevolgen hebben voor uw fiscale positie of aangifte. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
-  Inkomstenbelasting: 'Dit kan gevolgen hebben voor uw aangifte inkomstenbelasting. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
-  Btw: 'Dit kan gevolgen hebben voor uw btw-aangifte of -administratie. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
-  'BV & DGA': 'Als DGA of BV kan dit gevolgen hebben voor uw fiscale positie. Bespreek met uw adviseur of dit voor uw situatie relevant is.',
-  Vennootschapsbelasting: 'Dit kan gevolgen hebben voor de vennootschapsbelasting van uw BV. Controleer of deze wijziging van toepassing is op uw situatie en raadpleeg bij twijfel uw adviseur.',
-  'Personeel & loonheffingen': 'Voor werkgevers met personeel kan dit gevolgen hebben voor de loonadministratie of arbeidsvoorwaarden. Controleer wat dit concreet voor uw organisatie betekent.',
-  'Administratie & jaarrekening': 'Dit kan relevant zijn voor uw jaarrekening of financiële administratie. Bespreek met uw accountant of dit gevolgen heeft voor uw onderneming.',
-  'Ondernemen & rechtsvormen': 'Dit kan relevant zijn voor uw onderneming of rechtsvorm. Bekijk de volledige publicatie om te bepalen of actie nodig is.',
-};
-
-function extractiveSummary(item) {
-  const summary = item.description ? truncate(item.description, 280) : truncate(item.title, 280);
-  return { summary, aiAssisted: false };
-}
-
-async function aiSummary(item, category) {
-  const prompt = `Je schrijft voor het Kenniscentrum van Avydo, een Nederlands accountantskantoor. Gebruik UITSLUITEND onderstaande brontekst. Verzin geen feiten, cijfers, data, bedragen of regels die niet letterlijk in de brontekst staan.
-
-Titel: ${item.title}
-Bron: ${item.description}
-
-Geef terug als JSON met exact deze velden, geen andere tekst:
-{"summary": "een objectieve samenvatting van 1-2 zinnen, uitsluitend gebaseerd op de brontekst", "relevance": "1-2 zinnen die uitleggen wat dit in algemene zin kan betekenen voor een Nederlandse MKB-ondernemer, voorzichtig geformuleerd (\"kan gevolgen hebben voor\", niet \"is altijd voordelig\"), zonder nieuwe feiten toe te voegen die niet uit de brontekst blijken"}`;
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`Anthropic API ${res.status}`);
-    const data = await res.json();
-    const text = data?.content?.[0]?.text ?? '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Geen JSON in AI-respons');
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!parsed.summary || !parsed.relevance) throw new Error('Onvolledige AI-respons');
-    return { summary: parsed.summary, relevance: parsed.relevance, aiAssisted: true };
-  } catch (err) {
-    log(`    AI-samenvatting mislukt (${err.message}), val terug op extractieve samenvatting.`);
-    const { summary } = extractiveSummary(item);
-    return { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES['Fiscale actualiteit'], aiAssisted: false };
-  }
-}
-
-// `body` (optioneel, alleen Rijksoverheid) vervangt de markdown-body; zonder
-// body blijft die exact zoals voorheen de summary. De frontmatter is in
-// beide gevallen identiek.
-function writeArticle({ title, category, priority, publishedAt, sourceName, sourceUrl, summary, relevance, audiences, aiAssisted, body }) {
-  const dateStr = publishedAt.toISOString().slice(0, 10);
-  let baseSlug = `${dateStr}-${slugify(title)}`;
-  let filename = `${baseSlug}.md`;
-  let n = 2;
-  while (existsSync(path.join(CONTENT_DIR, filename))) {
-    filename = `${baseSlug}-${n}.md`;
-    n += 1;
-  }
-
-  const frontmatter = [
-    '---',
-    `title: "${yamlEscape(title)}"`,
-    `category: "${category}"`,
-    `priority: "${priority}"`,
-    `publishedAt: ${publishedAt.toISOString()}`,
-    `sourceName: "${yamlEscape(sourceName)}"`,
-    `sourceUrl: "${yamlEscape(sourceUrl)}"`,
-    `summary: "${yamlEscape(summary)}"`,
-    `relevance: "${yamlEscape(relevance)}"`,
-    'tags: []',
-    `audiences: [${audiences.map((a) => `"${a}"`).join(', ')}]`,
-    'featured: false',
-    'hidden: false',
-    `aiAssisted: ${aiAssisted}`,
-    `fetchedAt: ${new Date().toISOString()}`,
-    '---',
-    '',
-    body ?? summary,
-    '',
-  ].join('\n');
-
-  mkdirSync(CONTENT_DIR, { recursive: true });
-  writeFileSync(path.join(CONTENT_DIR, filename), frontmatter, 'utf8');
-  return filename;
-}
-
-// Verwerkt één ruw item (na parsing, vóór relevantie/schrijven) dat al een
-// niet-lege description heeft. Gedeeld door de RSS- en sitemap-paden zodat
-// categorisering/samenvatting/schrijven identiek verloopt, ongeacht bron-type.
+// Legt één relevant bronbericht vast als bronrecord (verwerkingsstatus
+// 'kandidaat'). Gedeeld door de RSS-, sitemap- en KVK-paden, zodat
+// categorisering en vastleggen identiek verlopen, ongeacht bron-type.
 // `categoryHint` (optioneel, alleen vanuit de relevantiepoort van
-// processSitemapSource): categorie van het signaal dat het artikel relevant
+// processSitemapSource): categorie van het signaal dat het bericht relevant
 // maakte. Volgorde: categoryKeywords-treffer → categoryHint → defaultCategory.
-async function publishItem(item, source, categoryHint) {
+//
+// Datums: `item.pubDate` is bij RSS en de Rijksoverheid-API de
+// publicatiedatum van de bron. Bij KVK (`item.lastModified`) is het de
+// "laatst gewijzigd"-datum uit de sitemap; die telt nooit als nieuwsdatum
+// en dus ook niet mee voor prioriteit 'actueel'.
+function recordSourceItem(item, source, categoryHint) {
   const combinedText = `${item.title} ${item.description}`;
-  const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date();
-  if (Number.isNaN(publishedAt.getTime())) return null;
+  const sourcePublishedAt = item.pubDate ? new Date(item.pubDate) : null;
+  const sourceLastModified = item.lastModified ? new Date(item.lastModified) : null;
+  if (sourcePublishedAt && Number.isNaN(sourcePublishedAt.getTime())) return null;
+  if (sourceLastModified && Number.isNaN(sourceLastModified.getTime())) return null;
+  if (!sourcePublishedAt && !sourceLastModified) return null;
 
   const category = pickCategory(combinedText, categoryHint ?? source.defaultCategory) ?? 'Fiscale actualiteit';
-  const priority = pickPriority(combinedText, publishedAt);
-  const audiences = pickAudiences(combinedText);
-
-  let summaryData;
-  if (ANTHROPIC_API_KEY) {
-    summaryData = await aiSummary(item, category);
-  } else {
-    const { summary } = extractiveSummary(item);
-    summaryData = { summary, relevance: RELEVANCE_TEMPLATES[category] ?? RELEVANCE_TEMPLATES['Fiscale actualiteit'], aiAssisted: false };
-  }
-
-  return writeArticle({
-    title: item.title,
-    category,
-    priority,
-    publishedAt,
-    sourceName: source.name,
+  return writeSourceRecord(SOURCES_DIR, {
     sourceUrl: item.link,
-    summary: summaryData.summary,
-    relevance: summaryData.relevance,
-    audiences,
-    aiAssisted: summaryData.aiAssisted,
+    sourceName: source.name,
+    title: item.title,
+    description: item.description,
     body: item.body ?? undefined,
+    sourcePublishedAt: sourcePublishedAt ?? undefined,
+    sourceLastModified: sourceLastModified ?? undefined,
+    fetchedAt: new Date(),
+    category,
+    priority: pickPriority(combinedText, sourcePublishedAt),
+    audiences: pickAudiences(combinedText),
+    processingStatus: 'kandidaat',
   });
 }
 
-// Stadia zoals gevraagd: opgehaald -> succesvol geparsed -> relevant ->
-// gepubliceerd. Elke bron rapporteert deze vier tellingen, ongeacht type.
+// Stadia: opgehaald -> succesvol geparsed -> relevant -> vastgelegd in de
+// bronlaag. Elke bron rapporteert deze vier tellingen, ongeacht type.
 // `reasons` is een los, bron-type-specifiek object met tellers die optellen
 // tot `fetched` (zie elke process*Source-functie voor de exacte velden) —
 // puur observability, bepaalt geen enkel gedrag.
 function newStageCounters() {
-  return { fetched: 0, parsed: 0, relevant: 0, published: 0 };
+  return { fetched: 0, parsed: 0, relevant: 0, recorded: 0 };
 }
 
 // --- Observability-helpers (geen invloed op filtering/selectie) ---
@@ -806,15 +760,20 @@ export async function processRssSource(source, existingUrls, remainingBudget) {
     }
     stages.relevant += 1;
 
-    const filename = await publishItem(item, source);
-    if (!filename) continue;
+    // De feed bevat alleen een korte omschrijving; de volledige tekst komt
+    // van de bronpagina zelf (zie extractMainContentBody). Lukt dat niet,
+    // dan wordt de bron zonder hoofdtekst vastgelegd en komt hij niet in
+    // aanmerking voor een Avydo-artikel.
+    const body = await fetchSourcePageBody(item.link);
+    const recordId = recordSourceItem({ ...item, body }, source);
+    if (!recordId) continue;
 
     existingUrls.add(item.link);
     added += 1;
     sourceCount += 1;
     remainingBudget.count -= 1;
-    stages.published += 1;
-    log(`  + ${filename}`);
+    stages.recorded += 1;
+    log(`  + bron ${recordId}${body ? ` (hoofdtekst ${body.length} tekens)` : ' (geen betrouwbare hoofdtekst)'}`);
   }
   // Items die nooit zijn bekeken omdat het bron- of totaalbudget al vóór
   // die iteratie op was (zie de break hierboven) — NIET hetzelfde als
@@ -823,7 +782,7 @@ export async function processRssSource(source, existingUrls, remainingBudget) {
   // wijziging al nooit bekeken, dit maakt dat alleen zichtbaar.
   stages.reasons.notEvaluated = items.length - itemsEvaluated;
 
-  log(`  ${added} nieuw artikel(en) toegevoegd`);
+  log(`  ${added} nieuwe bron(nen) vastgelegd`);
   logReasonBreakdown(stages);
   logRejectionSamples(samples);
   return { added, seen: items.length, ok: true, stages };
@@ -1038,7 +997,7 @@ function subtractMonthsUtc(date, months) {
 //  - precies op de grens (exact maxAgeMonths oud) telt als binnen de grens:
 //    alleen strikt ouder wordt afgewezen;
 //  - ontbrekende/ongeldige datum telt als buiten de grens — zelfde conventie
-//    als publishItem, dat nooit publiceert zonder geldige datum;
+//    als recordSourceItem, dat nooit een bron zonder geldige datum vastlegt;
 //  - een toekomstige datum is niet "ouder dan" de grens en telt als binnen.
 export function isOutsideMaxAge(pubDate, maxAgeMonths, now) {
   if (!pubDate) return true;
@@ -1181,7 +1140,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       // bronnen die zelf `audienceSignals` instellen (momenteel uitsluitend
       // rijksoverheid-topic-api). Bepaalt alleen OF een item relevant is, net
       // als ministryBypass hierboven; de categorie zelf blijft uitsluitend
-      // via categoryKeywords/pickCategory in publishItem bepaald.
+      // via categoryKeywords/pickCategory in recordSourceItem bepaald.
       const audienceMatch = source.audienceSignals?.some((kw) => combinedText.toLowerCase().includes(kw));
       // Smal, bron-gescoped positief signaal (zie relevanceSignals in
       // sources.config.mjs, momenteel alleen rijksoverheid-topic-api) —
@@ -1221,26 +1180,26 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
       }
       // Categorie-hint uitsluitend van een signaal dat dit artikel
       // daadwerkelijk relevant maakte; wint nooit van een
-      // categoryKeywords-treffer (zie publishItem).
+      // categoryKeywords-treffer (zie recordSourceItem).
       categoryHint =
         (signalMatch ? findRelevanceSignalCategory(combinedText, source.relevanceSignals) : undefined) ??
         (audienceMatch ? source.audienceSignalsCategory : undefined);
     }
     stages.relevant += 1;
 
-    const filename = await publishItem(enrichedItem, source, categoryHint);
-    if (!filename) continue;
+    const recordId = recordSourceItem(enrichedItem, source, categoryHint);
+    if (!recordId) continue;
 
     existingUrls.add(item.link);
     added += 1;
     sourceCount += 1;
     remainingBudget.count -= 1;
-    stages.published += 1;
-    log(`  + ${filename}`);
+    stages.recorded += 1;
+    log(`  + bron ${recordId}`);
     if (extractBody) {
       if (body) bodyStats.extracted += 1;
       else bodyStats.fallback += 1;
-      log(body ? `    body extracted (${body.length} tekens)` : '    body extraction failed (summary als body)');
+      log(body ? `    body extracted (${body.length} tekens)` : '    body extraction failed (bron zonder hoofdtekst vastgelegd)');
     }
   }
   // Zie de toelichting bij processRssSource: items die vóór hun beurt al
@@ -1248,7 +1207,7 @@ export async function processSitemapSource(source, existingUrls, remainingBudget
   // gedragswijziging, alleen zichtbaar gemaakt.
   stages.reasons.notEvaluated = items.length - itemsEvaluated;
 
-  log(`  ${added} nieuw artikel(en) toegevoegd`);
+  log(`  ${added} nieuwe bron(nen) vastgelegd`);
   if (extractBody && added > 0) log(`  Body-extractie: ${bodyStats.extracted} extracted, ${bodyStats.fallback} failed`);
   logReasonBreakdown(stages);
   logRejectionSamples(samples);
@@ -1281,7 +1240,7 @@ export function kvkSlugToText(url) {
 // daarin genoemd wordt (aantal/naamgeving ligt niet vast, dus niet
 // hardcoded). Verzamelt alle <url><loc>+<lastmod>-paren. lastmod is een
 // "laatst gewijzigd"-signaal, geen bewezen publicatiedatum — zie
-// publishedAt-opmerking bij processKvkSource.
+// sourceLastModified-opmerking bij processKvkSource.
 export async function fetchKvkDocumentUrls(sitemapIndexUrl) {
   const indexRes = await fetchWithTimeout(sitemapIndexUrl, FETCH_TIMEOUT_MS);
   if (!indexRes.ok) throw new Error(`HTTP ${indexRes.status} bij sitemap_index.xml`);
@@ -1649,7 +1608,15 @@ export async function fetchKvkArticleMeta(url) {
   }
   if (!res.ok) return null;
   const html = await res.text();
-  return extractKvkArticleFields(html);
+  const fields = extractKvkArticleFields(html);
+  if (!fields) return null;
+  let body = null;
+  try {
+    body = extractMainContentBody(html);
+  } catch {
+    body = null;
+  }
+  return { ...fields, body };
 }
 
 // --- Overlapcontrole met de bestaande Avydo-kennisbank ---
@@ -1695,18 +1662,19 @@ function kvkSignificantWords(text) {
 // publiceren.
 export const KVK_OVERLAP_JACCARD_THRESHOLD = 0.4;
 
-// Leest titel + categorie van alle bestaande Kenniscentrum-artikelen, als
-// basis voor de overlapcontrole hieronder.
-export function loadExistingArticlesMeta() {
-  if (!existsSync(CONTENT_DIR)) return [];
+// Leest titel, categorie en bron-URL van alle bestaande (Avydo-)artikelen,
+// als basis voor de overlapcontrole hieronder en in de redactiestap.
+export function loadExistingArticlesMeta(contentDir = CONTENT_DIR) {
+  if (!existsSync(contentDir)) return [];
   const articles = [];
-  for (const file of readdirSync(CONTENT_DIR)) {
+  for (const file of readdirSync(contentDir)) {
     if (!file.endsWith('.md')) continue;
-    const text = readFileSync(path.join(CONTENT_DIR, file), 'utf8');
-    const title = text.match(/^title:\s*"([^"]*)"/m)?.[1];
+    const text = readFileSync(path.join(contentDir, file), 'utf8');
+    const title = text.match(/^title:\s*"((?:[^"\\]|\\.)*)"/m)?.[1]?.replace(/\\"/g, '"');
     const category = text.match(/^category:\s*"([^"]*)"/m)?.[1] ?? null;
+    const sourceUrl = text.match(/^sourceUrl:\s*"([^"]*)"/m)?.[1] ?? null;
     if (!title) continue;
-    articles.push({ file, title, category });
+    articles.push({ file, title, category, sourceUrl });
   }
   return articles;
 }
@@ -1801,10 +1769,9 @@ export async function processKvkSource(source, existingUrls, remainingBudget) {
     stages.parsed += 1;
 
     // lastmod is "laatst gewijzigd", geen bewezen publicatiedatum (zie
-    // sources.config.mjs) — wordt hier, bij gebrek aan een betere bron-
-    // datum, wel gebruikt als publishedAt (zelfde aanpak als de bestaande
-    // Rijksoverheid-sitemapbron bij ontbrekende news:publication_date).
-    const item = { title: meta.title, description: meta.description, link: candidate.loc, pubDate: candidate.lastmod };
+    // sources.config.mjs): vastgelegd als sourceLastModified, nooit als
+    // publicatiedatum van de bron.
+    const item = { title: meta.title, description: meta.description, body: meta.body, link: candidate.loc, lastModified: candidate.lastmod };
     const combinedText = `${item.title} ${item.description}`;
 
     if (isKvkProcedurePage(combinedText)) {
@@ -1847,21 +1814,21 @@ export async function processKvkSource(source, existingUrls, remainingBudget) {
     }
     stages.relevant += 1;
 
-    const filename = await publishItem(item, source);
-    if (!filename) continue;
+    const recordId = recordSourceItem(item, source);
+    if (!recordId) continue;
 
     existingUrls.add(candidate.loc);
     added += 1;
     sourceCount += 1;
     remainingBudget.count -= 1;
-    stages.published += 1;
-    log(`  + ${filename}`);
+    stages.recorded += 1;
+    log(`  + bron ${recordId}${meta.body ? ` (hoofdtekst ${meta.body.length} tekens)` : ' (geen betrouwbare hoofdtekst)'}`);
   }
 
   stages.reasons.pageFetches = pagesFetched;
   stages.reasons.notFetchedDueToLimit = ranked.length - pagesFetched;
 
-  log(`  ${added} nieuw artikel(en) toegevoegd`);
+  log(`  ${added} nieuwe bron(nen) vastgelegd`);
   logReasonBreakdown(stages);
   logRejectionSamples(samples);
   return { added, seen: entries.length, ok: true, stages };
@@ -1884,16 +1851,17 @@ async function processSource(source, existingUrls, remainingBudget) {
   }
 
   const s = result.stages;
-  log(`  Bron → opgehaald: ${s.fetched} → succesvol geparsed: ${s.parsed} → relevant: ${s.relevant} → gepubliceerd: ${s.published}`);
+  log(`  Bron → opgehaald: ${s.fetched} → succesvol geparsed: ${s.parsed} → relevant: ${s.relevant} → vastgelegd: ${s.recorded}`);
   return result;
 }
 
 async function main() {
-  log(`Kenniscentrum: ophalen gestart (${new Date().toISOString()})`);
-  log(`AI-samenvatting: ${ANTHROPIC_API_KEY ? 'ingeschakeld (ANTHROPIC_API_KEY gevonden)' : 'uitgeschakeld (extractieve samenvatting)'}`);
+  const now = new Date();
+  log(`Kenniscentrum: run gestart (${now.toISOString()})`);
 
-  const existingUrls = loadExistingSourceUrls();
-  log(`${existingUrls.size} bestaand(e) artikel(en) in content-collectie`);
+  // Stap 1: bron-ingestie naar de bronlaag.
+  const existingUrls = loadKnownSourceUrls({ sourcesDir: SOURCES_DIR, contentDir: CONTENT_DIR });
+  log(`${existingUrls.size} bekende bron-URL('s) (bronlaag + Avydo-artikelen)`);
 
   const remainingBudget = { count: maxArticlesPerRun };
   const results = [];
@@ -1902,31 +1870,50 @@ async function main() {
     results.push({ id: source.id, name: source.name, ...result });
   }
 
-  const totalAdded = results.reduce((sum, r) => sum + r.added, 0);
+  const totalRecorded = results.reduce((sum, r) => sum + r.added, 0);
   const failedSources = results.filter((r) => !r.ok);
 
-  log('\n=== Samenvatting ===');
+  log('\n=== Bron-ingestie ===');
   for (const r of results) {
-    log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.id}: ${r.added} nieuw / ${r.seen} gezien (opgehaald ${r.stages.fetched}, geparsed ${r.stages.parsed}, relevant ${r.stages.relevant}, gepubliceerd ${r.stages.published})`);
+    log(`${r.ok ? 'OK  ' : 'FAIL'} ${r.id}: ${r.added} nieuw / ${r.seen} gezien (opgehaald ${r.stages.fetched}, geparsed ${r.stages.parsed}, relevant ${r.stages.relevant}, vastgelegd ${r.stages.recorded})`);
   }
-  log(`Totaal nieuwe artikelen: ${totalAdded}`);
+  log(`Totaal nieuwe bronrecords: ${totalRecorded}`);
   if (failedSources.length > 0) {
-    log(`${failedSources.length} bron(nen) waren niet bereikbaar of leverden geen geldige feed/sitemap. Bestaande content blijft ongewijzigd staan voor deze bronnen.`);
-  }
-  const sourcesWithArticles = new Set(results.filter((r) => r.added > 0).map((r) => r.id)).size;
-  if (sourcesWithArticles > 0) {
-    log(`Bronnen met nieuwe artikelen deze run: ${sourcesWithArticles} van ${results.length}.`);
+    log(`${failedSources.length} bron(nen) waren niet bereikbaar of leverden geen geldige feed/sitemap.`);
   }
 
-  // Schrijf een machine-leesbaar resultaat voor de GitHub Actions-stap die
-  // bepaalt of er iets te committen valt en voor de job summary.
+  // Stap 2: redactie (selectie → Avydo-artikel → validatie). Dynamisch
+  // geïmporteerd: editorial.mjs gebruikt zelf helpers uit dit bestand.
+  log('\n=== Redactie ===');
+  const { runEditorialPipeline, readPendingSourceUrls } = await import('./editorial.mjs');
+  const editorial = await runEditorialPipeline({
+    contentDir: CONTENT_DIR,
+    sourcesDir: SOURCES_DIR,
+    now,
+    apiKey: ANTHROPIC_API_KEY,
+    pendingSourceUrls: readPendingSourceUrls(process.env.KENNISCENTRUM_PR_LIST_FILE),
+    log,
+  });
+
+  // Machine-leesbaar resultaat voor de GitHub Action (job summary en de
+  // beslissing of er een Pull Request komt).
   writeFileSync(
     path.resolve(__dirname, '../../.kenniscentrum-run-result.json'),
-    JSON.stringify({ totalAdded, results, ranAt: new Date().toISOString() }, null, 2),
+    JSON.stringify({
+      totalRecorded,
+      articlesCreated: editorial.created.length,
+      editorial: editorial.summary,
+      results,
+      ranAt: now.toISOString(),
+    }, null, 2),
   );
+  if (editorial.pullRequest) {
+    writeFileSync(path.resolve(__dirname, '../../.kenniscentrum-pr.md'), editorial.pullRequest.body);
+    writeFileSync(path.resolve(__dirname, '../../.kenniscentrum-pr-title.txt'), editorial.pullRequest.title);
+  }
 
-  // Nooit falen op bronproblemen: dat is verwacht/afgehandeld gedrag, geen
-  // reden om de hele workflow als mislukt te markeren.
+  // Nooit falen op bron- of redactieproblemen: dat is afgehandeld gedrag.
+  // Zonder geslaagd artikel komt er simpelweg geen Pull Request.
   process.exit(0);
 }
 
@@ -1937,8 +1924,8 @@ const isDirectRun = process.argv[1] && import.meta.url === `file://${process.arg
 if (isDirectRun) {
   main().catch((err) => {
     console.error('Onverwachte fout in fetch-articles.mjs:', err);
-    // Ook hier: niet hard falen, zodat een eenmalige bug nooit de site kapot
-    // maakt. De laatst gecommitte content blijft gewoon live staan.
+    // Niet hard falen: zonder resultaat komt er geen Pull Request, en de
+    // live content blijft ongewijzigd.
     process.exit(0);
   });
 }

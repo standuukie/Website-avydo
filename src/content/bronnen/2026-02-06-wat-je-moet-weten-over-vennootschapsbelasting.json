@@ -1,0 +1,16 @@
+{
+  "sourceUrl": "https://www.kvk.nl/geldzaken/vennootschapsbelasting/",
+  "sourceName": "KVK",
+  "title": "Wat je moet weten over vennootschapsbelasting",
+  "description": "Ondernemers met een bv, nv of coöperatie betalen vennootschapsbelasting over de winst. Hoe dat werkt en waar je op moet letten lees je hier.",
+  "sourceLastModified": "2026-02-06T13:19:46.000Z",
+  "fetchedAt": "2026-10-01T15:37:08.335Z",
+  "category": "Vennootschapsbelasting",
+  "priority": "praktisch",
+  "audiences": [
+    "bv-dga",
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

@@ -17,27 +17,35 @@ npm run preview   # preview van de build
 - `src/components/` &mdash; herbruikbare UI-componenten.
 - `src/layouts/BaseLayout.astro` &mdash; paginaskelet met SEO-tags en structured data.
 - `src/pages/` &mdash; routes (bestandsgebaseerd).
-- `src/content/kenniscentrum/` &mdash; automatisch (en eventueel handmatig) beheerde Kenniscentrum-artikelen; zie hieronder.
-- `scripts/kenniscentrum/` &mdash; het ophaalscript en de bronconfiguratie voor het Kenniscentrum.
-- `.github/workflows/kenniscentrum-update.yml` &mdash; de dagelijkse GitHub Actions-job die nieuwe artikelen ophaalt.
+- `src/content/kenniscentrum/` &mdash; de Kenniscentrum-artikelen: uitsluitend eigen Avydo-artikelen; zie hieronder.
+- `src/content/bronnen/` &mdash; de bronlaag: één JSON-record per officieel bronbericht (geen pagina's).
+- `scripts/kenniscentrum/` &mdash; bron-import, selectie, redactie, validatie en de bronconfiguratie voor het Kenniscentrum.
+- `.github/workflows/kenniscentrum-update.yml` &mdash; de dagelijkse GitHub Actions-job die bronnen ophaalt en een redactievoorstel als Pull Request klaarzet.
 
-## Kenniscentrum: automatische actualisatie
+## Kenniscentrum: Avydo-artikelen op basis van officiële bronnen
 
-`/kenniscentrum` toont automatisch verzamelde ontwikkelingen (belastingen, personeel & loon, ondernemen, wet- en regelgeving, subsidies, financiën, accountancy) die relevant zijn voor Nederlandse mkb-ondernemers. Artikelen worden **nooit volledig gekopieerd**: het systeem haalt alleen titel, datum, bron en een korte samenvatting op, schrijft er een eigen "wat betekent dit voor jou"-tekst bij, en verwijst voor de volledige tekst altijd naar de oorspronkelijke bron.
+`/kenniscentrum` bestaat uitsluitend uit **eigen Avydo-artikelen**: Avydo legt actuele ontwikkelingen (belastingen, personeel & loon, ondernemen, wet- en regelgeving, accountancy) uit voor Nederlandse mkb-ondernemers. Elk artikel is gebaseerd op één officiële bron (Belastingdienst, Rijksoverheid of KVK) en verwijst daarnaar (`sourceName`/`sourceUrl`). Een officieel bronbericht wordt nooit meer rechtstreeks als artikel gepubliceerd.
 
 ### Architectuur
 
 ```
-RSS-feeds + Google News-sitemaps (officiële bronnen)
-   -> scripts/kenniscentrum/fetch-articles.mjs   (GitHub Actions, dagelijks)
-   -> filtering op relevantie + categorie/prioriteit
-   -> samenvatting (extractief, of optioneel via Claude Haiku)
-   -> src/content/kenniscentrum/*.md              (Astro content collection)
-   -> git commit + push
-   -> Vercel bouwt en deployt automatisch (bestaande GitHub-koppeling)
+officiële bronnen (Belastingdienst RSS, Rijksoverheid topic-API, KVK-sitemaps)
+   -> scripts/kenniscentrum/fetch-articles.mjs     bron-ingestie + relevantiefilters
+   -> src/content/bronnen/*.json                   bronlaag (verwerkingsstatus per bron)
+   -> scripts/kenniscentrum/select-topics.mjs      max. 2 onderwerpen per dag (0 mag)
+   -> scripts/kenniscentrum/editorial.mjs          Avydo-artikel via AI (vaste tool + JSON-schema)
+   -> scripts/kenniscentrum/validate-article.mjs   vaste controles (feiten, status, titel, overlap, bron)
+   -> src/content/kenniscentrum/*.md               Avydo-artikel (avydoContent: toelichting/gids)
+   -> tests + build -> Pull Request (menselijke controle) -> merge -> Vercel deployt
 ```
 
-De site zelf blijft volledig statisch: er draait geen server of API-route in productie. Het "backend"-gedeelte is een GitHub Actions workflow (`.github/workflows/kenniscentrum-update.yml`) die dagelijks (en handmatig via "Run workflow" in de Actions-tab) nieuwe artikelen ophaalt en als gewone bestanden in de repository commit. Dat is bewust gekozen boven Vercel Cron: volledig gratis, geen Vercel-planbeperkingen, en de content staat gewoon in git (dus ook zichtbaar/reviewbaar/terug te draaien via de normale GitHub-historie).
+De dagelijkse GitHub Actions workflow (`.github/workflows/kenniscentrum-update.yml`, ook handmatig via "Run workflow") pusht **nooit** rechtstreeks naar de live branch. Alleen als er een gevalideerd Avydo-artikel is, komt er een Pull Request met het onderwerp, de officiële bron, de reden van selectie, de status en het validatieresultaat. Geen geschikt onderwerp, of mislukte generatie/validatie: geen Pull Request; de reden staat in de job summary.
+
+**Bronlaag** (`src/content/bronnen/`, Astro data-collectie `bronnen`, schema in `src/content/config.ts`): per bron `sourceUrl`, `sourceName`, brontitel, omschrijving, opgehaalde hoofdtekst (`body`), `sourcePublishedAt` of (KVK) `sourceLastModified`, `fetchedAt`, `processingStatus` (`kandidaat`/`verwerkt`/`afgewezen`), `rejectionReason` en `avydoSlug`. `sourceUrl` (genormaliseerd: https, geen trailing slash) is de sleutel voor deduplicatie; een bron die in de bronlaag of in een artikel staat, wordt niet opnieuw geïmporteerd. Bron → artikel via `avydoSlug` of dezelfde `sourceUrl`; artikel → bron via `sourceUrl`.
+
+**Selectie** (`select-topics.mjs`): 1) actueel nieuws (Belastingdienst/Rijksoverheid, ≤ 14 dagen), 2) nieuwe of aangekondigde regelgeving (wetgevingssignaal én recent of met een toekomstige ingangsdatum in de bron), 3) blijvende uitleg (KVK, alleen op een dag zonder 1/2, hooguit één). Een KVK-`lastmod` telt nooit als nieuwsdatum. Afgewezen wordt: te weinig brontekst, overlap met een bestaand Avydo-artikel (titel-Jaccard, geen embeddings), bron al verwerkt, of al in een open/gesloten redactie-PR.
+
+**Datums**: `publishedAt` is de publicatiedatum van het Avydo-artikel, `sourcePublishedAt` die van het bronbericht. Bij de 55 in oktober 2026 omgezette artikelen is `publishedAt` gelijk gebleven aan de brondatum (de AI-assistent gebruikt `publishedAt` als brondatum in zijn context); de omzetting staat in `updatedAt`.
 
 ### Gebruikte bronnen
 
@@ -47,8 +55,9 @@ Zie `scripts/kenniscentrum/sources.config.mjs` voor de volledige, becommentariee
 |---|---|---|---|
 | Belastingdienst (Actueel zakelijk) | RSS | `nieuwsfeed_actueel_zakelijk.xml` | Belastingen |
 | Rijksoverheid | Topic-API (`POST /api/search`), 12 geselecteerde topics | `rijksoverheid.nl/api/search` | gemengd (streng gefilterd op fiscale/accountancy-trefwoorden; Financiën-publicaties met een fiscale stam tellen mee; alleen artikelen van maximaal 24 maanden oud) |
+| KVK | `sitemap_index.xml` &rarr; `documents-*.xml` | `kvk.nl/sitemap_index.xml` | kennisartikelen, redactioneel gefilterd (zie `classifyKvkRelevance`) |
 
-Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL rechtstreeks live is getest (niet via een zoekmachine); `inferred` betekent dat de URL een bevestigd patroon volgt maar niet 1-op-1 live is geverifieerd. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed/sitemap wordt overgeslagen (nooit verzonnen), en de uitkomst per bron — inclusief de stadia *opgehaald → geparsed → relevant → gepubliceerd* — is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary") en in de jobs-log.
+Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL rechtstreeks live is getest (niet via een zoekmachine); `inferred` betekent dat de URL een bevestigd patroon volgt maar niet 1-op-1 live is geverifieerd. Het ophaalscript controleert dit bij elke run zelf: een niet-bereikbare of ongeldige feed/sitemap wordt overgeslagen (nooit verzonnen), en de uitkomst per bron — inclusief de stadia *opgehaald → geparsed → relevant → vastgelegd (in de bronlaag)* — is zichtbaar in de samenvatting van elke workflow-run (tab **Actions** &rarr; run &rarr; "Summary") en in de jobs-log.
 
 **Bron-types** (veld `type` in `sources.config.mjs`):
 - `rss`: een RSS/Atom-feed met title/link/description/pubDate per item.
@@ -60,7 +69,7 @@ Elke bron heeft een `urlConfidence`-veld: `confirmed` betekent dat de exacte URL
 Om te voorkomen dat één bron structureel (bijna) alle artikelen levert, geldt naast het totale `maxArticlesPerRun` ook een `maxArticlesPerSourcePerRun`-plafond per bron per run.
 
 **Onderzocht maar niet geïntegreerd** (elk daadwerkelijk live getest, niet via een zoekmachine of giswerk — zie de uitgebreide toelichting in `sources.config.mjs`):
-- **KVK** (`kvk.nl/overzicht/`): geen RSS of sitemap die het nieuwsoverzicht dekt; de pagina haalt content client-side op bij een intern, niet-publiek Bloomreach-CMS-endpoint. Geen officiële methode beschikbaar zonder hun interne SPA-backend te reverse-engineeren.
+- **KVK-nieuwsoverzicht** (`kvk.nl/overzicht/`): geen RSS; de pagina haalt content client-side op bij een intern CMS-endpoint. KVK-kennisartikelen komen daarom via de publieke sitemaps binnen (zie hierboven).
 - **NBA** (`nba.nl/nieuws/`): geen RSS, de sitemap bevat geen individuele nieuwsartikelen, en de indexpagina levert geen server-gerenderde links op om te parsen.
 - **FD** (`fd.nl/economie`): heeft een technisch werkende RSS-feed, maar zowel de feed zelf ("intended solely for personal, non-commercial use") als `fd.nl/robots.txt` ("Prohibited uses include... any commercial purposes") sluiten gebruik op een commerciële website expliciet uit. Een juridische, geen technische blokkade.
 - **Gemeente Venray** (`venray.nl/nieuwsoverzicht`): geen RSS of nieuws-specifieke sitemap (de algemene sitemap maakt geen onderscheid tussen nieuwsartikelen en statische pagina's), en de bot-bescherming van de site blokkeerde herhaaldelijk verzoeken, ook met een browser-useragent.
@@ -77,16 +86,17 @@ Open `scripts/kenniscentrum/sources.config.mjs`:
 
 Elk artikel is een los markdown-bestand in `src/content/kenniscentrum/`, met leesbare frontmatter. Geen CMS nodig:
 
-- **Verwijderen**: het bestand verwijderen (en committen/pushen).
-- **Verbergen** (blijft bestaan maar niet zichtbaar): `hidden: true` zetten in de frontmatter.
+- **Redactievoorstel beoordelen**: de Pull Request van de dagelijkse run nalezen, eventueel aanpassen en mergen; sluiten zonder merge = afwijzen (die bron wordt niet opnieuw voorgesteld).
+- **Verwijderen**: het bestand verwijderen. Laat het bronrecord in `src/content/bronnen/` staan (zet het op `afgewezen` met een reden), zodat de bron niet opnieuw wordt geïmporteerd.
+- **Verbergen**: `hidden: true` zetten in de frontmatter.
 - **Uitlichten** (bovenaan als "Uitgelicht"): `featured: true` zetten.
-- **Categorie/prioriteit aanpassen**: `category` of `priority` direct in de frontmatter wijzigen.
+- **Status**: `status` (`voorstel`, `consultatie`, `voornemen`, `aangenomen`, `van-kracht`, `historisch`, `herzien`, `deels-geschrapt`) en zo nodig `supersededBy` (sourceUrl van het opvolgende artikel).
 
-### AI-samenvatting (optioneel)
+### Avydo-artikel genereren (AI)
 
-Standaard gebruikt het script **geen AI**: de samenvatting is de (opgeschoonde, van HTML ontdane) eigen tekst uit de RSS-feed van de bron zelf, aangevuld met een vast, per categorie afgestemd sjabloon voor "wat betekent dit voor jou". Dit kost niets en kan nooit feiten verzinnen.
+De redactiestap (`editorial.mjs`) roept de Anthropic API aan met een verplichte tool en een JSON-schema (titel, samenvatting, tekst met tussenkoppen, duiding, status, categorie, doelgroepen, tags) en de volledige opgehaalde brontekst. Het model is in te stellen met `KENNISCENTRUM_MODEL`. De prompt verbiedt informatie die niet in de bron staat; bij te weinig broninformatie levert het model geen artikel. Daarna controleert `validate-article.mjs` zonder AI onder meer: officiële en bereikbare bron, eigen titel (niet de brontitel), voldoende tekst en tussenkoppen, bedragen/percentages/datums/jaartallen die in de bron voorkomen, een voorstel niet als geldende regel, een toekomstige datum niet als al geldend, geldige status en geen overlap met bestaande Avydo-artikelen. Eén fout = geen artikel en geen Pull Request.
 
-Optioneel kan een betere, meer toegespitste samenvatting worden gegenereerd door Claude Haiku. Dit wordt automatisch geactiveerd zodra het GitHub Actions secret `ANTHROPIC_API_KEY` is ingesteld (Settings &rarr; Secrets and variables &rarr; Actions &rarr; New repository secret). De AI-prompt (zie `aiSummary()` in `fetch-articles.mjs`) staat expliciet niet toe om feiten, cijfers, bedragen of regels te verzinnen die niet letterlijk in de brontekst staan; bij twijfel of een fout valt het script automatisch terug op de gratis extractieve samenvatting. Omdat alleen *nieuwe* artikelen worden verwerkt (bestaande worden nooit opnieuw langs de AI gestuurd), blijft het aantal API-calls vanzelf beperkt.
+Zonder `ANTHROPIC_API_KEY` worden alleen bronrecords vastgelegd en ontstaat er geen artikel. Hoofdtekst wordt opgehaald voor Rijksoverheid (vaste tekstmarkers) en voor Belastingdienst/KVK (het `<main>`-element van de bronpagina); lukt dat niet betrouwbaar, dan komt de bron niet in aanmerking voor een artikel.
 
 ### Environment variables
 
@@ -95,10 +105,10 @@ Optioneel kan een betere, meer toegespitste samenvatting worden gegenereerd door
 | `GEMINI_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Primaire, gratis AI-provider voor de AI-assistent (`/kenniscentrum/ai-assistent`). Zie "Kenniscentrum: AI-assistent" hieronder. |
 | `GROQ_API_KEY` | Nee (aanbevolen) | Vercel &rarr; Project Settings &rarr; Environment Variables | Secundaire, gratis fallback-provider voor de AI-assistent. |
 | `AI_PROVIDER` | Nee | Vercel &rarr; Project Settings &rarr; Environment Variables | Kiest de providerketen (`free` = standaard). Zie "Provider-configuratie" hieronder. |
-| `ANTHROPIC_API_KEY` | Nee | GitHub &rarr; repository Secrets (Actions) **én/of** Vercel &rarr; Project Settings &rarr; Environment Variables | Betere AI-samenvatting in de nieuwsengine, en (alleen bij expliciete `AI_PROVIDER=anthropic`/`free-with-paid-fallback`) een optionele, betaalde provider voor de AI-assistent. |
+| `ANTHROPIC_API_KEY` | Nee | GitHub &rarr; repository Secrets (Actions) **én/of** Vercel &rarr; Project Settings &rarr; Environment Variables | In GitHub Actions: nodig om dagelijks een Avydo-artikel te laten schrijven. Op Vercel (alleen bij expliciete `AI_PROVIDER=anthropic`/`free-with-paid-fallback`): een optionele, betaalde provider voor de AI-assistent. |
 
 Alle sleutels worden uitsluitend server-side gebruikt:
-- `ANTHROPIC_API_KEY` in GitHub Actions (workflow "Kenniscentrum bijwerken") voor een optioneel betere samenvatting bij het ophalen van nieuwe artikelen. Zonder deze key werkt alles gewoon, met de extractieve samenvatting.
+- `ANTHROPIC_API_KEY` in GitHub Actions (workflow "Kenniscentrum bijwerken") voor de redactiestap. Zonder deze key worden alleen bronnen vastgelegd en komt er geen redactievoorstel.
 - `GEMINI_API_KEY`/`GROQ_API_KEY`/`ANTHROPIC_API_KEY` op Vercel, gelezen door `src/pages/api/kenniscentrum-chat.ts` en `src/lib/ai-providers/` (een serverless function, zie hieronder) voor de AI-assistent. **Zonder minstens één geldige sleutel op Vercel toont de assistent een nette "momenteel niet beschikbaar"-melding** in plaats van te crashen; de rest van de website blijft gewoon werken.
 
 Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/environment variable, alleen server-side gelezen. Dit is na implementatie expliciet gecontroleerd door de volledige Vercel build-output te doorzoeken op de sleutelnamen en provider-domeinen: die komen alleen voor in de servergebundelde function, nooit in de statische client-bundels.
@@ -106,21 +116,23 @@ Sleutels staan nergens in de frontend of in git &mdash; alleen als secret/enviro
 ### Fallback en betrouwbaarheid
 
 - Iedere bron wordt los geprobeerd (try/catch); een niet-bereikbare of ongeldige feed/sitemap stopt de andere bronnen niet.
-- Er wordt nooit content verzonnen: zonder voldoende broninformatie (te korte beschrijving, ontbrekende titel/link) wordt een item overgeslagen.
+- Er wordt nooit content verzonnen: zonder voldoende broninformatie wordt een bron overgeslagen of niet gekozen, en de vaste validatie houdt artikelen met feiten buiten de bron tegen.
 - De workflow faalt nooit hard op een bronprobleem (exit code altijd 0) &mdash; anders zou een tijdelijk offline feed onterecht een rode kruis in GitHub Actions veroorzaken.
-- Omdat artikelen gewone, gecommitte bestanden zijn, is de site nooit leeg of stuk door een tijdelijk niet-beschikbare bron: het laatst succesvol opgehaalde resultaat blijft gewoon live staan totdat de volgende run iets nieuws vindt.
+- Omdat artikelen gewone, gecommitte bestanden zijn, is de site nooit leeg of stuk door een tijdelijk niet-beschikbare bron. Nieuwe artikelen komen pas live na een gemergde Pull Request.
 - Is de collectie nog helemaal leeg (bijvoorbeeld vóór de eerste run), dan toont `/kenniscentrum` een nette "binnenkort"-melding in plaats van een lege of kapotte pagina.
 
 ### Kosten
 
 - GitHub Actions: gratis binnen de standaard minutenlimiet van deze repository (de job duurt typisch enkele seconden tot een minuut per run).
 - Bronnen: gratis, publieke overheidsfeeds en -sitemaps.
-- AI-samenvatting: optioneel, alleen bij gezette `ANTHROPIC_API_KEY`, alleen voor nieuwe artikelen (geen herhaalde verwerking van bestaande content).
+- AI: hooguit twee aanroepen per dag (één per gekozen onderwerp), alleen bij gezette `ANTHROPIC_API_KEY`.
 - Geen betaalde nieuws-API's of zoekdiensten gebruikt.
 
 ### Handmatig een run starten
 
-GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; **Run workflow**. Of lokaal: `npm run kenniscentrum:fetch` (schrijft direct naar `src/content/kenniscentrum/`).
+GitHub &rarr; tab **Actions** &rarr; workflow "Kenniscentrum bijwerken" &rarr; **Run workflow**. Of lokaal: `npm run kenniscentrum:fetch` (schrijft bronrecords naar `src/content/bronnen/` en, met `ANTHROPIC_API_KEY`, een gevalideerd artikel naar `src/content/kenniscentrum/`; lokaal komt er geen Pull Request).
+
+Let op: voor het aanmaken van Pull Requests moet in GitHub &rarr; Settings &rarr; Actions &rarr; General de optie "Allow GitHub Actions to create and approve pull requests" aan staan.
 
 ## Kenniscentrum: AI-assistent
 

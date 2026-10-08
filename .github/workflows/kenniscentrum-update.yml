@@ -1,12 +1,16 @@
 name: Kenniscentrum bijwerken
 
-# Haalt automatisch nieuwe artikelen op uit de geconfigureerde officiële
-# bronnen (zie scripts/kenniscentrum/sources.config.mjs), en commit nieuwe
-# content-bestanden zodat Vercel automatisch een nieuwe deployment start.
+# Dagelijkse redactierun van het Kenniscentrum:
 #
-# Kosten: gratis. Gebruikt alleen de gratis GitHub Actions-minuten van dit
-# account en (optioneel, alleen als het secret ANTHROPIC_API_KEY is gezet)
-# een klein aantal Claude Haiku-aanroepen, uitsluitend voor nieuwe artikelen.
+#   officiële bronnen → bronlaag → selectie (max. 2) → Avydo-artikel (AI)
+#   → vaste validatie → tests + build → Pull Request
+#
+# Er wordt nooit rechtstreeks naar de live branch gepusht. Alleen als er een
+# gevalideerd Avydo-artikel is, komt er een Pull Request; een mens beslist
+# met de merge of het live gaat. Geen geschikt onderwerp, of mislukte
+# generatie/validatie: geen Pull Request (zie de job summary voor de reden).
+#
+# Zie scripts/kenniscentrum/fetch-articles.mjs en editorial.mjs.
 
 on:
   schedule:
@@ -17,6 +21,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: kenniscentrum-update
@@ -40,41 +45,67 @@ jobs:
       - name: Dependencies installeren
         run: npm ci
 
-      - name: Artikelen ophalen
+      # Bronnen uit een openstaand of afgewezen (gesloten, niet gemerged)
+      # redactievoorstel worden niet opnieuw gekozen.
+      - name: Eerdere redactievoorstellen ophalen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --state all --limit 200 --json headRefName,body,mergedAt > "$RUNNER_TEMP/kenniscentrum-prs.json" \
+            || echo '[]' > "$RUNNER_TEMP/kenniscentrum-prs.json"
+
+      - name: Bronnen ophalen en Avydo-artikel voorbereiden
         id: fetch
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: npm run kenniscentrum:fetch
+          KENNISCENTRUM_PR_LIST_FILE: ${{ runner.temp }}/kenniscentrum-prs.json
+        run: |
+          npm run kenniscentrum:fetch
+          created=$(node -p "(() => { try { return require('./.kenniscentrum-run-result.json').articlesCreated ?? 0 } catch { return 0 } })()")
+          echo "created=$created" >> "$GITHUB_OUTPUT"
 
       - name: Job summary schrijven
         if: always()
         run: |
-          echo '## Kenniscentrum ophalen' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Kenniscentrum' >> "$GITHUB_STEP_SUMMARY"
           if [ -f .kenniscentrum-run-result.json ]; then
             node -e "
               const r = require('./.kenniscentrum-run-result.json');
-              console.log('**Nieuwe artikelen:** ' + r.totalAdded);
+              const e = r.editorial || {};
+              console.log('**Nieuwe bronrecords:** ' + r.totalRecorded + ' · **Avydo-artikelen:** ' + r.articlesCreated);
+              if (e.noArticleReason) console.log('\n**Geen artikel vandaag:** ' + e.noArticleReason);
+              for (const c of e.created || []) console.log('\n- ' + c.title + ' (' + c.kind + ', bron: ' + c.sourceUrl + ')');
+              for (const f of e.failed || []) console.log('\n- niet doorgegaan: ' + f.title + ' — ' + f.reason);
               console.log('');
-              console.log('| Bron | Status | Opgehaald | Geparsed | Relevant | Gepubliceerd |');
+              console.log('| Bron | Status | Opgehaald | Geparsed | Relevant | Vastgelegd |');
               console.log('|---|---|---|---|---|---|');
               for (const s of r.results) {
                 const st = s.stages || {};
-                console.log(\`| \${s.name || s.id} | \${s.ok ? '✅' : '❌'} | \${st.fetched ?? 0} | \${st.parsed ?? 0} | \${st.relevant ?? 0} | \${st.published ?? 0} |\`);
+                console.log(\`| \${s.name || s.id} | \${s.ok ? '✅' : '❌'} | \${st.fetched ?? 0} | \${st.parsed ?? 0} | \${st.relevant ?? 0} | \${st.recorded ?? 0} |\`);
               }
             " >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Geen resultaatbestand gevonden (onverwachte scriptfout).' >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Wijzigingen committen en pushen
+      - name: Tests en build
+        if: steps.fetch.outputs.created != '0'
         run: |
-          rm -f .kenniscentrum-run-result.json
+          npm run kenniscentrum:test
+          npm run build
+
+      - name: Pull Request maken
+        if: steps.fetch.outputs.created != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="kenniscentrum/avydo-$(date -u +%Y-%m-%d)-${GITHUB_RUN_ID}"
           git config user.name "avydo-kenniscentrum-bot"
           git config user.email "actions@github.com"
-          if [ -n "$(git status --porcelain src/content/kenniscentrum)" ]; then
-            git add src/content/kenniscentrum
-            git commit -m "Kenniscentrum: automatische update $(date -u +%Y-%m-%d)"
-            git push
-          else
-            echo "Geen nieuwe artikelen, niets te committen."
-          fi
+          git checkout -b "$branch"
+          git add src/content/kenniscentrum src/content/bronnen
+          git commit -m "$(cat .kenniscentrum-pr-title.txt)"
+          git push -u origin "$branch"
+          gh pr create --base "$GITHUB_REF_NAME" --head "$branch" \
+            --title "$(cat .kenniscentrum-pr-title.txt)" \
+            --body-file .kenniscentrum-pr.md

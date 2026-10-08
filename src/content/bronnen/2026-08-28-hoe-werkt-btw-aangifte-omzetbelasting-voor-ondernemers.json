@@ -1,0 +1,15 @@
+{
+  "sourceUrl": "https://www.kvk.nl/geldzaken/aangifte-omzetbelasting-voor-ondernemers/",
+  "sourceName": "KVK",
+  "title": "Hoe werkt btw-aangifte (omzetbelasting) voor ondernemers?",
+  "description": "Wanneer moet je aangifte omzetbelasting doen? Lees meer over btw afdragen en wanneer je btw-aangifte moet doen als ondernemer.",
+  "sourceLastModified": "2026-08-28T06:39:23.000Z",
+  "fetchedAt": "2026-10-01T15:37:05.371Z",
+  "category": "Btw",
+  "priority": "praktisch",
+  "audiences": [
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

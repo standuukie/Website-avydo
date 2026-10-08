@@ -1,10 +1,12 @@
 ---
-title: "Wetsvoorstel voor meer duidelijkheid zzp’ers en sterkere positie laagbetaalde schijnzelfstandigen naar de Kamer (deels geschrapt)"
+title: "Wetsvoorstel Vbar over zzp’ers en schijnzelfstandigheid ingediend bij de Kamer (deels geschrapt)"
 category: "Ondernemen & rechtsvormen"
 priority: "praktisch"
 publishedAt: 2025-07-07T10:30:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/07/07/wetsvoorstel-voor-meer-duidelijkheid-zzpers-en-sterkere-positie-laagbetaalde-schijnzelfstandigen-naar-de-kamer"
+sourcePublishedAt: 2025-07-07T10:30:00.000Z
 supersededBy: "https://www.rijksoverheid.nl/actueel/nieuws/2026/03/06/kabinet-kiest-voor-meer-rust-en-duidelijkheid-voor-zzpers-en-opdrachtgevers"
 summary: "Het kabinet wil het duidelijker maken wanneer mensen werknemer zijn en wanneer werk gedaan kan worden als zelfstandige. De daarvoor geldende criteria komen in de wet te staan."
 relevance: "Let op: dit wetsvoorstel is deels achterhaald. In maart 2026 schrapte het kabinet het verduidelijkingsdeel van de Vbar; daarvoor in de plaats komt de Zelfstandigenwet. Het rechtsvermoeden van werknemerschap voor laagbetaalde zzp'ers wil het kabinet wel snel invoeren, inmiddels voor zzp'ers met een uurtarief tot 38 euro (peildatum 1 januari 2026)."
@@ -15,32 +17,26 @@ hidden: false
 status: "deels-geschrapt"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:35:27.114Z
+avydoContent: "toelichting"
 ---
 
-Het kabinet wil het duidelijker maken wanneer mensen werknemer zijn en wanneer werk gedaan kan worden als zelfstandige. De daarvoor geldende criteria komen in de wet te staan. Ook moet iemand die minder dan € 36 per uur verdient als zzp’er een sterkere rechtspositie krijgen. Zij kunnen straks makkelijker stellen werknemer te zijn en een beroep doen op de bijbehorende rechten. Dat staat in het wetsvoorstel Verduidelijking beoordeling arbeidsrelaties en rechtsvermoeden (Vbar) dat het kabinet vandaag heeft ingediend bij de Tweede Kamer.
+## Let op: deels achterhaald
 
-Minister van Sociale Zaken en Werkgelegenheid Eddy van Hijum: “Werk moet je zekerheid geven. Over je inkomen en je toekomst. Met dit wetsvoorstel maken we duidelijker wat het onderscheid is tussen werken als zelfstandige of als werknemer. Als je aangestuurd wordt in je werk en je loopt geen ondernemersrisico, dan ben je een werknemer en heb je recht op de zekerheid die daarbij hoort. En als je echt zelfstandig werkt en onderneemt, dan is daar alle ruimte voor. Daarnaast versterken we de positie van mensen die gedwongen tegen een lager salaris via een zzp-constructie werken.”
+Dit artikel beschrijft het wetsvoorstel Vbar zoals het in juli 2025 werd ingediend. In maart 2026 schrapte het kabinet het verduidelijkingsdeel; daarvoor in de plaats komt de Zelfstandigenwet. Lees voor de actuele stand het artikel van 6 maart 2026. Dit artikel blijft staan als achtergrond.
 
-Verduidelijking
+## Wat stond er in het wetsvoorstel?
 
-Het wetsvoorstel verduidelijkt de criteria over wanneer iemand werknemer is en wanneer iemand als zelfstandige werkt. Zo zijn er criteria die bepalen of iemand wordt aangestuurd in het werk. Bijvoorbeeld of de opdrachtgever bepaalt wanneer en hoe het werk gedaan moet worden. Andere criteria toetsen of het werk voor eigen risico gebeurt. Daarbij wordt er ook gekeken of iemand zich buiten het werk als ondernemer gedraagt, bijvoorbeeld door nieuwe klanten te werven. Het wetsvoorstel verduidelijkt deze criteria, maar wijzigt ze inhoudelijk niet ten opzichte van de nu geldende gerechtelijke uitspraken. Door in deze nieuwe wet duidelijk vast te leggen waaraan getoetst wordt, wil het kabinet meer duidelijkheid bieden. Zo weten werkenden, werkgevers en uitvoeringsorganisaties beter waar ze aan toe zijn.
+Het wetsvoorstel Verduidelijking beoordeling arbeidsrelaties en rechtsvermoeden (Vbar) had twee delen:
 
-Rechtsvermoeden
+- **Verduidelijking:** de criteria uit de rechtspraak over wanneer iemand werknemer is en wanneer zelfstandige, zouden in de wet komen. Denk aan aansturing (wie bepaalt wanneer en hoe het werk gebeurt) en werken voor eigen risico, en of iemand zich ook buiten het werk als ondernemer gedraagt. Inhoudelijk zouden de criteria niet veranderen.
+- **Rechtsvermoeden:** zzp’ers die minder dan € 36 per uur verdienen, zouden makkelijker kunnen stellen dat zij werknemer zijn. De opdrachtgever moet dan aantonen dat er geen arbeidsovereenkomst is.
 
-Daarnaast kunnen zzp’ers die minder dan € 36 per uur verdienen straks stellen werknemer te zijn en een beroep doen op de bijbehorende rechten. Als de zzp’er een beroep op het vermoeden heeft gedaan, dan is het aan de werkgever om aan te tonen dat er toch geen sprake is van een arbeidsovereenkomst en er als zelfstandige gewerkt wordt. Ongeveer 15% van de zzp’ers die eigen arbeid leveren, valt onder deze grens. Met dit ‘rechtsvermoeden van werknemerschap’ wordt de rechtspositie van laagbetaalde zzp’ers versterkt en schijnzelfstandigheid teruggedrongen.
+Volgens de planning zou de wet op 1 juli 2026 van kracht worden, zonder overgangsrecht.
 
-Als er sprake is van een arbeidsovereenkomst en daarmee schijnzelfstandigheid, krijgen deze mensen alsnog recht op de voordelen die iedere werknemer heeft, zoals zwangerschap- en ziekteverlof, ontslagbescherming, werkloosheidsuitkering en een vangnet bij arbeidsongeschiktheid. De werkgever moet de daarvoor verschuldigde premies en belastingen betalen. Uitvoeringsorganisaties kunnen geen beroep doen op het rechtsvermoeden.
+## Wat is er sindsdien veranderd?
 
-Het uurtarief waaronder het rechtsvermoeden geldt wordt ieder jaar aangepast aan de stijging van het minimumloon. Het bedrag wordt naar boven afgerond op hele euro’s, zodat werkgevers weten waar ze aan toe zijn. Het bedrag van € 35,43 (peildatum 1 januari 2025) wordt daarom naar boven afgerond op € 36,00.
+Het verduidelijkingsdeel is in maart 2026 geschrapt. Het rechtsvermoeden wil het kabinet wel snel invoeren, inmiddels voor zzp’ers met een uurtarief tot 38 euro (peildatum 1 januari 2026).
 
-Schijnzelfstandigheid
+## Wat is de status?
 
-Nederland telde in 2024 1,3 miljoen zzp’ers. Dat aantal is een verdubbeling van de 630.000 zzp’ers in 2003. In sommige gevallen is hierbij sprake van schijnzelfstandigheid: mensen die werken in een zzp-constructie, terwijl er vanwege de aard van het werk eigenlijk sprake is van werknemerschap. Alhoewel er geen harde cijfers beschikbaar zijn, heeft het ministerie het aantal schijnzelfstandigen geraamd op 200.000. Schijnzelfstandigheid is in de eerste plaats problematisch omdat het leidt tot oneerlijke concurrentie tussen zowel werkenden als bedrijven. Ook holt het de sociale zekerheid uit als mensen die eigenlijk werknemer zijn via een zzp-constructie niet meer meebetalen. En tot slot werkt schijnzelfstandigheid uitbuiting in de hand.
-
-Achtergrond wetsvoorstel
-
-Het wetsvoorstel Vbar is het tweede grote wetsvoorstel van het arbeidsmarktpakket dat aan de Kamer wordt aangeboden. De hervorming van de arbeidsmarkt volgt uit het advies van de commissie Borstlap uit 2021 en het akkoord dat kabinet, vakbonden en werkgevers in 2023 sloten. De doelstelling van dit pakket is om werkenden meer zekerheid te geven en tegelijkertijd te zorgen dat ondernemers zich makkelijk kunnen aanpassen aan veranderende omstandigheden. Dit wetsvoorstel draagt bij aan het doel van het kabinet om bij werken met zelfstandigen te zorgen voor meer duidelijkheid, een gelijker speelveld en betere handhaving.
-
-Voortgang wetsbehandeling
-
-Als de Tweede Kamer instemt met het voorstel, gaat het wetsvoorstel door naar de Eerste Kamer. Als ook de Eerste Kamer instemt wordt het wetsvoorstel volgens planning op 1 juli 2026 van kracht. Er geldt geen overgangsrecht. Dat betekent dat het na inwerkingtreding van de wet per direct van kracht is en mensen er een beroep op kunnen doen.
+Deels geschrapt. Gebruik dit artikel alleen als achtergrond bij de huidige plannen.

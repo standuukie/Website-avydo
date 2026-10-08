@@ -1,0 +1,13 @@
+{
+  "sourceUrl": "https://www.kvk.nl/deponeren/controleer-je-jaarrekening/",
+  "sourceName": "KVK",
+  "title": "Controleer je jaarrekening",
+  "description": "Wil je weten of je jaarrekening goed bij KVK is aangekomen? Je kunt eenvoudig zelf controleren of de deponering verwerkt is.",
+  "sourceLastModified": "2025-11-26T09:49:13.000Z",
+  "fetchedAt": "2026-10-01T19:01:28.102Z",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

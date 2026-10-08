@@ -1,0 +1,15 @@
+{
+  "sourceUrl": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/handboek-milieubelastingen-2026-gepubliceerd",
+  "sourceName": "Belastingdienst",
+  "title": "Handboek Milieubelastingen 2026 gepubliceerd",
+  "description": "Het Handboek Milieubelastingen 2026 is gepubliceerd. Bekijk de nieuwste regels en wijzigingen in wetgeving, beleid en rechtspraak.",
+  "sourcePublishedAt": "2026-07-09T13:00:00.000Z",
+  "fetchedAt": "2026-09-22T18:40:40.936Z",
+  "category": "Fiscale actualiteit",
+  "priority": "praktisch",
+  "audiences": [
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

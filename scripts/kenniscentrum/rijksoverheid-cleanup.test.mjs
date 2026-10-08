@@ -1,12 +1,10 @@
 // Opschoning Rijksoverheid-nieuws (2026-10-07), twee rondes. Ronde 1: 16 artikelen zonder directe
 // waarde voor de Avydo-doelgroep (belastingverdragen, een verlopen webinar,
-// achterhaalde box 3-tussenfases en oude belastingjaren) staan op
-// `hidden: true`. Ze verdwijnen daarmee van de nieuwspagina, de
-// artikelpagina's en uit de AI-context (alle filteren op !data.hidden), maar
-// blijven als bestand bestaan: de fetcher dedupliceert op de sourceUrl van
-// alle bestanden in de content-map, dus een verwijderd bestand binnen de
-// maxAgeMonths van de Rijksoverheid-bron zou bij een volgende run opnieuw
-// worden geïmporteerd.
+// achterhaalde box 3-tussenfases en oude belastingjaren) werden verborgen.
+// Sinds de omzetting naar Avydo-artikelen (2026-10-08) staan deze bronnen
+// niet meer als (verborgen) artikel in de content-map, maar als afgewezen
+// bronrecord in de bronlaag (src/content/bronnen/<oude slug>.json). De
+// import dedupliceert op de bronlaag, dus ze worden niet opnieuw opgehaald.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -16,6 +14,12 @@ import { substituteExplicitSuccessors } from '../../src/lib/source-freshness.mjs
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = path.resolve(__dirname, '../../src/content/kenniscentrum');
+const SOURCES_DIR = path.resolve(__dirname, '../../src/content/bronnen');
+const recordFor = (file) => {
+  const p = path.join(SOURCES_DIR, file.replace(/\.md$/, '.json'));
+  return JSON.parse(readFileSync(p, 'utf8'));
+};
+const hasArticle = (file) => readdirSync(CONTENT_DIR).includes(file);
 
 const ARTICLES = readdirSync(CONTENT_DIR)
   .filter((f) => f.endsWith('.md'))
@@ -110,34 +114,46 @@ const ZZP_ARTIKELEN = [
 const VBAR = '2025-07-07-wetsvoorstel-voor-meer-duidelijkheid-zzp-ers-en-sterkere-positie-laagbetaalde-sc.md';
 const ZZP_RUST = '2026-03-06-kabinet-kiest-voor-meer-rust-en-duidelijkheid-voor-zzp-ers-en-opdrachtgevers.md';
 
-test('opschoning: de 6 belastingverdrag-artikelen zijn niet actief', () => {
-  for (const file of VERDRAGEN) assert.equal(isActive(file), false, file);
-});
-
-test('opschoning: het verlopen webinar (14 november 2024) is niet actief', () => {
-  assert.equal(isActive(WEBINAR), false);
-});
-
-test('opschoning: de achterhaalde box 3-tussenfases en oude belastingjaren (2024/2025) zijn niet actief', () => {
-  for (const file of VEROUDERD) assert.equal(isActive(file), false, file);
-});
-
-test('opschoning ronde 2: crypto-consultatie 2024, btw-alternatieven, dividendstripping, box 3-obligatielek, Prinsjesdag-macronieuws en Mededingingswet zijn niet actief', () => {
-  for (const file of VERBORGEN_RONDE_2) assert.equal(isActive(file), false, file);
-});
-
-test('opschoning: verborgen artikelen blijven als Rijksoverheid-bestand met sourceUrl bestaan (de fetcher importeert ze dus niet opnieuw)', () => {
-  for (const file of VERBORGEN) {
-    const article = byFile(file);
-    assert.equal(article.sourceName, 'Rijksoverheid', file);
-    assert.match(article.sourceUrl ?? '', /^https:\/\/www\.rijksoverheid\.nl\//, file);
+test('opschoning: de 6 belastingverdrag-artikelen zijn geen artikel meer, alleen een afgewezen bron', () => {
+  for (const file of VERDRAGEN) {
+    assert.equal(hasArticle(file), false, file);
+    assert.equal(recordFor(file).processingStatus, 'afgewezen', file);
   }
 });
 
-test('opschoning: precies deze 22 Rijksoverheid-artikelen zijn verborgen; 26 blijven actief', () => {
+test('opschoning: het verlopen webinar (14 november 2024) is geen artikel meer, alleen een afgewezen bron', () => {
+  assert.equal(hasArticle(WEBINAR), false);
+  assert.equal(recordFor(WEBINAR).processingStatus, 'afgewezen');
+});
+
+test('opschoning: de achterhaalde box 3-tussenfases en oude belastingjaren (2024/2025) zijn geen artikel meer', () => {
+  for (const file of VEROUDERD) {
+    assert.equal(hasArticle(file), false, file);
+    assert.equal(recordFor(file).processingStatus, 'afgewezen', file);
+  }
+});
+
+test('opschoning ronde 2: crypto-consultatie 2024, btw-alternatieven, dividendstripping, box 3-obligatielek, Prinsjesdag-macronieuws en Mededingingswet zijn geen artikel meer', () => {
+  for (const file of VERBORGEN_RONDE_2) {
+    assert.equal(hasArticle(file), false, file);
+    assert.equal(recordFor(file).processingStatus, 'afgewezen', file);
+  }
+});
+
+test('opschoning: de opgeschoonde bronnen blijven als Rijksoverheid-bronrecord met sourceUrl bestaan (de import haalt ze dus niet opnieuw op)', () => {
+  for (const file of VERBORGEN) {
+    const record = recordFor(file);
+    assert.equal(record.sourceName, 'Rijksoverheid', file);
+    assert.match(record.sourceUrl ?? '', /^https:\/\/www\.rijksoverheid\.nl\//, file);
+    assert.ok(record.rejectionReason, file);
+  }
+});
+
+test('opschoning: precies 26 Rijksoverheid-artikelen zijn zichtbaar; de 22 opgeschoonde zijn er niet meer', () => {
   const rijksoverheid = ARTICLES.filter((a) => a.sourceName === 'Rijksoverheid');
-  assert.deepEqual(rijksoverheid.filter((a) => a.hidden).map((a) => a.file).sort(), [...VERBORGEN].sort());
-  assert.equal(rijksoverheid.filter((a) => !a.hidden).length, 26);
+  assert.equal(rijksoverheid.filter((a) => a.hidden).length, 0);
+  assert.equal(rijksoverheid.length, 26);
+  for (const file of VERBORGEN) assert.equal(rijksoverheid.some((a) => a.file === file), false, file);
 });
 
 test('behoud: de actuele artikelen uit september/oktober 2026 blijven actief', () => {

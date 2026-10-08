@@ -1,0 +1,15 @@
+{
+  "sourceUrl": "https://www.kvk.nl/deponeren/een-xbrl-jaarrekening-opstellen-en-deponeren/",
+  "sourceName": "KVK",
+  "title": "Een XBRL-jaarrekening opstellen en deponeren",
+  "description": "Ondernemers in de bedrijfsklasse middelgroot moeten een jaarrekening deponeren bij KVK. Wil je dit online doen via SBR? Dan heb je een jaarrekening nodig in XBRL-formaat.",
+  "sourceLastModified": "2025-11-26T09:49:00.000Z",
+  "fetchedAt": "2026-10-01T19:01:28.297Z",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: zichtbaar bronartikel zonder eigen Avydo-duiding; vervallen bij de omzetting naar Avydo-artikelen. Bron bewaard voor deduplicatie en mogelijk later gebruik."
+}

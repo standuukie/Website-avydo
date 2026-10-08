@@ -25,13 +25,13 @@ const initiallyVisible = new Set(allArticles.slice(0, INITIAL_VISIBLE).map((a) =
 
 <BaseLayout
   title="Kenniscentrum"
-  description="Het kenniscentrum van Avydo verzamelt actuele ontwikkelingen in belastingen, accountancy, personeel en ondernemerschap die relevant zijn voor Nederlandse mkb-ondernemers. Filter op onderwerp, bron of uw situatie als ondernemer."
+  description="In het kenniscentrum legt Avydo actuele ontwikkelingen in belastingen, accountancy, personeel en ondernemerschap uit voor Nederlandse mkb-ondernemers, op basis van officiële bronnen. Filter op onderwerp, bron of uw situatie als ondernemer."
   path="/kenniscentrum"
 >
   <PageHero
     eyebrow="Kenniscentrum"
     title="Actuele ontwikkelingen voor mkb-ondernemers"
-    intro="Avydo houdt hier actuele ontwikkelingen bij op het gebied van belastingen, accountancy, personeel en ondernemerschap, uit officiële bronnen zoals de Rijksoverheid, de Belastingdienst en KVK. Waar Avydo een eigen toelichting heeft toegevoegd, leest u wat dit voor uw onderneming kan betekenen; elk artikel verwijst naar de oorspronkelijke bron."
+    intro="In het kenniscentrum legt Avydo actuele ontwikkelingen op het gebied van belastingen, accountancy, personeel en ondernemerschap uit: wat er verandert, voor wie het geldt en wat het voor uw onderneming betekent. Elk artikel is door Avydo geschreven op basis van een officiële bron, zoals de Rijksoverheid, de Belastingdienst of KVK, en verwijst naar die bron."
     crumbs={[{ label: 'Kenniscentrum' }]}
   />
 
@@ -42,7 +42,7 @@ const initiallyVisible = new Set(allArticles.slice(0, INITIAL_VISIBLE).map((a) =
           <p class="eyebrow">Binnenkort</p>
           <h2 class="mt-3 text-2xl font-display font-semibold text-ink-900">Actuele artikelen van Avydo</h2>
           <p class="mt-3 text-ink-600 leading-relaxed">
-            Ons systeem verzamelt automatisch relevante ontwikkelingen van officiële bronnen zoals de Belastingdienst en de Rijksoverheid. De eerste artikelen verschijnen hier zodra dat proces heeft gedraaid. Heeft u nu al een vraag? Neem gerust contact met ons op via <a href={`mailto:${company.email}`} class="font-semibold text-brand-600 hover:underline">{company.email}</a> of <a href={company.phoneHref} class="font-semibold text-brand-600 hover:underline">{company.phone}</a>.
+            Avydo schrijft hier artikelen op basis van officiële bronnen zoals de Belastingdienst en de Rijksoverheid. De eerste artikelen verschijnen hier binnenkort. Heeft u nu al een vraag? Neem gerust contact met ons op via <a href={`mailto:${company.email}`} class="font-semibold text-brand-600 hover:underline">{company.email}</a> of <a href={company.phoneHref} class="font-semibold text-brand-600 hover:underline">{company.phone}</a>.
           </p>
         </div>
       </div>
@@ -133,7 +133,7 @@ const initiallyVisible = new Set(allArticles.slice(0, INITIAL_VISIBLE).map((a) =
             </div>
 
             <div>
-              <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-source-heading">Bron</span>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-ink-500 mb-2" id="kc-source-heading">Gebaseerd op bron</span>
               <div class="flex flex-wrap gap-2" role="group" aria-labelledby="kc-source-heading" id="source-filters">
                 <button type="button" data-source-filter="" class="filter-chip is-active" aria-pressed="true">Alle bronnen</button>
                 {bronnen.map((bron) => (

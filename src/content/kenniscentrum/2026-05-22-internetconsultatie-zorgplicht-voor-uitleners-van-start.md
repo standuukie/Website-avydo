@@ -1,10 +1,12 @@
 ---
-title: "Voorstel zorgplicht: uitleners moeten BRP-inschrijving van arbeidsmigranten controleren"
+title: "Voorstel zorgplicht: uitleners moeten BRP-inschrijving van arbeidsmigranten bevorderen en controleren"
 category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2026-05-22T08:18:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/05/22/internetconsultatie-zorgplicht-voor-uitleners-van-start"
+sourcePublishedAt: 2026-05-22T08:18:00.000Z
 summary: "Vanaf 22 mei start de internetconsultatie van de zorgplicht rondom de registratie van arbeidsmigranten. Deze plicht geldt voor uitleners, zoals uitzendbureaus, detacheerders en payrollbedrijven."
 relevance: "Vooral relevant voor uitzendbureaus, detacheerders en payrollbedrijven; voor andere werkgevers geldt deze plicht niet. Volgens het voorstel moeten uitleners arbeidskrachten die minder dan 150% van het minimumloon verdienen informeren over inschrijving in de Basisregistratie Personen (BRP), en controleren of zij als ingezetene zijn ingeschreven. Het voorstel was tot 19 juni 2026 in internetconsultatie."
 tags: []
@@ -14,24 +16,28 @@ hidden: false
 status: "voorstel"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:43.008Z
+avydoContent: "toelichting"
 ---
 
-Vanaf 22 mei start de internetconsultatie van de zorgplicht rondom de registratie van arbeidsmigranten. Deze plicht geldt voor uitleners, zoals uitzendbureaus, detacheerders en payrollbedrijven. Een internetconsultatie is een periode waarbij het mogelijk is om op een (wets)voorstel te reageren. De reacties worden door het ministerie bekeken en kunnen leiden tot aanpassing van het voorstel. U kunt tot 19 juni 2026 op de internetconsultatie reageren.
+## Wat is er aan de hand?
 
-Arbeidsmigranten staan vaak onjuist geregistreerd in de Basisregistratie Personen (BRP). Arbeidsmigranten die langer dan 4 maanden in Nederland willen blijven, moeten zich binnen 5 dagen na aankomst als ingezetene laten inschrijven in de gemeente waar ze gaan wonen. Dit wordt nog onvoldoende gedaan, waardoor er geen zicht is op hun woonadres en de kans groot is dat zij rechten mislopen. Het kabinet werkt daarom aan een zorgplicht rondom de registratie van alle arbeidskrachten in het BRP.
+Het kabinet wil uitleners, zoals uitzendbureaus, detacheerders en payrollbedrijven, een zorgplicht geven rond de registratie van arbeidsmigranten in de Basisregistratie Personen (BRP). Het voorstel was vanaf 22 mei tot 19 juni 2026 in internetconsultatie.
 
-De zorgplicht bestaat uit een bevorderings- en vergewisplicht. Beide waren al opgenomen in de Wet allocatie arbeidskrachten door intermediairs (Waadi). Deze treedt in 2027 in werking. Deze verplichtingen worden met dit voorstel nader vormgegeven in het Besluit allocatie arbeidskrachten door intermediairs (Baadi). De zorgplicht geldt voor alle arbeidskrachten die minder dan 150% van het Wettelijk minimumloon (WML) verdienen, aangezien zij zich in de meest kwetsbare positie bevinden.
+Aanleiding is dat arbeidsmigranten vaak onjuist in de BRP staan. Wie langer dan 4 maanden in Nederland wil blijven, moet zich binnen 5 dagen na aankomst als ingezetene inschrijven in de gemeente waar hij of zij gaat wonen. Gebeurt dat niet, dan is er geen zicht op het woonadres en is de kans groot dat iemand rechten misloopt.
 
-Bevorderingsplicht
+## Wat houdt de zorgplicht in?
 
-De bevorderingsplicht bepaalt dat de arbeidskracht over verschillende BRP-verplichtingen moet worden geïnformeerd door de uitlener. De Baadi regelt voor welke onderdelen uit het BRP dit geldt. Bovendien moet dit gedaan worden in de taal die de voorkeur heeft van de arbeidskracht, tenzij er een andere taal is die hij begrijpt en waarin gecommuniceerd kan worden.
+De zorgplicht geldt voor arbeidskrachten die minder dan 150% van het wettelijk minimumloon verdienen en bestaat uit twee delen:
 
-Vergewisplicht
+- **Bevorderingsplicht:** de uitlener informeert de arbeidskracht over de BRP-verplichtingen, in de taal die de arbeidskracht het liefst gebruikt of in een andere taal die hij begrijpt.
+- **Vergewisplicht:** de uitlener controleert of de arbeidskracht als ingezetene bij de woongemeente staat ingeschreven.
 
-De uitlener wordt verplicht om te controleren dat de arbeidskracht als ingezetene bij zijn woongemeente staat ingeschreven. Op termijn zullen er hierover regels komen via het toelatingsstelsel voor uitleners (Wet toelating terbeschikkingstelling van arbeidskrachten). Dit gebeurt nadat het toelatingsstelsel volledig is ingericht en de capaciteit van inspectie-instellingen voldoende is.
+Beide plichten staan al in de Wet allocatie arbeidskrachten door intermediairs (Waadi), die in 2027 in werking treedt; dit voorstel werkt ze verder uit in het bijbehorende besluit (Baadi).
 
-Met deze verplichtingen wordt invulling gegeven aan het coalitieakkoord en het advies van de SER. Beide regels gelden alleen voor uitleners, niet voor andere ondernemers. Hiervoor is gekozen omdat het grootste aandeel van de EU-arbeidsmigranten die onjuist is ingeschreven in de BRP bij hen werkzaam is (op basis van cijfers van het CBS rond de 70% in 2023).
+## Voor wie is dit relevant?
 
-Breder pakket
+Alleen voor uitleners. Voor andere werkgevers geldt deze plicht niet.
 
-Naast genoemde maatregelen zet het kabinet breder in om de registratie van arbeidsmigranten in de BRP te verbeteren. Zo gaat de overheid vanaf deze zomer mails aan arbeidsmigranten sturen om hen te wijzen op correcte registratie. Daarnaast kunnen arbeidsmigranten regionaal bij fysieke WorkinNL-informatiepunten terecht met vragen over registratie in de BRP. Deze punten worden uitgerold over het hele land en de dienstverlening is in meerdere talen.
+## Wat is de status?
+
+Dit is een voorstel. Na de internetconsultatie kan het nog worden aangepast. Uitleners die met arbeidsmigranten werken, kunnen wel alvast nagaan hoe zij hun mensen nu informeren over inschrijving in de BRP.

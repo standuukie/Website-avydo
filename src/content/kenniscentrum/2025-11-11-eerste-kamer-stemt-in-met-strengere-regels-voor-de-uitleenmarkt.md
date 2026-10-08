@@ -3,28 +3,40 @@ title: "Strengere regels voor de uitleenmarkt: uitleners hebben vanaf 2027 een t
 category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2025-11-11T16:08:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/11/11/eerste-kamer-stemt-in-met-strengere-regels-voor-de-uitleenmarkt"
+sourcePublishedAt: 2025-11-11T16:08:00.000Z
 summary: "De Eerste Kamer heeft de Wet toelating terbeschikkingstelling van arbeidskrachten (Wtta) aangenomen. Uitzendbureaus en andere bedrijven die werknemers uitlenen mogen dit alleen als ze daarvoor een toelating (vergunning) hebben."
 relevance: "Relevant voor uitzendbureaus en andere uitleners, maar ook voor bedrijven die personeel inlenen. De wet gaat op 1 januari 2027 in; uitleners moeten zich vóór die datum melden bij de Nederlandse Autoriteit Uitleenmarkt (NAU). Vanaf 1 januari 2028 handhaaft de Arbeidsinspectie, en dan krijgen ook inleners een boete als zij werken met een uitlener zonder toelating."
 tags: []
 audiences: ["werkgever"]
 featured: false
 hidden: false
+status: "aangenomen"
 aiAssisted: true
 fetchedAt: 2026-10-07T13:10:13.771Z
+avydoContent: "toelichting"
 ---
 
-De Eerste Kamer heeft de Wet toelating terbeschikkingstelling van arbeidskrachten (Wtta) aangenomen. Uitzendbureaus en andere bedrijven die werknemers uitlenen mogen dit alleen als ze daarvoor een toelating (vergunning) hebben. De wet moet zorgen voor betere bescherming van werknemers en in het bijzonder voor arbeidsmigranten. Ook moet het leiden tot eerlijke concurrentie tussen bedrijven.
+## Wat is er aan de hand?
 
-Minister Mariëlle Paul van Sociale Zaken en Werkgelegenheid: “Alle arbeidsmigranten hebben recht op eerlijk, gezond en veilig werk. We zetten met deze wet een grote stap voorwaarts. Alleen uitzendbureaus met een toelating (vergunning) mogen straks nog werknemers en arbeidsmigranten uitlenen. Dat verbetert de positie van arbeidsmigranten én zorgt voor een gelijk speelveld voor alle uitzendbureaus.”
+De Eerste Kamer heeft de Wet toelating terbeschikkingstelling van arbeidskrachten (Wtta) aangenomen. Uitzendbureaus en andere bedrijven die werknemers uitlenen, mogen dat straks alleen nog met een toelating (vergunning). De wet moet werknemers, en in het bijzonder arbeidsmigranten, beter beschermen en zorgen voor eerlijke concurrentie tussen uitleners.
 
-Op 1 januari 2027 gaat de wet in. Bedrijven die werknemers willen blijven uitlenen, moeten zich vóór die datum bij de Nederlandse Autoriteit Uitleenmarkt (NAU) melden. Op 1 januari 2028 gaat de Nederlandse arbeidsinspectie handhaven. Uitleners die zonder toelating actief zijn op de arbeidsmarkt krijgen een boete. Deze boete geldt ook voor bedrijven die gebruik maken van uitzendbureaus, de zogenaamde inleners.
+## Belangrijke data
 
-Uitleners moeten om toegang te krijgen een Verklaring Omtrent Gedrag (VOG) indienen en een waarborgsom van €100.000 overmaken. Daarnaast moeten ze bewijzen dat ze bestaande wet- en regelgeving naleven zoals het uitbetalen van het wettelijk minimumloon. Alleen dan kunnen ze een toelating krijgen om mensen uit te lenen.
+- **Vóór 1 januari 2027:** uitleners die willen blijven uitlenen, melden zich bij de Nederlandse Autoriteit Uitleenmarkt (NAU).
+- **1 januari 2027:** de wet gaat in.
+- **1 januari 2028:** de Nederlandse Arbeidsinspectie gaat handhaven. Uitleners zonder toelating krijgen dan een boete, en die boete geldt ook voor bedrijven die met zo’n uitlener werken (inleners).
 
-Uitvoering van wet
+## Wat moet een uitlener doen voor een toelating?
 
-De uitvoering van de wet komt in handen van de Nederlandse Autoriteit Uitleenmarkt (NAU). De NAU beslist over de toelating van uitleners. Ook verzamelt de autoriteit signalen uit de markt en adviseert over verbeteringen. Daarnaast wijst de NAU de inspectie-instellingen aan die controleren of uitleners voldoen aan alle wet- en regelgeving. De NAU start vanaf 2026 met haar eerste werkzaamheden, zoals het aanwijzen van inspectie-instellingen en het openen van het aanmeldloket voor uitleners.
+Een uitlener moet een Verklaring Omtrent Gedrag (VOG) indienen en een waarborgsom van €100.000 overmaken. Ook moet hij aantonen dat hij de bestaande regels naleeft, zoals het betalen van het wettelijk minimumloon. De NAU beslist over de toelating en wijst de inspectie-instellingen aan die dat controleren.
 
-Deze wet is een belangrijke aanbeveling van het Aanjaagteam Bescherming Arbeidsmigranten (Roemer). Naast deze wet heeft het kabinet ook een aantal andere stappen gezet. Zo is de Nederlandse Arbeidsinspectie met 135 fte uitgebreid om de pakkans te vergoten. Ook zijn op verschillende plekken hulppunten geopend om arbeidsmigranten te helpen met vragen of problemen. De komende periode komen er nog meer hulppunten bij. Ook ligt er een wet bij de Eerste Kamer om ernstige benadeling van arbeidsmigranten makkelijker strafrechtelijk te vervolgen.
+## Voor wie is dit relevant?
+
+Voor uitzendbureaus, detacheerders en andere uitleners, en ook voor bedrijven die personeel inlenen: zij lopen vanaf 2028 zelf risico op een boete als hun uitlener geen toelating heeft.
+
+## Wat is de status?
+
+De wet is aangenomen en gaat op 1 januari 2027 in. Werkt u met ingeleend personeel, controleer dan vóór 2028 of uw uitlener een toelating heeft.

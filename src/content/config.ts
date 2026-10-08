@@ -24,6 +24,8 @@ export const priorities = ['belangrijk', 'actueel', 'praktisch'] as const;
 // doelgroepen hebben, of geen enkele als er geen duidelijke match is.
 export const audiences = ['zzp', 'bv-dga', 'werkgever', 'starter', 'mkb-ondernemer'] as const;
 
+export const articleStatuses = ['voorstel', 'consultatie', 'voornemen', 'aangenomen', 'van-kracht', 'historisch', 'herzien', 'deels-geschrapt'] as const;
+
 const kenniscentrum = defineCollection({
   type: 'content',
   schema: z.object({
@@ -50,13 +52,46 @@ const kenniscentrum = defineCollection({
     // Optioneel, redactioneel: de fase van het bericht, als badge getoond
     // (STATUS_LABELS in src/lib/news-presentation.mjs). Afwezig = geen badge.
     // 'van-kracht' = het voorstel uit het bericht is inmiddels geldende regel.
-    status: z.enum(['voorstel', 'consultatie', 'voornemen', 'van-kracht', 'historisch', 'herzien', 'deels-geschrapt']).optional(),
-    // Optioneel, redactioneel: eigen Avydo-content. 'gids' = door Avydo
-    // geschreven uitleg op basis van de bron; 'toelichting' = eigen analyse
-    // van Avydo naar aanleiding van een bronbericht. sourceName/sourceUrl
-    // blijven de geraadpleegde bron. Alleen weergave.
+    // 'aangenomen' = door het parlement aangenomen, maar nog niet in werking.
+    status: z.enum(articleStatuses).optional(),
+    // Eigen Avydo-content: elk zichtbaar artikel is door Avydo geschreven op
+    // basis van één officiële bron (sourceName/sourceUrl). 'toelichting' =
+    // actueel nieuws of een (aangekondigde) wijziging; 'gids' = blijvend
+    // geldende uitleg.
     avydoContent: z.enum(['gids', 'toelichting']).optional(),
+    // Publicatiedatum van het officiële bronbericht. `publishedAt` is de
+    // datum van het Avydo-artikel. Bij de in oktober 2026 omgezette
+    // artikelen zijn beide gelijk (zie README, "Datums").
+    sourcePublishedAt: z.date().optional(),
   }),
 });
 
-export const collections = { kenniscentrum };
+// Bronlaag: één record per officieel bronbericht (zie
+// scripts/kenniscentrum/source-records.mjs). Geen pagina's; dit is de
+// invoer voor de redactionele pipeline en de deduplicatie van de import.
+const bronnen = defineCollection({
+  type: 'data',
+  schema: z.object({
+    sourceUrl: z.string().url(),
+    sourceName: z.string(),
+    // Titel zoals de bron die gebruikt.
+    title: z.string(),
+    // Korte omschrijving van de bron (meta description of feedtekst).
+    description: z.string().optional(),
+    // Opgehaalde hoofdtekst van de bronpagina; ontbreekt als die niet
+    // betrouwbaar uit te lezen was.
+    body: z.string().optional(),
+    sourcePublishedAt: z.coerce.date().optional(),
+    sourceLastModified: z.coerce.date().optional(),
+    fetchedAt: z.coerce.date().optional(),
+    category: z.enum(categories).optional(),
+    priority: z.enum(priorities).optional(),
+    audiences: z.array(z.enum(audiences)).default([]),
+    processingStatus: z.enum(['kandidaat', 'verwerkt', 'afgewezen']),
+    rejectionReason: z.string().optional(),
+    // Slug van het Avydo-artikel dat op deze bron is gebaseerd.
+    avydoSlug: z.string().optional(),
+  }),
+});
+
+export const collections = { kenniscentrum, bronnen };

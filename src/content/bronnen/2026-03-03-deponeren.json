@@ -1,0 +1,13 @@
+{
+  "sourceUrl": "https://www.kvk.nl/hulp-en-contact/deponeren/",
+  "sourceName": "KVK",
+  "title": "Deponeren",
+  "description": "Heb je een vraag over deponeren bij KVK? Kijk hier voor het antwoord.",
+  "sourceLastModified": "2026-03-03T07:29:59.000Z",
+  "fetchedAt": "2026-10-01T19:43:22.672Z",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: was al verborgen in het Kenniscentrum (redactioneel niet geschikt, verouderd of een doublure; zie git-historie). Bron bewaard voor deduplicatie."
+}

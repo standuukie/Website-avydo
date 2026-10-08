@@ -3,8 +3,10 @@ title: "Regeling voor huisvestingskosten arbeidsmigranten blijft bestaan"
 category: "Personeel & loonheffingen"
 priority: "belangrijk"
 publishedAt: 2025-10-30T13:01:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/10/30/regeling-voor-huisvestingskosten-arbeidsmigranten-blijft-bestaan"
+sourcePublishedAt: 2025-10-30T13:01:00.000Z
 summary: "Het kabinet heeft besloten dat werkgevers maximaal 25% van het minimumloon in rekening mogen brengen voor huisvestingskosten. De geplande afbouw van deze regeling per 1 januari 2026 gaat niet door."
 relevance: "Dit is de geldende regel voor werkgevers die arbeidsmigranten huisvesten: u mag maximaal 25% van het minimumloon inhouden voor huisvestingskosten, en alleen als de woning gecertificeerd is. Let op: in september 2026 kondigde de minister aan deze inhouding per 1 juli 2028 te willen afschaffen; dat is nog een voornemen."
 tags: ["huur", "inhouden", "werkgever", "huisvesting"]
@@ -14,16 +16,26 @@ hidden: false
 status: "van-kracht"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:35:24.110Z
+avydoContent: "toelichting"
 ---
 
-Het kabinet heeft besloten dat werkgevers maximaal 25% van het minimumloon in rekening mogen brengen voor huisvestingskosten. De geplande afbouw van deze regeling per 1 januari 2026 gaat niet door. Het risico bestaat dat de afbouw van de inhouding op dit moment meer nadelen dan voordelen voor de arbeidsmigrant heeft.
+## Wat is er aan de hand?
 
-De bescherming van de arbeidsmigrant staat voorop. Daarom neemt het kabinet het besluit om nu nog niet te beginnen met de afbouw van de inhoudingsmogelijkheid. Ook wordt het voorstel nu niet naar de Raad van State gestuurd voor advies.
+Het kabinet heeft besloten dat werkgevers maximaal 25% van het minimumloon in rekening mogen blijven brengen voor huisvestingskosten van arbeidsmigranten. De geplande afbouw van deze regeling per 1 januari 2026 gaat niet door.
 
-Een eerdere verkenning laat zien dat er in de praktijk verschillende kanten zitten aan de regeling. De regeling vergroot de afhankelijkheid voor arbeidsmigranten van werkgevers en kan bijdragen aan een onwenselijk verdienmodel. Daar staat tegenover dat de regeling het makkelijker maakt voor arbeidsmigranten en werkgevers om huisvesting te regelen.
+## Waarom gaat de afbouw niet door?
 
-Daarnaast kan de overheid door deze regeling eisen stellen aan de kwaliteit van de woning. Zo mag de werkgever enkel geld inhouden voor huisvesting als de woning gecertificeerd is. Met het afschaffen van de regeling verliezen we deze vorm van toezicht.
+Volgens het kabinet heeft afbouw op dit moment meer nadelen dan voordelen voor de arbeidsmigrant. De regeling heeft twee kanten. Ze kan de afhankelijkheid van de werkgever vergroten en bijdragen aan een onwenselijk verdienmodel. Maar ze maakt het ook makkelijker om huisvesting te regelen, en via de regeling kan de overheid eisen stellen aan de woning: de werkgever mag alleen inhouden als de woning gecertificeerd is. Ook zijn andere maatregelen die arbeidsmigranten rond huisvesting moeten beschermen nog niet allemaal in werking.
 
-De afbouw van de regeling kan ertoe leiden dat de situatie van de arbeidsmigrant verslechtert door de huidige positie op de woningmarkt. Ook wil het kabinet de regeling nu niet afbouwen omdat andere maatregelen die arbeidsmigranten moeten beschermen rondom huisvesting nog niet allemaal in werking zijn.
+## Wat geldt er?
 
-Tegelijkertijd werkt het kabinet aan het verstevigen van de positie van arbeidsmigranten door de afhankelijkheid van arbeidsmigranten van hun werkgever te verminderen en onwenselijke verdienmodellen te beperken. Zo zijn er Work in NL -informatiepunten om arbeidsmigranten te informeren over hun rechten. Met het wetsvoorstel toelating terbeschikkingstelling van arbeidskrachten (Wtta) verbetert de positie van kwetsbare arbeidskrachten, in het bijzonder ook arbeidsmigranten. Daarnaast werkt de minister van Volkshuisvesting en Ruimtelijke Ordening (VRO) aan een wetsvoorstel om de huurbescherming van arbeidsmigranten te verbeteren.
+- U mag maximaal 25% van het minimumloon inhouden voor huisvestingskosten.
+- Dat mag alleen als de woning gecertificeerd is.
+
+## Voor wie is dit relevant?
+
+Voor werkgevers en uitleners die arbeidsmigranten huisvesten en daarvoor een bedrag op het loon inhouden.
+
+## Wat is de status?
+
+Dit is de regel die nu geldt. Let op: in september 2026 kondigde de minister aan deze inhoudingsmogelijkheid per 1 juli 2028 te willen afschaffen. Dat is een voornemen en nog geen geldende regel; zie het aparte artikel daarover.

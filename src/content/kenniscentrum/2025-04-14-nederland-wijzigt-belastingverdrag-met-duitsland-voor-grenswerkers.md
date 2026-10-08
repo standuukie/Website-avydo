@@ -1,10 +1,12 @@
 ---
-title: "Belastingverdrag met Duitsland wordt gewijzigd: 34 thuiswerkdagen per jaar voor grenswerkers"
+title: "Grenswerkers Duitsland: belastingverdrag wordt aangepast voor maximaal 34 thuiswerkdagen per jaar"
 category: "Fiscale actualiteit"
 priority: "praktisch"
 publishedAt: 2025-04-14T09:45:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2025/04/14/nederland-wijzigt-belastingverdrag-met-duitsland-voor-grenswerkers"
+sourcePublishedAt: 2025-04-14T09:45:00.000Z
 summary: "Het belastingverdrag tussen Nederland en Duitsland wordt gewijzigd zodat grenswerkers jaarlijks maximaal 34 dagen kunnen thuiswerken zonder dat zij over hun inkomen belasting hoeven te betalen in beide landen."
 relevance: "Vooral relevant voor werkgevers in de grensregio met werknemers die in Duitsland wonen, en voor grenswerkers zelf. Na de wijziging kunnen grenswerkers maximaal 34 dagen per jaar thuiswerken terwijl de belasting over hun loon volledig in het land van de werkgever blijft. Let op: de wijziging geldt pas nadat de Raad van State en de parlementen van beide landen ermee hebben ingestemd."
 tags: []
@@ -13,24 +15,28 @@ featured: false
 hidden: false
 aiAssisted: true
 fetchedAt: 2026-10-06T23:55:08.472Z
+avydoContent: "toelichting"
 ---
 
-Het belastingverdrag tussen Nederland en Duitsland wordt gewijzigd zodat grenswerkers jaarlijks maximaal 34 dagen kunnen thuiswerken zonder dat zij over hun inkomen belasting hoeven te betalen in beide landen. Dit hebben de landen vandaag afgesproken. Het is een eerste stap om de mogelijkheden voor grenswerkers om thuis te werken te verbeteren. Doordat er een maximum van 34 dagen per jaar is opgenomen, hebben nog niet alle grenswerkers profijt van de nieuwe thuiswerkregeling. Daarom hebben Nederland en Duitsland afgesproken om hier verder over te praten.
+## Wat is er aan de hand?
 
-Een belastingverdrag voorkomt dat grenswerkers in zowel het land van wonen als het land waar de werkgever is gevestigd belasting betalen over hetzelfde inkomen. Doorgaans is voor werknemers geregeld dat inkomstenbelasting wordt geheven in het land waar de werkzaamheden fysiek zijn verricht. Als grenswerkers vanuit een ander land werken dan waar de werkgever is gevestigd, dan kunnen er ook heffingsrechten aan dat andere land worden gegeven. Er moet dan bijvoorbeeld belasting worden betaald in zowel het land van wonen voor het deel dat wordt thuisgewerkt, als het land van de werkgever voor het overige deel van het inkomen.
+Nederland en Duitsland hebben in april 2025 afgesproken het belastingverdrag te wijzigen. Grenswerkers kunnen dan jaarlijks maximaal 34 dagen thuiswerken, terwijl de belasting over hun loon volledig in het land van de werkgever blijft. Nu kan thuiswerken ertoe leiden dat een deel van het inkomen in het woonland wordt belast en de rest in het land van de werkgever.
 
-Thuiswerkregeling
+## Wat zijn de voordelen?
 
-Door de wijziging van het belastingverdrag met Duitsland kunnen grenswerkers jaarlijks maximaal 34 dagen thuiswerken waarbij het heffingsrecht volledig blijft bij het land waar de werkgever is gevestigd. Dit geldt voor zowel medewerkers binnen het bedrijfsleven als binnen de overheid.
+- Het inkomen wordt alleen nog in het land van de werkgever belast, waardoor er minder onzekerheid is over het netto-inkomen.
+- Complexe berekeningen voor aangiften in twee landen kunnen worden voorkomen.
+- De regeling geldt voor werknemers in het bedrijfsleven en bij de overheid.
+- Een thuiswerkdag telt mee als er die dag meer dan 30 minuten thuis wordt gewerkt.
 
-De wijziging van het belastingverdrag heeft verschillende voordelen voor grenswerkers. Het inkomen van de grenswerker wordt alleen nog maar in het land van de werkgever belast waardoor minder onzekerheid bestaat over het definitieve netto-inkomen. Daarnaast kunnen ook extra administratieve lasten worden voorkomen, bijvoorbeeld voor het doen van complexe berekeningen voor belastingaangiften in beide landen. In sommige gevallen kan worden voorkomen dat er kosten worden gemaakt voor een belastingadviseur.
+## Wat regelt het niet?
 
-Met Duitsland is afgesproken dat er sprake is van een thuiswerkdag als meer dan 30 minuten per dag wordt thuisgewerkt. De wijziging van het belastingverdrag is een eerste stap om de situatie rondom thuiswerken voor grenswerkers te verbeteren.
+Niet alle grenswerkers hebben er profijt van, bijvoorbeeld wie structureel 1 à 2 dagen per week thuiswerkt bij een Duitse werkgever. In een intentieverklaring hebben beide landen afgesproken op termijn verder te praten over een regeling met meer dan 34 werkdagen per kalenderjaar, en waar mogelijk meer zekerheid te bieden aan werkgevers.
 
-Intentieverklaring
+## Voor wie is dit relevant?
 
-Niet alle grenswerkers hebben profijt van de nieuwe thuiswerkregeling. Bijvoorbeeld mensen die een werkgever in Duitsland hebben en structureel 1 à 2 dagen per week thuiswerken. Ook voor hen wil Nederland een oplossing vinden en daarom is samen met Duitsland een intentieverklaring ondertekend waarin is afgesproken om op termijn door te praten over een thuiswerkregeling met meer dan 34 werkdagen per kalenderjaar. Daarbij willen beide landen, waar mogelijk, ook meer zekerheid bieden aan werkgevers over de fiscale gevolgen van het thuiswerken door grenswerkers.
+Voor werkgevers in de grensregio met werknemers die in Duitsland wonen, voor Nederlandse werkgevers met Duitse grenswerkers en voor grenswerkers zelf.
 
-Vervolg
+## Wat is de status?
 
-Voordat de wijziging van het belastingverdrag in werking treedt, wordt het verdrag eerst aan de Raad van State voorgelegd, waarna deze ter goedkeuring naar het parlement wordt gestuurd. Ook het Duitse parlement moet akkoord gaan met de wijziging.
+De wijziging geldt pas nadat de Raad van State is gehoord en het Nederlandse en het Duitse parlement ermee hebben ingestemd. Tot die tijd gelden de huidige regels uit het verdrag.

@@ -448,7 +448,7 @@ test('fetcher: een bestaand artikel met supersededBy wordt bij een nieuwe fetch 
       console.log = log;
     }
     assert.equal(result.stages.reasons.duplicate, 1);
-    assert.equal(result.stages.published, 0);
+    assert.equal(result.stages.recorded, 0);
     assert.equal(pageFetches, 0);
     assert.deepEqual(readdirSync(dir), [fileName]);
     assert.equal(readFileSync(path.join(dir, fileName), 'utf8'), original);

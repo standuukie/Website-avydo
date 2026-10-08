@@ -8,12 +8,13 @@ interface Props {
   highlighted?: boolean;
 }
 const { article, highlighted = false } = Astro.props;
-const { title, category, priority, publishedAt, summary, relevance, sourceName, audiences, tags, status, avydoContent } = article.data;
+const { title, category, priority, publishedAt, summary, relevance, sourceName, audiences, tags, status } = article.data;
 // Alleen een eigen duiding tonen; een sjabloonzin van de nieuwsengine niet.
 const showRelevance = hasOwnRelevance(relevance);
 const statusLabel = status ? STATUS_LABELS[status] : undefined;
 const statusIsOutdated = status ? OUTDATED_STATUSES.has(status) : false;
-// KVK-datum = "laatst gewijzigd" van de bronpagina, geen publicatiedatum.
+// Bij de omgezette KVK-artikelen is de datum de "laatst gewijzigd"-datum van
+// de bronpagina, geen publicatiedatum.
 const dateIsLastModified = dateIsSourceLastModified(article.data);
 ---
 
@@ -41,7 +42,7 @@ const dateIsLastModified = dateIsSourceLastModified(article.data);
     )}
     <span class="text-xs font-medium text-ink-500">{category}</span>
     <span class="text-xs text-ink-400">&middot;</span>
-    <span class="text-xs text-ink-500">{dateIsLastModified && 'Bijgewerkt '}<time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time></span>
+    <span class="text-xs text-ink-500">{dateIsLastModified && 'Bron bijgewerkt '}<time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time></span>
     <span
       class="audience-match-badge hidden ml-auto inline-flex items-center rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white"
       data-audience-badge
@@ -75,7 +76,7 @@ const dateIsLastModified = dateIsSourceLastModified(article.data);
   )}
 
   <div class="mt-4 pt-4 border-t border-ink-100 flex items-center justify-between gap-3">
-    <span class="text-xs text-ink-500">{avydoContent ? <>Door Avydo &middot; bron: {sourceName}</> : <>Bron: {sourceName}</>}</span>
+    <span class="text-xs text-ink-500">Door Avydo &middot; bron: {sourceName}</span>
     <a href={`/kenniscentrum/${article.slug}`} class="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:gap-1.5 transition-all shrink-0">
       Lees meer
       <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L11.29 6.16a.75.75 0 1 1 1.02-1.1l5 4.25a.75.75 0 0 1 0 1.18l-5 4.25a.75.75 0 1 1-1.02-1.1l3.098-3.09H3.75A.75.75 0 0 1 3 10Z" clip-rule="evenodd" /></svg>

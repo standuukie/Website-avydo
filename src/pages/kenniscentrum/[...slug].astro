@@ -5,7 +5,7 @@ import CTASection from '@/components/CTASection.astro';
 import ArticleCard from '@/components/kenniscentrum/ArticleCard.astro';
 import { formatDate, audienceLabels } from '@/lib/kenniscentrum';
 import { safeJsonLd } from '@/lib/seo';
-import { dateIsSourceLastModified, hasOwnRelevance, OUTDATED_STATUSES, sourceBodyBlocks, STATUS_LABELS } from '@/lib/news-presentation.mjs';
+import { dateIsSourceLastModified, hasOwnRelevance, OUTDATED_STATUSES, STATUS_LABELS } from '@/lib/news-presentation.mjs';
 
 export async function getStaticPaths() {
   const articles = await getCollection('kenniscentrum', ({ data }) => !data.hidden);
@@ -16,29 +16,28 @@ export async function getStaticPaths() {
 }
 
 const { article, allArticles } = Astro.props;
-const { title, category, priority, publishedAt, updatedAt, sourceName, sourceUrl, summary, relevance, audiences, status, supersededBy, avydoContent } = article.data;
+const { title, category, priority, publishedAt, updatedAt, sourcePublishedAt, sourceName, sourceUrl, summary, relevance, audiences, status, supersededBy, avydoContent } = article.data;
 
-// De meeste (automatisch opgehaalde) artikelen hebben een body die
-// vrijwel gelijk is aan summary — dan voegt een apart "volledige
-// toelichting"-blok niets toe. Uitgebreidere, redactionele artikelen
-// (handmatig of via aiAssisted geschreven) hebben een substantieel langere
-// body; alleen dan tonen we 'm, om duplicatie met de Samenvatting hierboven
-// te voorkomen.
+// Elk zichtbaar artikel is een Avydo-artikel met een eigen tekst. Alleen als
+// die tekst niet meer is dan de samenvatting, tonen we hem niet apart.
 const { Content } = await render(article);
 const hasExtendedBody = article.body != null && article.body.trim().length > summary.length * 1.3;
-
-// Rijksoverheid-artikelen bevatten de volledige brontekst, die begint met de
-// samenvatting. Dan tonen we geen aparte Samenvatting (dubbel), maar de
-// brontekst zelf met de tussenkoppen uit de bron.
-const showSourceText = sourceName === 'Rijksoverheid' && hasExtendedBody;
-const sourceBlocks = showSourceText ? sourceBodyBlocks(article.body) : [];
 // Sjabloonteksten van de nieuwsengine zijn geen eigen uitleg: niet tonen.
 const showRelevance = hasOwnRelevance(relevance);
 const statusLabel = status ? STATUS_LABELS[status] : undefined;
 const isOutdated = Boolean(supersededBy) || (status != null && OUTDATED_STATUSES.has(status));
 const successor = supersededBy ? allArticles.find((a) => a.data.sourceUrl === supersededBy) : undefined;
-// KVK-datum = "laatst gewijzigd" van de bronpagina, geen publicatiedatum.
+// Bij de omgezette KVK-artikelen is de datum de "laatst gewijzigd"-datum van
+// de bronpagina, geen publicatiedatum.
 const dateIsLastModified = dateIsSourceLastModified(article.data);
+// Datum van het officiële bronbericht, als die bekend is.
+const sourceDate = sourcePublishedAt;
+// De eigen publicatiedatum van Avydo tonen we apart als die afwijkt van de
+// datum van het bronbericht. Bij de in oktober 2026 omgezette artikelen is
+// `publishedAt` de datum van het bronbericht gebleven; daar tonen we alleen
+// die datum en de datum van de omzetting (updatedAt).
+const sameDay = (a: Date, b: Date) => a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+const showAvydoDate = !dateIsLastModified && !(sourceDate && sameDay(sourceDate, publishedAt));
 // Bronnaam in een lopende zin ("informatie van de Belastingdienst").
 const sourceInSentence = sourceName === 'Belastingdienst' || sourceName === 'Rijksoverheid' ? `de ${sourceName}` : sourceName;
 
@@ -58,7 +57,12 @@ const structuredData = {
   dateModified: (updatedAt ?? publishedAt).toISOString(),
   author: { '@type': 'Organization', name: 'Avydo Accountants & Belastingadviseurs' },
   publisher: { '@type': 'Organization', name: 'Avydo Accountants & Belastingadviseurs' },
-  isBasedOn: sourceUrl,
+  isBasedOn: {
+    '@type': 'CreativeWork',
+    url: sourceUrl,
+    publisher: { '@type': 'Organization', name: sourceName },
+    ...(sourcePublishedAt ? { datePublished: sourcePublishedAt.toISOString() } : {}),
+  },
   articleSection: category,
 };
 ---
@@ -86,7 +90,7 @@ const structuredData = {
         )}
         <span class="text-xs font-medium text-ink-300">{category}</span>
         <span class="text-xs text-ink-500">&middot;</span>
-        <span class="text-xs text-ink-300">{dateIsLastModified && 'Bijgewerkt '}<time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time></span>
+        <span class="text-xs text-ink-300">{dateIsLastModified && 'Bron bijgewerkt '}<time datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time></span>
       </div>
       <div class="mask-reveal mt-4 overflow-hidden" data-reveal="mask">
         <h1 class="mask-reveal-inner max-w-3xl pb-1 font-display text-3xl font-semibold leading-[1.1] text-white md:text-4xl">{title}</h1>
@@ -106,80 +110,52 @@ const structuredData = {
   <section class="section">
     <div class="container max-w-content grid lg:grid-cols-3 gap-12">
       <div class="lg:col-span-2 max-w-2xl">
-        {!showSourceText && (
-          <>
-            <h2 class="text-lg font-display font-semibold text-ink-900">Samenvatting</h2>
-            <p class="mt-3 text-ink-700 leading-relaxed text-lg">{summary}</p>
-          </>
+        {isOutdated && (
+          <div class="mb-8 rounded-md border-l-4 border-ink-400 bg-ink-50 px-4 py-3 text-sm text-ink-700 leading-relaxed" role="note" data-outdated-notice>
+            <strong class="text-ink-900">{statusLabel ?? 'Historisch'} artikel.</strong> Dit artikel beschrijft de situatie ten tijde van het bronbericht{sourceDate && <> van {formatDate(sourceDate)}</>}; die is inmiddels niet meer (volledig) actueel.
+            {successor ? (
+              <> Lees ook: <a href={`/kenniscentrum/${successor.slug}`} class="font-semibold text-brand-600 hover:underline">{successor.data.title}</a>.</>
+            ) : supersededBy ? (
+              <> Lees ook het <a href={supersededBy} target="_blank" rel="noopener noreferrer" class="font-semibold text-brand-600 hover:underline">latere bericht bij de bron</a>.</>
+            ) : null}
+          </div>
         )}
 
+        <h2 class="text-lg font-display font-semibold text-ink-900">Samenvatting</h2>
+        <p class="mt-3 text-ink-700 leading-relaxed text-lg">{summary}</p>
+
         {showRelevance && (
-          <div class:list={['rounded-md border border-ink-100 bg-ink-50/60 p-6', !showSourceText && 'mt-8']}>
+          <div class="mt-8 rounded-md border border-ink-100 bg-ink-50/60 p-6">
             <h2 class="font-display text-lg font-semibold text-ink-900">Wat betekent dit voor uw onderneming?</h2>
             <p class="mt-2 text-ink-700 leading-relaxed">{relevance}</p>
           </div>
         )}
 
-        {showSourceText && (
-          <div class:list={[showRelevance && 'mt-10']}>
-            <h2 class="text-lg font-display font-semibold text-ink-900">Brontekst</h2>
-            {isOutdated && (
-              <div class="mt-4 rounded-md border-l-4 border-ink-400 bg-ink-50 px-4 py-3 text-sm text-ink-700 leading-relaxed" role="note" data-outdated-notice>
-                <strong class="text-ink-900">{statusLabel ?? 'Historisch'} bericht.</strong> De tekst hieronder is de oorspronkelijke publicatie van {formatDate(publishedAt)} en beschrijft de situatie van dat moment; die is inmiddels niet meer (volledig) actueel.
-                {successor ? (
-                  <> Lees ook het latere bericht: <a href={`/kenniscentrum/${successor.slug}`} class="font-semibold text-brand-600 hover:underline">{successor.data.title}</a>.</>
-                ) : supersededBy ? (
-                  <> Lees ook het <a href={supersededBy} target="_blank" rel="noopener noreferrer" class="font-semibold text-brand-600 hover:underline">latere bericht bij de bron</a>.</>
-                ) : null}
-              </div>
-            )}
-            <div class="prose prose-slate mt-4 max-w-none prose-headings:font-display prose-headings:text-ink-900 prose-h3:text-lg prose-h3:mt-8 prose-a:text-brand-600 prose-strong:text-ink-900">
-              {sourceBlocks.map((block) =>
-                block.type === 'heading' ? <h3>{block.text}</h3>
-                : block.type === 'list' ? <ul>{block.items.map((item) => <li>{item}</li>)}</ul>
-                : <p>{block.text}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {hasExtendedBody && !showSourceText && (
+        {hasExtendedBody && (
           <div class="prose prose-slate mt-10 max-w-none prose-headings:font-display prose-headings:text-ink-900 prose-h2:text-xl prose-h2:mt-8 prose-a:text-brand-600 prose-strong:text-ink-900">
             <Content />
           </div>
         )}
 
-        <div class="mt-8 rounded-md border border-ink-100 p-6">
-          <h2 class="font-display text-base font-semibold text-ink-900">Bron</h2>
-          {avydoContent === 'gids' ? (
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-              Deze gids is geschreven door Avydo en gepubliceerd op {formatDate(publishedAt)}. Avydo heeft daarvoor informatie van <strong class="text-ink-800">{sourceInSentence}</strong> geraadpleegd. Voor de volledige, officiële regels verwijzen wij u naar de bron.
-            </p>
-          ) : avydoContent === 'toelichting' ? (
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-              Deze toelichting is geschreven door Avydo naar aanleiding van een bericht van <strong class="text-ink-800">{sourceInSentence}</strong> van {formatDate(publishedAt)}{updatedAt && <>, en bijgewerkt op {formatDate(updatedAt)}</>}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
-            </p>
-          ) : dateIsLastModified ? (
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-              Dit bericht is een samenvatting door Avydo op basis van een pagina van <strong class="text-ink-800">{sourceName}</strong>. Volgens {sourceName} is die pagina voor het laatst bijgewerkt op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
-            </p>
-          ) : showSourceText ? (
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-              Brontekst: <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. De tekst hierboven is overgenomen uit deze publicatie{showRelevance ? '; de toelichting "Wat betekent dit voor uw onderneming?" is van Avydo' : ''}. De oorspronkelijke publicatie is leidend.
-            </p>
-          ) : (
-            <p class="mt-2 text-sm text-ink-600 leading-relaxed">
-              Dit bericht is een samenvatting door Avydo op basis van een publicatie van <strong class="text-ink-800">{sourceName}</strong>, gepubliceerd op {formatDate(publishedAt)}. Voor de volledige, officiële tekst verwijzen wij u naar de oorspronkelijke bron.
-            </p>
-          )}
+        <div class="mt-8 rounded-md border border-ink-100 p-6" data-source-block>
+          <h2 class="font-display text-base font-semibold text-ink-900">Officiële bron</h2>
+          <p class="mt-2 text-sm text-ink-600 leading-relaxed">
+            {avydoContent === 'gids' ? (
+              <>Deze gids is geschreven door Avydo op basis van informatie van <strong class="text-ink-800">{sourceInSentence}</strong>.</>
+            ) : (
+              <>Deze toelichting is geschreven door Avydo op basis van een bericht van <strong class="text-ink-800">{sourceInSentence}</strong>{sourceDate && <> van {formatDate(sourceDate)}</>}.</>
+            )}
+            {dateIsLastModified && <> Volgens {sourceName} is de bronpagina voor het laatst bijgewerkt op {formatDate(publishedAt)}.</>}
+            {' '}U leest hier de uitleg van Avydo, niet de tekst van de bron zelf. Voor de volledige, officiële regels is de bron leidend.
+          </p>
           <a href={sourceUrl} target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
-            {avydoContent === 'gids' ? `Bekijk de informatie bij ${sourceInSentence}` : 'Lees de volledige publicatie bij de bron'}
+            {`Bekijk de bron bij ${sourceInSentence}`}
             <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4.5 4A1.5 1.5 0 0 0 3 5.5v10A1.5 1.5 0 0 0 4.5 17h10a1.5 1.5 0 0 0 1.5-1.5V11a.75.75 0 0 0-1.5 0v4.5h-10v-10H9A.75.75 0 0 0 9 4H4.5Zm6.75.75c0 .414.336.75.75.75h2.69l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.22-6.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0-.75.75Z"/></svg>
           </a>
         </div>
 
         <p class="mt-6 text-xs text-ink-500 leading-relaxed">
-          Dit bericht is met zorg samengesteld op basis van de bovengenoemde bron en is bedoeld als algemene informatie. Het vormt geen fiscaal of juridisch advies. Voor advies toegespitst op uw situatie kunt u <a href="/contact" class="underline hover:text-brand-600">contact opnemen met Avydo</a>.
+          Dit artikel is door Avydo met zorg geschreven op basis van de bovengenoemde officiële bron en is bedoeld als algemene informatie. Het vormt geen fiscaal of juridisch advies. Voor advies toegespitst op uw situatie kunt u <a href="/contact" class="underline hover:text-brand-600">contact opnemen met Avydo</a>.
         </p>
       </div>
 
@@ -191,14 +167,20 @@ const structuredData = {
               <div class="flex justify-between gap-4"><dt class="text-ink-600">Status</dt><dd class="font-semibold text-ink-900">{statusLabel}</dd></div>
             )}
             <div class="flex justify-between gap-4"><dt class="text-ink-600">Categorie</dt><dd class="font-semibold text-ink-900">{category}</dd></div>
-            <div class="flex justify-between gap-4"><dt class="text-ink-600">{dateIsLastModified ? `Bijgewerkt bij ${sourceName}` : 'Gepubliceerd'}</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Auteur</dt><dd class="font-semibold text-ink-900 text-right">Avydo</dd></div>
+            {showAvydoDate && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">Gepubliceerd</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
+            )}
             {updatedAt && (
               <div class="flex justify-between gap-4"><dt class="text-ink-600">Bijgewerkt</dt><dd class="font-semibold text-ink-900">{formatDate(updatedAt)}</dd></div>
             )}
-            {avydoContent && (
-              <div class="flex justify-between gap-4"><dt class="text-ink-600">Auteur</dt><dd class="font-semibold text-ink-900 text-right">Avydo</dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-ink-600">Officiële bron</dt><dd class="font-semibold text-ink-900 text-right"><a href={sourceUrl} target="_blank" rel="noopener noreferrer" class="hover:text-brand-600">{sourceName}</a></dd></div>
+            {sourceDate && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">Datum bronbericht</dt><dd class="font-semibold text-ink-900">{formatDate(sourceDate)}</dd></div>
             )}
-            <div class="flex justify-between gap-4"><dt class="text-ink-600">{avydoContent ? 'Geraadpleegde bron' : 'Bron'}</dt><dd class="font-semibold text-ink-900 text-right">{sourceName}</dd></div>
+            {dateIsLastModified && (
+              <div class="flex justify-between gap-4"><dt class="text-ink-600">{`Bron bijgewerkt bij ${sourceName}`}</dt><dd class="font-semibold text-ink-900">{formatDate(publishedAt)}</dd></div>
+            )}
           </dl>
           <a href="/kenniscentrum" class="btn-outline mt-6 w-full">Naar het kenniscentrum</a>
         </div>

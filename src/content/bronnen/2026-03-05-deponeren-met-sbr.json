@@ -1,0 +1,13 @@
+{
+  "sourceUrl": "https://www.kvk.nl/deponeren/deponeren-met-sbr/",
+  "sourceName": "KVK",
+  "title": "Deponeren met SBR",
+  "description": "De meeste bedrijven die verplicht zijn om hun jaarrekening te deponeren, moeten deze jaarrekening digitaal deponeren via Standard Business Reporting (SBR).",
+  "sourceLastModified": "2026-03-05T11:00:26.000Z",
+  "fetchedAt": "2026-10-01T19:43:22.207Z",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "Migratie oktober 2026: zichtbaar bronartikel zonder eigen Avydo-duiding; vervallen bij de omzetting naar Avydo-artikelen. Bron bewaard voor deduplicatie en mogelijk later gebruik."
+}

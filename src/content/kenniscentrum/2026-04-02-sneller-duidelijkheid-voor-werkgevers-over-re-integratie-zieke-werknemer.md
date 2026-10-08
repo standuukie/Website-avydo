@@ -1,10 +1,12 @@
 ---
-title: "Sneller duidelijkheid voor werkgevers over re-integratie zieke werknemer"
+title: "Re-integratie in het tweede ziektejaar: kabinet wil mkb-werkgevers sneller duidelijkheid geven"
 category: "Personeel & loonheffingen"
 priority: "belangrijk"
 publishedAt: 2026-04-02T12:00:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/04/02/sneller-duidelijkheid-voor-werkgevers-over-re-integratie-zieke-werknemer"
+sourcePublishedAt: 2026-04-02T12:00:00.000Z
 summary: "Volgens een wetsvoorstel van minister Aartsen wordt voor zieke werknemers die niet binnen 1 jaar kunnen terugkeren, vanaf het 2e ziektejaar uitsluitend een plek bij een ander bedrijf gezocht. Het voorstel ligt bij de Tweede Kamer."
 relevance: "Relevant voor mkb-werkgevers met een langdurig zieke werknemer. Volgens dit wetsvoorstel richt de re-integratie zich in het tweede ziektejaar op werk bij een andere werkgever, met instemming van de werknemer of toestemming van UWV; zo weet u eerder of u iemand nieuw mag aannemen. Het voorstel is naar de Tweede Kamer gestuurd en is nog niet ingevoerd."
 tags: []
@@ -14,18 +16,23 @@ hidden: false
 status: "voorstel"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:45.080Z
+avydoContent: "toelichting"
 ---
 
-Als zieke werknemers niet binnen 1 jaar kunnen terugkeren op het werk, kan vanaf de start van het 2e ziektejaar uitsluitend een plek bij een ander bedrijf worden gezocht. Zo wil het kabinet kleine en middelgrote werkgevers sneller duidelijkheid geven over het kunnen vervangen van een zieke werknemer. Minister Aartsen van Werk en Participatie heeft het wetsvoorstel hierover naar de Tweede Kamer gestuurd.
+## Wat is er aan de hand?
 
-Langdurig ziek zijn, of arbeidsongeschikt raken, heeft grote impact. In eerste instantie natuurlijk op de werknemer. Maar ook een werkgever komt voor problemen te staan als een werknemer langere tijd niet kan werken. De werkgever heeft dan gedurende minimaal 2 jaar de verplichting de zieke werknemer te re-integreren en gedeeltelijk het loon door te betalen. Ook moet de werkgever de functie van de zieke werknemer beschikbaar houden, waardoor hij slechts voor tijdelijke vervanging kan zorgen. Dit maakt met name kleine bedrijven minder wendbaar. En vormt voor relatief veel mkb-werkgevers een belemmering om werknemers een vast contract aan te bieden.
+Minister Aartsen (Werk en Participatie) heeft een wetsvoorstel naar de Tweede Kamer gestuurd dat kleine en middelgrote werkgevers sneller duidelijkheid moet geven over het vervangen van een langdurig zieke werknemer. Kan een zieke werknemer niet binnen 1 jaar terugkeren, dan kan volgens het voorstel vanaf de start van het tweede ziektejaar uitsluitend een plek bij een ander bedrijf worden gezocht.
 
-Andere werkgever
+## Waarom?
 
-In het arbeidsmarktpakket hebben kabinet en sociale partners daarom afgesproken om de re-integratie in het 2e ziektejaar in het mkb zoveel mogelijk te richten op het zogenaamde 2e spoor. Dat wil zeggen dat iemand aan de slag gaat bij een andere werkgever, zonder de mogelijkheid van terugkeer naar de eigen werkplek. Dit wordt mogelijk met instemming van de werknemer of met toestemming van UWV.
+Bij langdurige ziekte moet een werkgever minimaal 2 jaar re-integreren, gedeeltelijk het loon doorbetalen en de functie beschikbaar houden. Daardoor kan hij alleen voor tijdelijke vervanging zorgen. Volgens het kabinet maakt dat vooral kleine bedrijven minder wendbaar en houdt het mkb-werkgevers soms tegen om een vast contract aan te bieden.
 
-Minister Aartsen: “Dat is goed voor de werkgever, want deze weet zo sneller of hij iemand nieuw mag aannemen om weer op volle sterkte te komen. Voor de werknemer is eerder duidelijk dat de re-integratie zich richt op een baan bij een nieuwe werkgever.”
+## Wat verandert er volgens het voorstel?
 
-Meer voorstellen
+In het arbeidsmarktpakket hebben kabinet en sociale partners afgesproken de re-integratie in het tweede ziektejaar in het mkb zoveel mogelijk te richten op het zogenoemde tweede spoor: werk bij een andere werkgever, zonder terugkeer naar de eigen werkplek. Dat kan met instemming van de werknemer of met toestemming van UWV. De werkgever weet zo eerder of hij iemand nieuw mag aannemen.
 
-Dit is de 2e stap die minister Aartsen zet om de periode van loondoorbetaling bij ziekte meer werkbaar te maken voor werkgevers. Een 1e wetsvoorstel heeft hij recent naar de Raad van State gestuurd voor advies. Dit regelt dat het advies van de bedrijfsarts leidend wordt bij de re-integratietoets door UWV na 2 jaar ziekte. Werkgevers krijgen zo meer zekerheid over de verplichtingen rond de periode van loondoorbetaling bij ziekte. Het kabinet werkt de komende periode meer voorstellen uit om de periode van loondoorbetaling bij ziekte beter uitvoerbaar te maken voor werkgevers, met name voor het mkb.
+Dit is de tweede stap van de minister. Een eerder wetsvoorstel regelt dat het advies van de bedrijfsarts leidend wordt bij de re-integratietoets van UWV na 2 jaar ziekte.
+
+## Wat is de status?
+
+Het wetsvoorstel ligt bij de Tweede Kamer en is nog niet ingevoerd. Tot het parlement het heeft aangenomen en het in werking is getreden, gelden de huidige re-integratieregels.

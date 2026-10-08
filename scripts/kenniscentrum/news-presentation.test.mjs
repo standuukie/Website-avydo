@@ -1,7 +1,8 @@
 // Redactionele weergave van het Kenniscentrum (2026-10-07): sjabloon-duidingen
 // niet tonen, één overzicht zonder scheiding tussen nieuws en naslag
-// (2026-10-08), statusbadges, de Intermediairdagen uit de selectie en de
-// Rijksoverheid-brontekst met echte tussenkoppen.
+// (2026-10-08), statusbadges en de Intermediairdagen uit de selectie.
+// Sinds 2026-10-08 bestaat het Kenniscentrum uitsluitend uit Avydo-artikelen;
+// de officiële bronnen staan in de bronlaag (src/content/bronnen/).
 // Alles hier is weergave; de AI-context en -retrieval blijven ongewijzigd.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,8 +13,6 @@ import * as presentation from '../../src/lib/news-presentation.mjs';
 import {
   GENERIC_RELEVANCE_TEXTS,
   hasOwnRelevance,
-  isHeadingBlock,
-  sourceBodyBlocks,
   STATUS_LABELS,
   dateIsSourceLastModified,
 } from '../../src/lib/news-presentation.mjs';
@@ -21,6 +20,9 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
 const CONTENT_DIR = path.join(ROOT, 'src/content/kenniscentrum');
+const SOURCES_DIR = path.join(ROOT, 'src/content/bronnen');
+// Bronrecord met de (oude) slug van een artikel dat bij de omzetting is vervallen.
+const recordForSlug = (file) => JSON.parse(readFileSync(path.join(SOURCES_DIR, file.replace(/\.md$/, '.json')), 'utf8'));
 
 const ARTICLES = readdirSync(CONTENT_DIR)
   .filter((f) => f.endsWith('.md'))
@@ -40,6 +42,7 @@ const ARTICLES = readdirSync(CONTENT_DIR)
       avydoContent: get('avydoContent'),
       hidden: get('hidden') === 'true',
       fetched: get('fetchedAt') != null,
+      sourcePublishedAt: get('sourcePublishedAt'),
     };
   });
 const ACTIVE = ARTICLES.filter((a) => !a.hidden);
@@ -50,13 +53,12 @@ const byFile = (file) => {
   return article;
 };
 
-test('GENERIC_RELEVANCE_TEXTS bevat alle sjablonen van de nieuwsengine', () => {
+test('GENERIC_RELEVANCE_TEXTS: de sjablonen van de oude nieuwsengine blijven herkend (en worden in de validatie afgewezen)', () => {
+  assert.equal(GENERIC_RELEVANCE_TEXTS.size, 9);
   const source = readFileSync(path.join(ROOT, 'scripts/kenniscentrum/fetch-articles.mjs'), 'utf8');
-  const block = source.match(/const RELEVANCE_TEMPLATES = \{([\s\S]*?)\n\};/)?.[1];
-  assert.ok(block, 'RELEVANCE_TEMPLATES niet gevonden in fetch-articles.mjs');
-  const templates = [...block.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
-  assert.equal(templates.length, 8);
-  for (const t of templates) assert.ok(GENERIC_RELEVANCE_TEXTS.has(t), `sjabloon ontbreekt: ${t.slice(0, 50)}`);
+  assert.doesNotMatch(source, /RELEVANCE_TEMPLATES/, 'de import schrijft geen duiding meer');
+  const validator = readFileSync(path.join(ROOT, 'scripts/kenniscentrum/validate-article.mjs'), 'utf8');
+  assert.match(validator, /hasOwnRelevance\(relevance\)/);
 });
 
 test('hasOwnRelevance: sjablonen en lege teksten zijn geen eigen duiding', () => {
@@ -66,20 +68,26 @@ test('hasOwnRelevance: sjablonen en lege teksten zijn geen eigen duiding', () =>
   assert.equal(hasOwnRelevance('Belangrijk voor werkgevers: per 1 januari verandert de premie.'), true);
 });
 
-test('alle actieve Rijksoverheid-artikelen en handgeschreven gidsen houden hun eigen duiding', () => {
+test('alle zichtbare artikelen hebben een eigen duiding (geen sjabloontekst)', () => {
   assert.equal(ACTIVE_RO.length, 26);
-  for (const a of ACTIVE_RO) assert.ok(hasOwnRelevance(a.relevance), `${a.file}: geen eigen duiding`);
-  const guides = ACTIVE.filter((a) => !a.fetched);
-  assert.ok(guides.length >= 12);
-  for (const a of guides) assert.ok(hasOwnRelevance(a.relevance), `${a.file}: geen eigen duiding`);
+  assert.equal(ACTIVE.length, 68);
+  for (const a of ACTIVE) assert.ok(hasOwnRelevance(a.relevance), `${a.file}: geen eigen duiding`);
 });
 
-test('sjabloon-duidingen komen alleen voor bij automatisch opgehaalde KVK-/Belastingdienst-artikelen', () => {
-  const generic = ACTIVE.filter((a) => !hasOwnRelevance(a.relevance));
-  assert.ok(generic.length > 0);
-  for (const a of generic) {
-    assert.ok(a.fetched, `${a.file}: sjabloon bij een handgeschreven artikel`);
-    assert.ok(['KVK', 'Belastingdienst'].includes(a.sourceName), `${a.file}: sjabloon bij ${a.sourceName}`);
+test('Avydo-model: elk artikel is een zichtbaar Avydo-artikel (avydoContent) met één officiële bron', () => {
+  assert.equal(ARTICLES.filter((a) => a.hidden).length, 0, 'geen verborgen bronartikelen meer in de content-map');
+  for (const a of ARTICLES) {
+    assert.ok(['gids', 'toelichting'].includes(a.avydoContent), `${a.file}: geen avydoContent`);
+    assert.ok(['Belastingdienst', 'Rijksoverheid', 'KVK'].includes(a.sourceName), a.file);
+    assert.match(a.sourceUrl ?? '', /^https:\/\/www\.(belastingdienst|rijksoverheid|kvk)\.nl\//, a.file);
+  }
+});
+
+test('Avydo-model: omgezette artikelen hebben een eigen tekst met tussenkoppen; nieuws van Belastingdienst/Rijksoverheid heeft een aparte brondatum', () => {
+  for (const a of ACTIVE.filter((x) => x.fetched)) {
+    assert.ok((a.body.match(/^## \S/gm) ?? []).length >= 2, `${a.file}: te weinig tussenkoppen`);
+    assert.ok(a.body.trim().length > (a.summary ?? '').length * 1.3, `${a.file}: tekst is niet meer dan de samenvatting`);
+    if (a.sourceName !== 'KVK') assert.ok(a.sourcePublishedAt, `${a.file}: sourcePublishedAt ontbreekt`);
   }
 });
 
@@ -92,8 +100,6 @@ test('één Kenniscentrum: geen scheiding tussen nieuws en naslag', () => {
     'STATUS_LABELS',
     'dateIsSourceLastModified',
     'hasOwnRelevance',
-    'isHeadingBlock',
-    'sourceBodyBlocks',
   ]);
 
   const index = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/index.astro'), 'utf8');
@@ -133,20 +139,21 @@ test('één Kenniscentrum: geen scheiding tussen nieuws en naslag', () => {
     }
   }
 
-  // De eigen gidsen blijven gewoon artikelen in dezelfde verzameling.
-  const guides = ACTIVE.filter((a) => a.avydoContent === 'gids');
-  assert.equal(guides.length, 12);
-  for (const a of guides) assert.ok(a.file.startsWith('2026-10-01-'), a.file);
+  // De handgeschreven gidsen blijven gewoon artikelen in dezelfde verzameling.
+  const handGuides = ACTIVE.filter((a) => a.avydoContent === 'gids' && !a.fetched);
+  assert.equal(handGuides.length, 12);
+  for (const a of handGuides) assert.ok(a.file.startsWith('2026-10-01-'), a.file);
 });
 
-test('Intermediairdagen staan niet meer in de nieuwsselectie, maar blijven bestaan voor deduplicatie', () => {
+test('Intermediairdagen staan niet in het Kenniscentrum, maar blijven als afgewezen bron bestaan voor deduplicatie', () => {
   for (const file of [
     '2026-10-05-schrijf-u-nu-in-voor-de-intermediairdagen-2026.md',
     '2026-09-14-intermediairdagen-2026-belastingplan-2027-kennissessies-en-netwerkkansen.md',
   ]) {
-    const a = byFile(file);
-    assert.equal(a.hidden, true, `${file} moet hidden zijn`);
-    assert.match(a.sourceUrl ?? '', /^https:\/\//);
+    assert.equal(ARTICLES.some((a) => a.file === file), false, file);
+    const record = recordForSlug(file);
+    assert.equal(record.processingStatus, 'afgewezen', file);
+    assert.match(record.sourceUrl ?? '', /^https:\/\//);
   }
   assert.ok(!ACTIVE.some((a) => /intermediairdagen/i.test(a.title ?? '')));
 });
@@ -171,9 +178,11 @@ test('statuswaarden zijn geldig en staan op de bedoelde artikelen', () => {
   // Subsidie gesloten; Vbar-aanpassing ingehaald door het schrappen in maart 2026.
   assert.equal(statusOf('2025-09-29-subsidie-voor-mbk'), 'historisch');
   assert.equal(statusOf('2025-03-27-ondernemerschap-blijft'), 'historisch');
+  // Wtta: door de Eerste Kamer aangenomen, in werking per 1 januari 2027.
+  assert.equal(statusOf('2025-11-11-eerste-kamer-stemt-in'), 'aangenomen');
 });
 
-test('KVK-naslag ontdubbeld: doublures, video’s en tool-/dienstpagina’s verborgen, niet verwijderd', () => {
+test('KVK-naslag ontdubbeld: doublures, video’s en tool-/dienstpagina’s zijn afgewezen bronnen, geen artikel', () => {
   const hiddenKvk = [
     '2026-09-29-ontdek-hoe-je-de-eu-kor-voor-je-webshop-gebruikt.md', // EU-KOR: gedekt door #17 en #16
     '2026-09-24-kleineondernemersregeling-kor-interessant-voor-jouw-bedrijf.md', // KOR: Avydo-gids
@@ -188,9 +197,10 @@ test('KVK-naslag ontdubbeld: doublures, video’s en tool-/dienstpagina’s verb
     '2025-11-26-controleer-je-jaarrekening.md', // dienstpagina deponeringscontrole
   ];
   for (const file of hiddenKvk) {
-    const a = byFile(file);
-    assert.equal(a.hidden, true, file);
-    assert.match(a.sourceUrl ?? '', /^https:\/\/www\.kvk\.nl\//, file);
+    assert.equal(ARTICLES.some((a) => a.file === file), false, file);
+    const record = recordForSlug(file);
+    assert.equal(record.processingStatus, 'afgewezen', file);
+    assert.match(record.sourceUrl ?? '', /^https:\/\/www\.kvk\.nl\//, file);
   }
   // Behouden: verschillende vragen binnen hetzelfde onderwerp.
   for (const file of [
@@ -205,12 +215,13 @@ test('KVK-naslag ontdubbeld: doublures, video’s en tool-/dienstpagina’s verb
   ]) {
     assert.equal(byFile(file).hidden, false, file);
   }
-  // Eigen Avydo-gidsen blijven allemaal zichtbaar.
-  assert.equal(ACTIVE.filter((a) => a.avydoContent === 'gids').length, 12);
-  assert.equal(ACTIVE.filter((a) => a.sourceName === 'KVK').length, 33);
+  // Handgeschreven Avydo-gidsen blijven allemaal zichtbaar; van KVK blijven
+  // 26 omgezette artikelen en 1 handgeschreven gids over.
+  assert.equal(ACTIVE.filter((a) => a.avydoContent === 'gids' && !a.fetched).length, 12);
+  assert.equal(ACTIVE.filter((a) => a.sourceName === 'KVK').length, 27);
 });
 
-test('ongeschikte artikelen zijn verborgen, niet verwijderd (sourceUrl blijft voor deduplicatie)', () => {
+test('ongeschikte artikelen zijn geen artikel meer, maar een afgewezen bron (sourceUrl blijft voor deduplicatie)', () => {
   for (const prefix of [
     '2026-08-18-geen-verzuimboete-minimumbelasting', '2026-08-18-bent-u-cryptodienstverlener',
     '2026-08-03-begin-augustus-herinneren', '2026-07-09-handboek-milieubelastingen',
@@ -220,36 +231,43 @@ test('ongeschikte artikelen zijn verborgen, niet verwijderd (sourceUrl blijft vo
     '2026-01-02-landelijke-landbouwnormen', '2025-12-03-vanaf-1-januari-2026-btwwft',
     '2025-06-24-drijvende-huizen', '2025-01-07-fusie-splitsing', '2024-01-22-goederen-inklaren',
   ]) {
-    const matches = ARTICLES.filter((a) => a.file.startsWith(prefix));
-    assert.equal(matches.length, 1, prefix);
-    assert.equal(matches[0].hidden, true, prefix);
-    assert.match(matches[0].sourceUrl ?? '', /^https:\/\//, prefix);
+    assert.equal(ARTICLES.some((a) => a.file.startsWith(prefix)), false, prefix);
+    const records = readdirSync(SOURCES_DIR).filter((f) => f.startsWith(prefix.replace(/\.md$/, '')));
+    assert.equal(records.length, 1, prefix);
+    const record = recordForSlug(records[0]);
+    assert.equal(record.processingStatus, 'afgewezen', prefix);
+    assert.match(record.sourceUrl ?? '', /^https:\/\//, prefix);
   }
   // Nog actueel volgens KVK (portaal verdwijnt "binnenkort"): blijft zichtbaar.
   assert.equal(byFile('2025-03-31-kvk-opstelportaal-voor-middelgroot-verdwijnt.md').hidden, false);
 });
 
-test('eigen Avydo-content: 12 gidsen en 1 toelichting, met de geraadpleegde bron behouden', () => {
-  const own = ARTICLES.filter((a) => a.avydoContent);
-  assert.equal(own.length, 13);
-  for (const a of own) {
-    assert.ok(['Belastingdienst', 'KVK'].includes(a.sourceName), a.file);
-    assert.match(a.sourceUrl ?? '', /^https:\/\/www\.(belastingdienst|kvk)\.nl\//, a.file);
-  }
-  for (const a of own.filter((x) => x.avydoContent === 'gids')) assert.equal(a.fetched, false, a.file);
-  const toelichting = own.filter((a) => a.avydoContent === 'toelichting');
-  assert.deepEqual(toelichting.map((a) => a.file), ['2026-09-15-belastingplan-2027-op-rijksoverheid-nl-staan-de-voorgestelde-veranderingen.md']);
+test('eigen Avydo-content: 12 handgeschreven gidsen en 56 artikelen op basis van een opgehaald bronbericht (55 omgezet in oktober 2026, 1 eerdere toelichting)', () => {
+  const handGuides = ARTICLES.filter((a) => !a.fetched);
+  assert.equal(handGuides.length, 12);
+  for (const a of handGuides) assert.equal(a.avydoContent, 'gids', a.file);
+  const fromSource = ARTICLES.filter((a) => a.fetched);
+  assert.equal(fromSource.length, 56);
+  assert.ok(fromSource.some((a) => a.file === '2026-09-15-belastingplan-2027-op-rijksoverheid-nl-staan-de-voorgestelde-veranderingen.md'));
+  // Nieuws en (aangekondigde) wijzigingen zijn een toelichting; blijvende uitleg is een gids.
+  for (const a of fromSource.filter((x) => x.sourceName !== 'KVK')) assert.equal(a.avydoContent, 'toelichting', a.file);
 });
 
-test('datumweergave: een KVK-sitemapdatum wordt als "bijgewerkt" getoond, niet als publicatiedatum', () => {
-  assert.equal(dateIsSourceLastModified({ sourceName: 'KVK', fetchedAt: '2026-10-01' }), true);
+test('datumweergave: een KVK-sitemapdatum wordt als "bron bijgewerkt" getoond, niet als publicatiedatum; Avydo- en brondatum apart', () => {
+  // Omgezet KVK-artikel: datum is de lastmod van de bronpagina.
+  assert.equal(dateIsSourceLastModified({ sourceName: 'KVK', fetchedAt: '2026-10-01', avydoContent: 'gids' }), true);
+  // Handgeschreven gids en nieuw Avydo-artikel (geen fetchedAt): eigen datum.
   assert.equal(dateIsSourceLastModified({ sourceName: 'KVK', fetchedAt: undefined, avydoContent: 'gids' }), false);
+  assert.equal(dateIsSourceLastModified({ sourceName: 'KVK', fetchedAt: '2026-10-01', sourcePublishedAt: '2026-09-01' }), false);
   assert.equal(dateIsSourceLastModified({ sourceName: 'Belastingdienst', fetchedAt: '2026-10-01' }), false);
   assert.equal(dateIsSourceLastModified({ sourceName: 'Rijksoverheid', fetchedAt: '2026-10-01' }), false);
   const page = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/[...slug].astro'), 'utf8');
   assert.match(page, /Deze gids is geschreven door Avydo/);
   assert.match(page, /Deze toelichting is geschreven door Avydo/);
   assert.match(page, /voor het laatst bijgewerkt op/);
+  assert.match(page, />Auteur</);
+  assert.match(page, /Datum bronbericht/);
+  assert.match(page, /showAvydoDate/);
 });
 
 test('geen achterhaalde relatieve tijdsaanduidingen in Rijksoverheid-samenvattingen', () => {
@@ -258,43 +276,26 @@ test('geen achterhaalde relatieve tijdsaanduidingen in Rijksoverheid-samenvattin
   }
 });
 
-test('isHeadingBlock herkent tussenkoppen en geen gewone zinnen', () => {
-  assert.equal(isHeadingBlock('Heldere criteria', 'Tekst.'), true);
-  assert.equal(isHeadingBlock('Wat verandert er?', 'Tekst.'), true);
-  assert.equal(isHeadingBlock('Heldere criteria', undefined), false);
-  assert.equal(isHeadingBlock('Dit is een gewone zin.', 'Tekst.'), false);
-  assert.equal(isHeadingBlock('- lijstitem', 'Tekst.'), false);
-  assert.equal(isHeadingBlock('kleine letter aan het begin', 'Tekst.'), false);
-  assert.equal(
-    isHeadingBlock('Waarom wil het kabinet deze regeling voor zelfstandigen nu al aanpassen?', 'Tekst.'),
-    false,
-  );
-});
-
-test('sourceBodyBlocks: koppen, alinea’s en samengevoegde lijsten', () => {
-  const blocks = sourceBodyBlocks('Eerste alinea.\n\nTussenkop\n\n- een\n- twee\n\n- drie\n\n\\- escaped streepje.');
-  assert.deepEqual(blocks, [
-    { type: 'paragraph', text: 'Eerste alinea.' },
-    { type: 'heading', text: 'Tussenkop' },
-    { type: 'list', items: ['een', 'twee', 'drie'] },
-    { type: 'paragraph', text: '- escaped streepje.' },
-  ]);
-});
-
-test('de Zelfstandigenwet-brontekst krijgt de tussenkoppen uit de bron', () => {
+test('de Zelfstandigenwet-toelichting heeft eigen tussenkoppen en noemt de status', () => {
   const a = ACTIVE_RO.find((x) => x.file.startsWith('2026-10-01-zelfstandigenwet'));
-  const headings = sourceBodyBlocks(a.body).filter((b) => b.type === 'heading').map((b) => b.text);
-  assert.deepEqual(headings, ['Heldere criteria', 'Handelingsperspectief']);
+  const headings = [...a.body.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+  assert.ok(headings.includes('Wat is de status?'), headings.join(' | '));
+  assert.match(a.body, /internetconsultatie/);
+  assert.match(a.body, /nog geen geldende wet/);
 });
 
 test('weergave: geen sjabloonduiding, geen dubbele samenvatting en een juiste bronvermelding', () => {
   const card = readFileSync(path.join(ROOT, 'src/components/kenniscentrum/ArticleCard.astro'), 'utf8');
   assert.match(card, /showRelevance &&/);
+  assert.match(card, /Door Avydo &middot; bron: \{sourceName\}/);
+  assert.doesNotMatch(card, /avydoContent \?/);
   const page = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/[...slug].astro'), 'utf8');
   assert.match(page, /\{showRelevance && \(/);
-  assert.match(page, /\{!showSourceText && \(/);
-  assert.match(page, /Brontekst: <strong/);
+  // Geen weergave meer die suggereert dat de pagina de originele brontekst is.
+  assert.doesNotMatch(page, /Brontekst|showSourceText|sourceBodyBlocks/);
+  assert.match(page, /niet de tekst van de bron zelf/);
   assert.match(page, /data-outdated-notice/);
+  assert.match(page, /data-source-block/);
   const index = readFileSync(path.join(ROOT, 'src/pages/kenniscentrum/index.astro'), 'utf8');
   assert.match(index, /pickHighlighted\(allArticles/);
   assert.doesNotMatch(index, /korte, eigen uitleg/);
@@ -326,7 +327,6 @@ test('redactie: status, titel, prioriteit en categorie sluiten aan op de audit',
   ]) {
     assert.notEqual(get(file, 'priority'), 'belangrijk', file);
   }
-  assert.equal(get('2026-06-17-algemene-voorwaarden-deponeren.md', 'category'), 'Ondernemen & rechtsvormen');
   assert.equal(get('2026-09-28-inzicht-in-de-belastingtarieven-en-cijfers-van-2026.md', 'category'), 'Fiscale actualiteit');
   for (const file of [
     '2026-09-08-zakelijke-post-alleen-digitaal-ontvangen-geef-nu-uw-keuze-door.md',

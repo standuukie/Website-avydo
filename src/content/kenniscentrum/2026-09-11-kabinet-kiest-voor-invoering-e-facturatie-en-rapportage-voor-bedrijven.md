@@ -1,10 +1,12 @@
 ---
-title: "Kabinet kiest voor invoering e-facturatie en rapportage voor bedrijven"
+title: "E-facturatie en digitale rapportage: kabinet wil invoering voor bedrijven vanaf juli 2030"
 category: "Administratie & jaarrekening"
 priority: "belangrijk"
 publishedAt: 2026-09-11T12:00:00.000Z
+updatedAt: 2026-10-08T00:00:00.000Z
 sourceName: "Rijksoverheid"
 sourceUrl: "https://www.rijksoverheid.nl/actueel/nieuws/2026/09/11/kabinet-kiest-voor-invoering-e-facturatie-en-rapportage-voor-bedrijven"
+sourcePublishedAt: 2026-09-11T12:00:00.000Z
 summary: "Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven."
 relevance: "Relevant voor vrijwel alle ondernemers die aan andere bedrijven factureren. Het kabinet wil e-facturatie per 1 juli 2030 en digitale rapportage per transactie per 1 juli 2031 ook voor binnenlandse zakelijke transacties verplicht stellen; ondernemers die de kleineondernemersregeling (KOR) toepassen, zijn vrijgesteld. Het is nog geen wet: het wetsvoorstel volgt naar verwachting voor de zomer van 2027. Voor een deel van de ondernemers betekent dit dat het factuurproces moet worden aangepast, bijvoorbeeld met een digitaal boekhoudpakket."
 tags: ["e-facturatie", "verplicht"]
@@ -14,22 +16,25 @@ hidden: false
 status: "voornemen"
 aiAssisted: true
 fetchedAt: 2026-10-07T12:24:36.093Z
+avydoContent: "toelichting"
 ---
 
-Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven. Deze verplichting gaat gelden voor zowel internationale als nationale transacties tussen bedrijven. Verplichte e-facturatie en rapportage helpen ondernemers om hun processen te automatiseren, dragen bij aan het concurrentievermogen van de Nederlandse en Europese economie en zorgen voor een effectievere handhaving door de Belastingdienst. De aanleiding hiervan is de EU-richtlijn ‘Btw in het digitale tijdperk’. Het nationale wetsvoorstel hiervoor wordt de komende tijd verder uitgewerkt en wordt naar verwachting voor de zomer van 2027 ingediend bij de Tweede Kamer.
+## Wat is er aan de hand?
 
-Op dit moment gelden voor ondernemers in de verschillende lidstaten van de Europese Unie verschillende rapportageverplichtingen voor de btw. Dit heeft een remmend effect op de handel binnen Europa, terwijl deze handel juist goed is voor de Nederlandse economie. Ook leiden deze nationale verschillen voor ondernemers tot onnodige regeldruk zoals extra administratieve lasten. Door de Europese richtlijn gaan alle ondernemers grensoverschrijdende zakelijke transacties (zogeheten business-to-business) per juli 2030 op dezelfde manier rapporteren, namelijk digitaal en per transactie. Daarmee kan ook op een effectievere manier fraude worden bestreden. Om dit mogelijk te maken zijn elektronische facturen noodzakelijk.
+Het kabinet wil e-facturatie en digitale rapportage invoeren voor transacties tussen bedrijven. Per 1 juli 2030 wil het kabinet e-facturatie en rapportage invoeren voor bedrijven, voor zowel internationale als nationale zakelijke transacties. Aanleiding is de EU-richtlijn ‘Btw in het digitale tijdperk’. Het nationale wetsvoorstel wordt nog uitgewerkt en wordt naar verwachting voor de zomer van 2027 bij de Tweede Kamer ingediend.
 
-Binnen Nederland
+## Wat verandert er volgens het voorstel?
 
-Lidstaten hebben de keuze om deze richtlijn ook toe te passen voor binnenlandse zakelijke transacties. Het kabinet kiest er net als bijvoorbeeld Frankrijk, Duitsland, België, Polen en Italië voor om hier gebruik van te maken en elektronisch factureren (per 1 juli 2030) en rapportage (per 1 juli 2031) ook verplicht te stellen voor deze binnenlandse transacties. Nederlandse bedrijven binnen de kleineondernemersregeling (KOR), met een omzet van maximaal € 20.000,- per kalenderjaar, zijn vrijgesteld van e-facturatie en -rapportage. De uitzondering voor deze groep blijft ook na juli 2030 gelden.
+- **Grensoverschrijdend:** door de Europese richtlijn rapporteren alle ondernemers zakelijke transacties met andere EU-landen per juli 2030 op dezelfde manier: digitaal en per transactie. Daarvoor zijn elektronische facturen nodig.
+- **Binnenlands:** lidstaten mogen dit ook voor binnenlandse transacties verplicht stellen. Het kabinet kiest daarvoor: elektronisch factureren per 1 juli 2030 en rapportage per 1 juli 2031.
+- **Uitzondering:** bedrijven die de kleineondernemersregeling (KOR) toepassen, met een omzet van maximaal € 20.000 per kalenderjaar, zijn vrijgesteld. Die uitzondering blijft ook na juli 2030 gelden.
 
-Voor ondernemers die de eenmalige investering in verdere digitalisering toch al voor hun buitenlandse zaken moeten doen, betekent dit uiteindelijk een verdere administratieve vereenvoudiging en wordt het makkelijker aan hun fiscale verplichtingen te voldoen. Voor een deel van de ondernemers betekent dit dat zij hun factureringsprocessen moeten aanpassen, bijvoorbeeld door over te stappen op een digitaal boekhoudpakket. Onderzoek laat al zien dat e-facturatie zorgt voor een forse kostenbesparing voor ondernemers per verzonden en ontvangen factuur. Tegelijkertijd biedt het voor de Belastingdienst de mogelijkheid om toezicht en dienstverlening gerichter en efficiënter te maken.
+Het kabinet noemt de veilige verwerking van bedrijfsgevoelige gegevens een harde randvoorwaarde, onder meer met rolgebaseerde toegang, logging en een beperkte bewaartermijn van tien jaar bij de Belastingdienst.
 
-Veiligheid bedrijfsgevoelige gegevens harde randvoorwaarde
+## Voor wie is dit relevant?
 
-Het kabinet vindt het essentieel dat het ontvangen en verwerken van bedrijfsgevoelige gegevens op een veilige en verantwoorde manier gebeurt en dat dit gewaarborgd wordt. Dit is een harde randvoorwaarde bij de implementatie van het voorstel. Niet iedereen kan zomaar bij de gegevens die een ondernemer aanlevert. Zo wordt er gewerkt met autorisatie en rolgebaseerde toegang: medewerkers hebben uitsluitend toegang tot gegevens die noodzakelijk zijn voor de uitvoering van hun taak (“ need to know ”). Daarnaast wordt de toegang tot en het gebruik van gegevens gelogd, inclusief wie, wanneer en met welk doel gegevens worden geraadpleegd of verwerkt. Ook is het kabinet voornemens de Belastingdienst een beperkte bewaartermijn van tien jaar te laten hanteren.
+Voor vrijwel alle ondernemers die facturen sturen aan andere bedrijven. Voor een deel van hen betekent dit dat het factuurproces moet worden aangepast, bijvoorbeeld door over te stappen op een digitaal boekhoudpakket.
 
-Vervolg
+## Wat is de status?
 
-De komende periode wordt op een aantal punten nog nader onderzoek gedaan, zoals hoe veilige en betrouwbare data-uitwisseling worden ingericht en wat de bredere impact (waaronder op het aanpakken van administratieve lasten) voor ondernemers is. Het conceptwetsvoorstel wordt dit najaar in internetconsultatie gebracht. Het kabinet wil het wetsvoorstel vervolgens voor de zomer van 2027 aanbieden aan de Tweede Kamer.
+Dit is een voornemen van het kabinet, nog geen wet. Het conceptwetsvoorstel gaat dit najaar in internetconsultatie; daarna volgt de behandeling in het parlement. Er hoeft nu nog niets te veranderen, maar wie de komende jaren een nieuw boekhoud- of factuursysteem kiest, doet er goed aan te letten op ondersteuning van e-facturatie.
