@@ -184,7 +184,7 @@ test('bronrelatie: elk Avydo-artikel heeft een bronrecord met dezelfde sourceUrl
   }
 });
 
-test('bestaande URL\'s: de 68 behouden artikelen staan er met dezelfde slug; de 13 vervallen artikelen hebben een afgewezen bronrecord', () => {
+test('bestaande URL\'s: de 68 behouden artikelen staan er met dezelfde slug; de 13 vervallen artikelen hebben een afgewezen bronrecord; nieuwe artikelen komen uit de redactiepipeline', () => {
   assert.equal(SLUGS.retained.length, 68);
   assert.equal(SLUGS.removed.length, 13);
   for (const slug of SLUGS.retained) assert.ok(existsSync(path.join(CONTENT_DIR, `${slug}.md`)), slug);
@@ -193,7 +193,19 @@ test('bestaande URL\'s: de 68 behouden artikelen staan er met dezelfde slug; de 
     const record = JSON.parse(readFileSync(path.join(SOURCES_DIR, `${slug}.json`), 'utf8'));
     assert.equal(record.processingStatus, 'afgewezen', slug);
   }
-  assert.equal(readdirSync(CONTENT_DIR).filter((f) => f.endsWith('.md')).length, 68);
+  // Het Kenniscentrum groeit via de redactiepipeline. Elk artikel buiten de
+  // 68 behouden slugs is zo'n nieuw artikel: een nieuwe slug (geen vervallen
+  // slug die terugkomt), gedateerd op of na de migratie, met precies één
+  // bronrecord dat ernaar verwijst en als verwerkt is gemarkeerd.
+  const retained = new Set(SLUGS.retained);
+  const added = readdirSync(CONTENT_DIR).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')).filter((slug) => !retained.has(slug));
+  for (const slug of added) {
+    assert.equal(SLUGS.removed.includes(slug), false, `${slug}: vervallen artikel is teruggekomen`);
+    assert.ok(slug.slice(0, 10) >= '2026-10-08', `${slug}: ouder dan de migratie`);
+    const linked = RECORDS.filter((r) => r.avydoSlug === slug);
+    assert.equal(linked.length, 1, `${slug}: geen (of meer dan één) bronrecord met avydoSlug`);
+    assert.equal(linked[0].processingStatus, 'verwerkt', slug);
+  }
 });
 
 // --- Selectie ---
@@ -375,9 +387,18 @@ test('productie-run #38 nagespeeld: tarieven 2025 afgewezen, "Jaarrekening wel o
 });
 
 test('selectie: alleen kandidaten; verwerkte en afgewezen records worden niet opnieuw gekozen (ook niet de echte bronlaag)', () => {
+  // De echte bronlaag kan na een run kandidaten bevatten (uitgesteld of
+  // niet gelukt); die mogen gekozen worden, verwerkte en afgewezen nooit.
   const real = selectTopics(RECORDS, { now: NOW, avydoArticles: [] });
-  assert.equal(real.selected.length, 0);
-  assert.equal(RECORDS.filter((r) => r.processingStatus === 'kandidaat').length, 0);
+  for (const group of [real.selected, real.rejected, real.deferred]) {
+    for (const { record } of group) assert.equal(record.processingStatus, 'kandidaat', record.sourceUrl);
+  }
+  const done = RECORDS.filter((r) => r.processingStatus !== 'kandidaat');
+  // Alle bronnen uit de migratie zijn verwerkt of afgewezen.
+  const doneKeys = new SourceUrlSet(done.map((r) => r.sourceUrl));
+  for (const url of LEGACY_URLS) assert.ok(doneKeys.has(url), url);
+  const onlyDone = selectTopics(done, { now: NOW, avydoArticles: [] });
+  assert.deepEqual([onlyDone.selected.length, onlyDone.rejected.length, onlyDone.deferred.length], [0, 0, 0]);
 });
 
 // --- Vaste validatie ---
