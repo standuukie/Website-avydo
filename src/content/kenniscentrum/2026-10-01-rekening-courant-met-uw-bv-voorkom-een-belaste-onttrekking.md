@@ -4,7 +4,7 @@ category: "BV & DGA"
 priority: "praktisch"
 publishedAt: 2026-10-01T08:30:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/werk_en_inkomen/bijzondere_situaties/geld_lenen_van_uw_bv/voorwaarden_bij_de_rekening_courant"
 summary: "Veel DGA's lenen geld van hun eigen BV via de rekening-courant. Dit artikel legt uit hoe dit werkt, wat de risico's zijn van een oplopende schuld aan de BV, en waar u op moet letten om een fiscale correctie te voorkomen."
 relevance: "Een rekening-courantschuld die te hoog oploopt, kan door de Belastingdienst (deels) als dividenduitkering worden aangemerkt. Tijdige aandacht voor uw rekening-courantpositie voorkomt een onverwachte, forse belastingaanslag."
 tags: ["rekening-courant", "dga", "bv", "box 2", "excessief lenen"]

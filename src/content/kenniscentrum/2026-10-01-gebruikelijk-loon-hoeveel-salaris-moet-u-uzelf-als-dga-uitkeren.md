@@ -4,7 +4,7 @@ category: "BV & DGA"
 priority: "praktisch"
 publishedAt: 2026-10-01T08:00:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/prive/vermogen_en_aanmerkelijk_belang/aanmerkelijk_belang/loon_en_aanmerkelijk_belang/"
 summary: "Als directeur-grootaandeelhouder (DGA) van uw eigen BV moet u zichzelf een 'gebruikelijk loon' uitkeren. Dit artikel legt uit wat deze regeling inhoudt, hoe de hoogte wordt bepaald, en wat de gevolgen zijn als u te weinig loon opneemt."
 relevance: "De gebruikelijkloonregeling bepaalt mede uw persoonlijke belastingdruk (box 1) en die van uw BV (loonheffingen). Een te laag vastgesteld loon kan leiden tot een correctie en naheffing door de Belastingdienst."
 tags: ["gebruikelijk loon", "dga", "bv", "loonheffingen", "box 1"]

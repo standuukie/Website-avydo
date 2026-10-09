@@ -4,7 +4,7 @@ category: "Btw"
 priority: "praktisch"
 publishedAt: 2026-10-01T09:30:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/hoe_werkt_de_btw/kleineondernemersregeling/wat-betekent-meedoen-met-de-kleineondernemersregeling/"
 summary: "Met de kleineondernemersregeling (KOR) kunt u, onder voorwaarden, kiezen voor vrijstelling van btw. Dit artikel legt uit voor wie de KOR interessant kan zijn, wat de voor- en nadelen zijn, en waar u op moet letten bij aanmelding."
 relevance: "De KOR kan uw administratieve lasten flink verminderen, maar betekent ook dat u geen btw meer in rekening brengt én geen voorbelasting meer kunt terugvragen. Of dit voordelig is, hangt sterk af van uw klantenkring en investeringen."
 tags: ["kor", "kleineondernemersregeling", "btw-vrijstelling", "btw", "zzp"]

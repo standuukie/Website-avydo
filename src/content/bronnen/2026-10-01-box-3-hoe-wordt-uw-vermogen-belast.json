@@ -1,12 +1,13 @@
 {
-  "sourceUrl": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/",
+  "sourceUrl": "https://www.belastingdienst.nl/wps/wcm/connect/nl/box-3/box-3",
   "sourceName": "Belastingdienst",
-  "title": "Belastingdienst – geraadpleegde bronpagina",
+  "title": "Box 3 (vermogensrendementsheffing)",
   "category": "Inkomstenbelasting",
   "priority": "praktisch",
   "audiences": [
     "mkb-ondernemer",
     "bv-dga"
   ],
-  "processingStatus": "verwerkt"
+  "processingStatus": "verwerkt",
+  "avydoSlug": "2026-10-01-box-3-hoe-wordt-uw-vermogen-belast"
 }

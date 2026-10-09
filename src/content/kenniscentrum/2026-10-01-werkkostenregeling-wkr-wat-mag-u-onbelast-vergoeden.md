@@ -4,7 +4,7 @@ category: "Personeel & loonheffingen"
 priority: "praktisch"
 publishedAt: 2026-10-01T10:00:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/nl/personeel-en-loon/content/werkkostenregeling"
 summary: "Via de werkkostenregeling (WKR) kunt u als werkgever vergoedingen en verstrekkingen aan personeel onbelast geven, binnen een bepaalde vrije ruimte. Dit artikel legt uit hoe de WKR werkt en wat er gebeurt als u de vrije ruimte overschrijdt."
 relevance: "De WKR biedt mogelijkheden om personeel te belonen zonder dat dit (volledig) belast loon wordt, maar overschrijding van de vrije ruimte leidt tot een naheffing bij de werkgever — niet bij de werknemer. Goede planning voorkomt verrassingen."
 tags: ["werkkostenregeling", "wkr", "vrije ruimte", "loonheffingen", "werkgever", "personeel"]

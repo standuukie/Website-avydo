@@ -1,0 +1,13 @@
+{
+  "sourceUrl": "https://www.kvk.nl/deponeren/",
+  "sourceName": "KVK",
+  "title": "Deponeren",
+  "category": "Administratie & jaarrekening",
+  "priority": "praktisch",
+  "audiences": [
+    "bv-dga",
+    "mkb-ondernemer"
+  ],
+  "processingStatus": "afgewezen",
+  "rejectionReason": "algemene rubriekpagina (overzicht van deponeeronderwerpen), geen inhoudelijke bron voor één onderwerp"
+}
