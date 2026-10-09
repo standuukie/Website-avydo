@@ -28,7 +28,9 @@
  *      het standaardmodel (zie editorial.mjs).
  *      KENNISCENTRUM_PR_LIST_FILE (optioneel) — JSON van `gh pr list`, zodat
  *      een bron uit een openstaand of afgewezen voorstel niet opnieuw wordt
- *      gekozen.
+ *      gekozen en het record van een bron uit een open artikel-PR niet in de
+ *      bronlaag-PR komt. Is de variabele gezet maar het bestand ontbreekt of
+ *      is ongeldig, dan stopt de run (geen voorstel).
  */
 import { XMLParser } from 'fast-xml-parser';
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -1887,7 +1889,13 @@ async function main() {
   // Stap 2: redactie (selectie → Avydo-artikel → validatie). Dynamisch
   // geïmporteerd: editorial.mjs gebruikt zelf helpers uit dit bestand.
   log('\n=== Redactie ===');
-  const { runEditorialPipeline, readPendingSourceUrls } = await import('./editorial.mjs');
+  const { runEditorialPipeline, readPullRequestList, parsePendingSourceUrls, parseOpenArticleSourceUrls, sourceLayerExclusions } = await import('./editorial.mjs');
+  // De PR-lijst is nodig om bronnen uit openstaande voorstellen uit te
+  // stellen en buiten de bronlaag-PR te houden. Is die opgegeven maar niet
+  // leesbaar, dan stopt de run: liever geen voorstel dan een dubbel of
+  // conflicterend voorstel. Lokaal (zonder variabele) is er geen PR-lijst.
+  const prListFile = process.env.KENNISCENTRUM_PR_LIST_FILE;
+  const prs = prListFile ? readPullRequestList(prListFile) : null;
   if (!GROQ_API_KEY) {
     log('GROQ_API_KEY ontbreekt: geen AI-aanroep, geen artikel en geen Pull Request. Zet GROQ_API_KEY als GitHub Actions repository secret.');
   }
@@ -1896,7 +1904,8 @@ async function main() {
     sourcesDir: SOURCES_DIR,
     now,
     apiKey: GROQ_API_KEY,
-    pendingSourceUrls: readPendingSourceUrls(process.env.KENNISCENTRUM_PR_LIST_FILE),
+    pendingSourceUrls: prs ? parsePendingSourceUrls(prs) : [],
+    openArticleSourceUrls: prs ? parseOpenArticleSourceUrls(prs) : [],
     log,
   });
 
@@ -1908,6 +1917,9 @@ async function main() {
       totalRecorded,
       articlesCreated: editorial.created.length,
       editorial: editorial.summary,
+      // Voor de stap "Bronlaag-PR bijwerken": zonder geladen PR-lijst wordt
+      // de bronlaag-PR niet bijgewerkt (zie de workflow).
+      sourceLayer: { prListLoaded: Boolean(prs), excludedRecordIds: sourceLayerExclusions(editorial.summary) },
       results,
       ranAt: now.toISOString(),
     }, null, 2),

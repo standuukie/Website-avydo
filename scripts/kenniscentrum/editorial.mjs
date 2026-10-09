@@ -17,7 +17,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { loadExistingArticlesMeta, slugify } from './fetch-articles.mjs';
-import { readSourceRecords, updateSourceRecord } from './source-records.mjs';
+import { readSourceRecords, updateSourceRecord, SourceUrlSet } from './source-records.mjs';
 import { selectTopics } from './select-topics.mjs';
 import { validateAvydoArticle, CATEGORIES, AUDIENCES, ARTICLE_STATUSES } from './validate-article.mjs';
 
@@ -44,19 +44,9 @@ export const PR_SOURCE_MARKER = 'kenniscentrum-bron';
  * Bron-URL's uit eerdere redactie-PR's die niet zijn gemerged (open of
  * gesloten). Een gesloten PR is een menselijke afwijzing: die bron wordt
  * niet opnieuw voorgesteld. Gemergde PR's staan al in de repository.
- * @param {string | undefined} file JSON van `gh pr list --json headRefName,body,mergedAt`
+ * @param {Array<{headRefName?: string, body?: string, mergedAt?: string|null, state?: string}>} prs
+ *   JSON van `gh pr list --json headRefName,body,mergedAt,state`
  */
-export function readPendingSourceUrls(file) {
-  if (!file || !existsSync(file)) return [];
-  let prs;
-  try {
-    prs = JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    return [];
-  }
-  return parsePendingSourceUrls(prs);
-}
-
 export function parsePendingSourceUrls(prs) {
   const urls = [];
   for (const pr of Array.isArray(prs) ? prs : []) {
@@ -65,6 +55,41 @@ export function parsePendingSourceUrls(prs) {
     for (const m of String(pr.body ?? '').matchAll(new RegExp(`<!-- ${PR_SOURCE_MARKER}: (\\S+) -->`, 'g'))) urls.push(m[1]);
   }
   return urls;
+}
+
+/**
+ * Bron-URL's uit nog open artikel-PR's. Het bronrecord van zo'n bron staat
+ * (als "verwerkt") in die artikel-PR en mag dus niet ook — als andere
+ * versie — in de bronlaag-PR komen. Een PR zonder `state` geldt als open:
+ * bij twijfel liever uitsluiten dan een conflicterend record voorstellen.
+ */
+export function parseOpenArticleSourceUrls(prs) {
+  const open = (Array.isArray(prs) ? prs : []).filter((pr) => !pr.mergedAt && (pr.state === undefined || pr.state === null || pr.state === 'OPEN'));
+  return parsePendingSourceUrls(open);
+}
+
+/**
+ * Leest de PR-lijst (JSON van `gh pr list`) streng: een ontbrekend of
+ * ongeldig bestand is een fout, geen lege lijst. Anders zou een bron uit een
+ * open voorstel stilzwijgend opnieuw gekozen of in de bronlaag-PR gezet worden.
+ */
+export function readPullRequestList(file) {
+  if (!file || !existsSync(file)) throw new Error(`PR-lijst ontbreekt (${file || 'geen bestand opgegeven'})`);
+  const prs = JSON.parse(readFileSync(file, 'utf8'));
+  if (!Array.isArray(prs)) throw new Error('PR-lijst is geen JSON-array');
+  return prs;
+}
+
+/**
+ * Bronrecords (id = bestandsnaam zonder .json) die niet in de bronlaag-PR
+ * horen: het eigen record van een nieuw artikel (gaat mee in de nieuwe
+ * artikel-PR) en het record van een bron uit een nog open artikel-PR.
+ */
+export function sourceLayerExclusions(summary) {
+  return [...new Set([
+    ...(summary?.created ?? []).map((c) => c.sourceRecordId),
+    ...(summary?.openArticleSourceRecordIds ?? []),
+  ].filter(Boolean))].sort();
 }
 
 // --- Prompt en AI-aanroep ---
@@ -407,13 +432,19 @@ export function buildSourceLayerPullRequestBody(summary, { totalRecorded = 0 } =
   return `${lines.join('\n')}\n`;
 }
 
+function openArticleRecordIds(sourcesDir, urls) {
+  if (!urls?.length) return [];
+  const open = new SourceUrlSet(urls);
+  return readSourceRecords(sourcesDir).filter((r) => open.has(r.sourceUrl)).map((r) => r.id).sort();
+}
+
 // --- Orkestratie ---
 
 /**
  * @returns {Promise<{ created: Array<object>, summary: object, pullRequest: {title: string, body: string} | null }>}
  */
 export async function runEditorialPipeline({
-  contentDir, sourcesDir, now = new Date(), apiKey, pendingSourceUrls = [], log = () => {},
+  contentDir, sourcesDir, now = new Date(), apiKey, pendingSourceUrls = [], openArticleSourceUrls = [], log = () => {},
   model = resolveModel(), fetchImpl = fetch,
   aiCallSpacingMs = AI_CALL_SPACING_MS, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
@@ -497,6 +528,9 @@ export async function runEditorialPipeline({
     // de redactie omdat het onderwerp al door een Avydo-artikel is gedekt.
     rejectedSources: [...rejected, ...rejectedAfterGeneration].map(({ record, reason }) => ({ title: record.title, sourceUrl: record.sourceUrl, reason })),
     deferredSources: deferred.map(({ record, reason }) => ({ title: record.title, sourceUrl: record.sourceUrl, reason })),
+    // Bronrecords van bronnen uit nog open artikel-PR's (in deze run opnieuw
+    // vastgelegd of al bekend); die horen niet in de bronlaag-PR.
+    openArticleSourceRecordIds: openArticleRecordIds(sourcesDir, openArticleSourceUrls),
     noArticleReason: created.length === 0 ? (noTopicReason ?? 'generatie of validatie mislukt') : null,
   };
   return { created, summary, pullRequest: created.length > 0 ? buildPullRequest(created, summary, now) : null };

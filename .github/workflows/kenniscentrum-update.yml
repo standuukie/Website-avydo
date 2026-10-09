@@ -52,13 +52,15 @@ jobs:
         run: npm ci
 
       # Bronnen uit een openstaand of afgewezen (gesloten, niet gemerged)
-      # redactievoorstel worden niet opnieuw gekozen.
+      # redactievoorstel worden niet opnieuw gekozen; het bronrecord van een
+      # open artikel-PR komt niet in de bronlaag-PR. Lukt het ophalen niet,
+      # dan stopt de run: zonder PR-lijst zou een bron dubbel of als
+      # conflicterende versie voorgesteld kunnen worden.
       - name: Eerdere redactievoorstellen ophalen
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr list --state all --limit 200 --json headRefName,body,mergedAt > "$RUNNER_TEMP/kenniscentrum-prs.json" \
-            || echo '[]' > "$RUNNER_TEMP/kenniscentrum-prs.json"
+          gh pr list --state all --limit 200 --json headRefName,body,mergedAt,state > "$RUNNER_TEMP/kenniscentrum-prs.json"
 
       # De bronlaag-PR is altijd één commit bovenop de live branch; die
       # wijziging wordt hier toegepast. Lukt dat niet (conflict), dan gaat de
@@ -67,7 +69,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          open_pr=$(gh pr list --head kenniscentrum/bronlaag --state open --json number --jq '.[0].number' || true)
+          open_pr=$(gh pr list --head kenniscentrum/bronlaag --state open --json number --jq '.[0].number')
           if [ -z "$open_pr" ]; then
             echo "Geen open bronlaag-PR."
             exit 0
@@ -119,19 +121,26 @@ jobs:
             echo 'Geen resultaatbestand gevonden (onverwachte scriptfout).' >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Bronlaagwijzigingen, behalve de bronrecords van een nieuw artikel (die
-      # gaan mee in de artikel-PR), naar de doorlopende bronlaag-PR. Gebouwd
-      # met een aparte index: de werkmap en de gewone index blijven ongemoeid.
+      # Bronlaagwijzigingen naar de doorlopende bronlaag-PR, behalve de
+      # bronrecords die bij een artikel-PR horen: het record van een nieuw
+      # artikel (gaat mee in de nieuwe artikel-PR) en het record van een bron
+      # uit een nog open artikel-PR (staat daar al, als andere versie).
+      # Gebouwd met een aparte index: de werkmap en de gewone index blijven
+      # ongemoeid. Zonder resultaatbestand of geladen PR-lijst: niet bijwerken.
       - name: Bronlaag-PR bijwerken
         if: steps.fetch.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          article_records=$(node -p "(() => { try { return (require('./.kenniscentrum-run-result.json').editorial?.created ?? []).map((c) => c.sourceRecordId).filter(Boolean).join(' ') } catch { return '' } })()")
+          excluded=$(node -p "(() => { try { const r = require('./.kenniscentrum-run-result.json'); return r.sourceLayer?.prListLoaded === true ? (r.sourceLayer.excludedRecordIds ?? []).join(' ') : 'NIET_GELADEN' } catch { return 'NIET_GELADEN' } })()")
+          if [ "$excluded" = "NIET_GELADEN" ]; then
+            echo "::warning::Geen resultaatbestand of PR-lijst; de bronlaag-PR wordt deze run niet bijgewerkt."
+            exit 0
+          fi
           export GIT_INDEX_FILE="$RUNNER_TEMP/bronlaag.index"
           git read-tree HEAD
           git add -A -- src/content/bronnen
-          for id in $article_records; do git reset -q HEAD -- "src/content/bronnen/$id.json"; done
+          for id in $excluded; do git reset -q HEAD -- "src/content/bronnen/$id.json"; done
           if git diff --cached --quiet HEAD -- src/content/bronnen; then
             echo "Geen bronlaagwijzigingen."
             exit 0

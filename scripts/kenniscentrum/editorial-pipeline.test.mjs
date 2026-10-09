@@ -11,7 +11,8 @@
 // Geen netwerk, geen echte AI-aanroep.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +56,9 @@ import {
   buildSourceLayerPullRequestBody,
   buildPullRequest,
   SOURCE_LAYER_BRANCH,
+  parseOpenArticleSourceUrls,
+  readPullRequestList,
+  sourceLayerExclusions,
 } from './editorial.mjs';
 import { findOverlappingArticle } from './fetch-articles.mjs';
 import { estimateTokens } from '../../src/lib/token-estimate.mjs';
@@ -781,7 +785,9 @@ test('workflow: bronlaagwijzigingen uit een run zonder artikel gaan naar één d
   assert.match(layer, /if: steps\.fetch\.outcome == 'success'/);
   assert.match(layer, /export GIT_INDEX_FILE=/);
   assert.match(layer, /git add -A -- src\/content\/bronnen/);
-  assert.match(layer, /sourceRecordId/);
+  assert.match(layer, /sourceLayer\?\.prListLoaded === true/);
+  assert.match(layer, /excludedRecordIds/);
+  assert.match(layer, /NIET_GELADEN/);
   assert.match(layer, /git reset -q HEAD -- "src\/content\/bronnen\/\$id\.json"/);
   assert.match(layer, /git diff --cached --quiet HEAD -- src\/content\/bronnen/);
   assert.match(layer, /commit-tree "\$tree" -p HEAD/);
@@ -1600,4 +1606,187 @@ test('brongetrouw: PR #2-achtige fouten blokkeren niet maar komen als aandachtsp
   }
   const pr = buildPullRequest([{ slug: 'x', record: FIDELITY_RECORD, kind: 'toelichting', reason: 'test', article, validation: result }], { candidates: 1, selected: 1, failed: [] }, NOW);
   assert.match(pr.body, /aandachtspunten: .*statusclaim "geldt momenteel"/);
+});
+
+// --- Bronlaag-PR en open artikel-PR's: gescheiden bestandssets ---
+//
+// Run #47: de bron van een nog open artikel-PR werd opnieuw geïmporteerd en
+// als "kandidaat" in de bronlaag-PR gezet, terwijl dezelfde file in de
+// artikel-PR "verwerkt" is. Records van bronnen uit open artikel-PR's blijven
+// nu buiten de bronlaag-PR; de selectie stelt ze (ongewijzigd) uit.
+
+const OPEN_A = 'https://www.kvk.nl/test/open-artikel-a/';
+const OPEN_B = 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/open-artikel-b';
+const CLOSED_C = 'https://www.kvk.nl/test/afgewezen-voorstel-c/';
+const PR_LIST = [
+  { headRefName: 'kenniscentrum/avydo-2026-10-08-1', state: 'OPEN', mergedAt: null, body: `x\n<!-- ${PR_SOURCE_MARKER}: ${OPEN_A} -->` },
+  { headRefName: 'kenniscentrum/avydo-2026-10-08-2', state: 'OPEN', mergedAt: null, body: `<!-- ${PR_SOURCE_MARKER}: ${OPEN_B} -->` },
+  { headRefName: 'kenniscentrum/avydo-2026-10-01-3', state: 'CLOSED', mergedAt: null, body: `<!-- ${PR_SOURCE_MARKER}: ${CLOSED_C} -->` },
+  { headRefName: 'kenniscentrum/avydo-2026-09-30-4', state: 'MERGED', mergedAt: '2026-09-30T10:00:00Z', body: `<!-- ${PR_SOURCE_MARKER}: https://www.kvk.nl/test/gemerged/ -->` },
+  { headRefName: 'kenniscentrum/bronlaag', state: 'OPEN', mergedAt: null, body: 'Doorlopend voorstel voor de bronlaag.' },
+  { headRefName: 'feature/iets', state: 'OPEN', mergedAt: null, body: `<!-- ${PR_SOURCE_MARKER}: https://www.kvk.nl/test/andere-branch/ -->` },
+];
+
+test('open artikel-PR\'s: alleen bronnen uit open (niet gemergde) kenniscentrum-PR\'s; zonder state geldt een PR als open', () => {
+  assert.deepEqual(parseOpenArticleSourceUrls(PR_LIST), [OPEN_A, OPEN_B]);
+  // Uitstellen blijft gelden voor open én gesloten (afgewezen) voorstellen.
+  assert.deepEqual(parsePendingSourceUrls(PR_LIST), [OPEN_A, OPEN_B, CLOSED_C]);
+  assert.deepEqual(parseOpenArticleSourceUrls([{ headRefName: 'kenniscentrum/avydo-x', mergedAt: null, body: `<!-- ${PR_SOURCE_MARKER}: ${OPEN_A} -->` }]), [OPEN_A]);
+});
+
+test('PR-lijst wordt streng gelezen: ontbrekend of ongeldig bestand is een fout, geen lege lijst', () => {
+  const dir = tempDir('prlist');
+  try {
+    assert.throws(() => readPullRequestList(path.join(dir, 'ontbreekt.json')), /PR-lijst ontbreekt/);
+    assert.throws(() => readPullRequestList(undefined), /PR-lijst ontbreekt/);
+    writeFileSync(path.join(dir, 'kapot.json'), '{niet: json');
+    assert.throws(() => readPullRequestList(path.join(dir, 'kapot.json')));
+    writeFileSync(path.join(dir, 'object.json'), '{"a":1}');
+    assert.throws(() => readPullRequestList(path.join(dir, 'object.json')), /geen JSON-array/);
+    writeFileSync(path.join(dir, 'ok.json'), JSON.stringify(PR_LIST));
+    assert.equal(readPullRequestList(path.join(dir, 'ok.json')).length, PR_LIST.length);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function openPrKvkRecord(sourceUrl, title) {
+  return { ...RUN43_RECORD, sourceUrl, title, sourceLastModified: '2025-08-26T00:00:00.000Z' };
+}
+
+async function runWithOpenPrs(dirs) {
+  writeSourceRecord(dirs.sourcesDir, openPrKvkRecord(OPEN_A, 'Bron uit open artikel-PR A'));
+  writeSourceRecord(dirs.sourcesDir, { ...RECORD, sourceUrl: OPEN_B, title: 'Bron uit open artikel-PR B' });
+  writeSourceRecord(dirs.sourcesDir, openPrKvkRecord(CLOSED_C, 'Bron uit afgewezen voorstel C'));
+  writeSourceRecord(dirs.sourcesDir, { ...RECORD, sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2024/01/01/oud-bericht', title: 'Oud bericht zonder actualiteit', sourcePublishedAt: daysAgo(400), body: 'Te weinig brontekst.' });
+  let groqCalls = 0;
+  const run = await runEditorialPipeline({
+    contentDir: dirs.contentDir, sourcesDir: dirs.sourcesDir, now: NOW, apiKey: 'k', log: () => {}, aiCallSpacingMs: 0,
+    pendingSourceUrls: parsePendingSourceUrls(PR_LIST),
+    openArticleSourceUrls: parseOpenArticleSourceUrls(PR_LIST),
+    fetchImpl: async (url) => { if (isGroq(url)) groqCalls += 1; return isGroq(url) ? aiResponse(AI_INPUT) : new Response('<html></html>', { status: 200 }); },
+  });
+  return { run, groqCalls, records: readSourceRecords(dirs.sourcesDir) };
+}
+
+test('open artikel-PR\'s: hun bronnen worden uitgesteld (geen Groq) en hun records staan in de uitsluitingen voor de bronlaag-PR; andere records niet', async () => {
+  const contentDir = tempDir('content-openprs');
+  const sourcesDir = tempDir('sources-openprs');
+  try {
+    const { run, groqCalls, records } = await runWithOpenPrs({ contentDir, sourcesDir });
+    assert.equal(groqCalls, 0);
+    assert.equal(run.created.length, 0);
+    const deferredUrls = run.summary.deferredSources.map((d) => d.sourceUrl).sort();
+    assert.deepEqual(deferredUrls, [CLOSED_C, OPEN_A, OPEN_B].sort());
+    const idOf = (url) => records.find((r) => r.sourceUrl === url).id;
+    assert.deepEqual(run.summary.openArticleSourceRecordIds, [idOf(OPEN_A), idOf(OPEN_B)].sort());
+    assert.deepEqual(sourceLayerExclusions(run.summary), [idOf(OPEN_A), idOf(OPEN_B)].sort());
+    // Het afgewezen voorstel (gesloten PR) en het afgewezen oude bericht horen wél in de bronlaag-PR.
+    assert.ok(!sourceLayerExclusions(run.summary).includes(idOf(CLOSED_C)));
+    assert.equal(records.find((r) => r.sourceUrl.endsWith('oud-bericht')).processingStatus, 'afgewezen');
+    // Een nieuw artikel: zijn eigen record komt ook in de uitsluitingen (gaat mee in de artikel-PR).
+    assert.deepEqual(sourceLayerExclusions({ created: [{ sourceRecordId: 'nieuw' }], openArticleSourceRecordIds: ['a', 'nieuw'] }), ['a', 'nieuw']);
+    assert.deepEqual(sourceLayerExclusions(undefined), []);
+  } finally {
+    rmSync(contentDir, { recursive: true, force: true });
+    rmSync(sourcesDir, { recursive: true, force: true });
+  }
+});
+
+// Voert de échte stap "Bronlaag-PR bijwerken" uit de workflow uit in een
+// tijdelijke git-repository met een lokale "origin"; gh is een stub.
+function workflowStepScript(name) {
+  const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
+  const start = wf.indexOf(`- name: ${name}`);
+  const next = wf.indexOf('\n      - name: ', start + 1);
+  const step = wf.slice(start, next < 0 ? undefined : next);
+  const lines = step.slice(step.indexOf('run: |') + 'run: |'.length).split('\n').slice(1);
+  return lines.map((l) => l.replace(/^ {10}/, '')).join('\n');
+}
+
+function sh(cwd, args, env = {}) {
+  return execFileSync('git', args, { cwd, env: { ...process.env, ...env }, encoding: 'utf8' }).trim();
+}
+
+const GIT_ENV = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'push.negotiate', GIT_CONFIG_VALUE_0: 'false', GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+
+function setupRepo() {
+  const root = tempDir('git-bronlaag');
+  const remote = path.join(root, 'remote.git');
+  const repo = path.join(root, 'repo');
+  execFileSync('git', ['init', '-q', '--bare', remote], { env: { ...process.env, ...GIT_ENV } });
+  execFileSync('git', ['init', '-q', '-b', 'main', repo], { env: { ...process.env, ...GIT_ENV } });
+  mkdirSync(path.join(repo, 'src/content/bronnen'), { recursive: true });
+  mkdirSync(path.join(repo, 'src/content/kenniscentrum'), { recursive: true });
+  writeFileSync(path.join(repo, 'src/content/bronnen/bestaand.json'), '{"processingStatus":"verwerkt"}\n');
+  writeFileSync(path.join(repo, 'src/content/kenniscentrum/.gitkeep'), '');
+  sh(repo, ['add', '-A'], GIT_ENV);
+  sh(repo, ['commit', '-qm', 'base'], GIT_ENV);
+  sh(repo, ['remote', 'add', 'origin', remote], GIT_ENV);
+  sh(repo, ['push', '-q', 'origin', 'main'], GIT_ENV);
+  const bin = path.join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(path.join(bin, 'gh'), `#!/bin/sh\necho "$*" >> "${path.join(root, 'gh.log')}"\n`);
+  chmodSync(path.join(bin, 'gh'), 0o755);
+  return { root, remote, repo, bin };
+}
+
+function runLayerStep({ repo, bin, root }) {
+  const env = { ...process.env, ...GIT_ENV, PATH: `${bin}:${process.env.PATH}`, RUNNER_TEMP: root, GITHUB_REF_NAME: 'main', GH_TOKEN: 'x' };
+  return execFileSync('bash', ['-e', '-c', workflowStepScript('Bronlaag-PR bijwerken')], { cwd: repo, env, encoding: 'utf8' });
+}
+
+test('workflow-stap (echte git): bronrecords uit meerdere open artikel-PR\'s komen niet in de bronlaag-PR; overige wijzigingen wel; bestandssets gescheiden', async () => {
+  const g = setupRepo();
+  try {
+    const sourcesDir = path.join(g.repo, 'src/content/bronnen');
+    const contentDir = path.join(g.repo, 'src/content/kenniscentrum');
+    const { run, records } = await runWithOpenPrs({ contentDir, sourcesDir });
+    writeFileSync(path.join(g.repo, '.kenniscentrum-run-result.json'), JSON.stringify({ editorial: run.summary, sourceLayer: { prListLoaded: true, excludedRecordIds: sourceLayerExclusions(run.summary) } }));
+    writeFileSync(path.join(g.repo, '.kenniscentrum-bronlaag-pr.md'), 'tekst');
+    runLayerStep(g);
+    const files = sh(g.remote, ['diff', '--name-only', 'main', 'kenniscentrum/bronlaag']).split('\n').filter(Boolean).sort();
+    const file = (url) => `src/content/bronnen/${records.find((r) => r.sourceUrl === url).id}.json`;
+    // In de bronlaag-PR: het afgewezen voorstel C en het afgewezen oude bericht; niet A en B.
+    assert.deepEqual(files, [file(CLOSED_C), `src/content/bronnen/${records.find((r) => r.sourceUrl.endsWith('oud-bericht')).id}.json`].sort());
+    // De (gesimuleerde) artikel-PR's bevatten A en B: geen overlap met de bronlaag-PR.
+    const articlePrFiles = [file(OPEN_A), file(OPEN_B)];
+    assert.deepEqual(files.filter((f) => articlePrFiles.includes(f)), []);
+    // De gewone index en de werkmap zijn ongemoeid; de live branch is niet aangeraakt.
+    assert.equal(sh(g.remote, ['rev-parse', 'main']), sh(g.repo, ['rev-parse', 'HEAD']));
+    assert.equal(sh(g.repo, ['diff', '--cached', '--name-only']), '');
+    assert.match(readFileSync(path.join(g.root, 'gh.log'), 'utf8'), /pr create --base main --head kenniscentrum\/bronlaag/);
+  } finally {
+    rmSync(g.root, { recursive: true, force: true });
+  }
+});
+
+test('workflow-stap (echte git): zonder geladen PR-lijst of resultaatbestand wordt de bronlaag-PR niet bijgewerkt (geen stille opname)', async () => {
+  for (const result of [null, { editorial: {}, sourceLayer: { prListLoaded: false, excludedRecordIds: [] } }, { editorial: {} }]) {
+    const g = setupRepo();
+    try {
+      writeFileSync(path.join(g.repo, 'src/content/bronnen/nieuw.json'), '{"processingStatus":"kandidaat"}\n');
+      if (result) writeFileSync(path.join(g.repo, '.kenniscentrum-run-result.json'), JSON.stringify(result));
+      const out = runLayerStep(g);
+      assert.match(out, /::warning::Geen resultaatbestand of PR-lijst/);
+      assert.throws(() => sh(g.remote, ['rev-parse', '--verify', '-q', 'kenniscentrum/bronlaag']));
+      assert.equal(existsSync(path.join(g.root, 'gh.log')), false);
+    } finally {
+      rmSync(g.root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('workflow: de PR-lijst wordt zonder stille terugval opgehaald (met state); de bronlaag-PR-check heeft geen "|| true"', () => {
+  const wf = readFileSync(path.join(ROOT, '.github/workflows/kenniscentrum-update.yml'), 'utf8');
+  const list = workflowStepScript('Eerdere redactievoorstellen ophalen');
+  assert.match(list, /gh pr list --state all --limit 200 --json headRefName,body,mergedAt,state/);
+  assert.doesNotMatch(list, /\|\||echo '\[\]'/);
+  assert.doesNotMatch(workflowStepScript('Openstaande bronlaag-PR toepassen'), /\|\| true/);
+  assert.match(wf, /KENNISCENTRUM_PR_LIST_FILE: \$\{\{ runner\.temp \}\}\/kenniscentrum-prs\.json/);
+  // De import leest de PR-lijst streng en schrijft de uitsluitingen in het resultaatbestand.
+  const main = readFileSync(path.join(ROOT, 'scripts/kenniscentrum/fetch-articles.mjs'), 'utf8');
+  assert.match(main, /readPullRequestList\(prListFile\)/);
+  assert.match(main, /sourceLayer: \{ prListLoaded: Boolean\(prs\), excludedRecordIds: sourceLayerExclusions\(editorial\.summary\) \}/);
+  assert.doesNotMatch(readFileSync(path.join(ROOT, 'scripts/kenniscentrum/editorial.mjs'), 'utf8'), /readPendingSourceUrls/);
 });
