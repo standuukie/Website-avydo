@@ -1,6 +1,17 @@
 // Controles op de bronlink van een Avydo-artikel en de titel van een
 // bronrecord.
 //
+// Twee afzonderlijke regels:
+// - URL-specificiteit (deze module): een bron-URL moet naar een pagina over
+//   één onderwerp wijzen, niet naar een start- of rubriekpagina. Deze controle
+//   kijkt alleen naar de URL zelf.
+// - Bronrelatie (bronlaag): per bron-URL is er één bronrecord, en dat record
+//   is via `avydoSlug` aan hooguit één artikel gekoppeld. Twee artikelen op
+//   dezelfde specifieke bron kan dus niet; de bronrelatietest in
+//   source-links.test.mjs en de duplicaatcontrole van de redactiepipeline
+//   (validateAvydoArticle) houden dat tegen. Dat volgt uit het datamodel,
+//   niet uit de URL-controle hieronder.
+//
 // Aanleiding (audit 2026-10-09): elf handgeschreven gidsen verwezen allemaal
 // naar dezelfde algemene Belastingdienst-URL, die doorverwijst naar de
 // overzichtspagina "Ondernemers". De lezer kwam zo op een menu uit in plaats
@@ -79,10 +90,12 @@ export function isPlaceholderSourceTitle(title, sourceName) {
 }
 
 /**
- * Problemen met bronlinks van artikelen. Een gedeelde specifieke bron is
- * toegestaan (bijvoorbeeld een nieuwsbericht en een latere uitleg op basis
- * van dezelfde officiële pagina); een gedeelde algemene URL wijst op een
- * placeholder en wordt apart gemeld.
+ * URL-specificiteit van de bronlinks van artikelen: algemene start- of
+ * rubriekpagina's, en een algemene URL die meerdere artikelen delen (wijst
+ * op een placeholder). Meerdere artikelen op dezelfde specifieke URL meldt
+ * deze functie niet, want dat is geen kwestie van URL-specificiteit; de
+ * bronlaag staat het niet toe (één record per URL, gekoppeld aan één
+ * artikel) en de bronrelatietest vangt het af.
  * @param {Array<{slug: string, sourceUrl: string}>} articles
  * @returns {Array<{type: 'generic-url', slug: string, url: string, reason: string} | {type: 'shared-generic-url', url: string, slugs: string[]}>}
  */
@@ -99,6 +112,29 @@ export function findSourceLinkIssues(articles) {
     if (slugs.length > 1 && isGenericSourceUrl(url)) issues.push({ type: 'shared-generic-url', url, slugs: [...slugs].sort() });
   }
   return issues;
+}
+
+/**
+ * Gepubliceerde artikelen (niet `hidden`) waarvan de bron-URL een bronrecord
+ * met status `afgewezen` heeft. Een afgewezen bron is ongeschikt als basis
+ * voor een artikel, ongeacht de reden of de site. Geeft alleen id's en URL's
+ * terug, geen broninhoud.
+ * @param {Array<{slug: string, sourceUrl: string, hidden?: boolean}>} articles
+ * @param {Array<{id: string, sourceUrl: string, processingStatus: string}>} records
+ * @returns {Array<{recordId: string, slug: string, url: string}>}
+ */
+export function findRejectedSourcesInUse(articles, records) {
+  const rejected = new Map(
+    records.filter((r) => r.processingStatus === 'afgewezen').map((r) => [normalizeSourceUrl(r.sourceUrl), r.id]),
+  );
+  return articles
+    .filter((a) => !a.hidden && rejected.has(normalizeSourceUrl(a.sourceUrl)))
+    .map((a) => ({ recordId: rejected.get(normalizeSourceUrl(a.sourceUrl)), slug: a.slug, url: a.sourceUrl }));
+}
+
+/** Leesbare melding per geval, voor testuitvoer. */
+export function describeRejectedSourceInUse({ recordId, slug }) {
+  return `bronrecord ${recordId} is afgewezen, maar het gepubliceerde artikel ${slug} gebruikt deze bron`;
 }
 
 /**

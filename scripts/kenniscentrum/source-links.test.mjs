@@ -11,6 +11,8 @@ import {
   isPlaceholderSourceTitle,
   findSourceLinkIssues,
   findPlaceholderRecordTitles,
+  findRejectedSourcesInUse,
+  describeRejectedSourceInUse,
 } from './source-links.mjs';
 import { readSourceRecords, normalizeSourceUrl } from './source-records.mjs';
 
@@ -25,10 +27,14 @@ const BD = 'https://www.belastingdienst.nl/wps/wcm/connect';
 function readArticles() {
   return readdirSync(CONTENT_DIR)
     .filter((f) => f.endsWith('.md'))
-    .map((f) => ({
-      slug: f.replace(/\.md$/, ''),
-      sourceUrl: readFileSync(path.join(CONTENT_DIR, f), 'utf8').match(/^sourceUrl: "(.*)"$/m)?.[1] ?? '',
-    }));
+    .map((f) => {
+      const text = readFileSync(path.join(CONTENT_DIR, f), 'utf8');
+      return {
+        slug: f.replace(/\.md$/, ''),
+        sourceUrl: text.match(/^sourceUrl: "(.*)"$/m)?.[1] ?? '',
+        hidden: /^hidden: true$/m.test(text),
+      };
+    });
 }
 
 // --- Algemene start- en rubriekpagina's ---
@@ -94,8 +100,13 @@ test('bronlaag: geen enkel bronrecord heeft een placeholdertitel', () => {
 });
 
 // --- Gedeelde bron-URL's ---
+//
+// Deze test gaat alleen over URL-specificiteit. Dat de URL-controle een
+// gedeelde specifieke URL niet meldt, betekent niet dat twee artikelen dezelfde
+// bron mogen hebben: de bronlaag koppelt één record aan één artikel, en de
+// bronrelatietest hieronder wijst een tweede artikel op dezelfde bron af.
 
-test('bronlink: meerdere artikelen op dezelfde algemene URL worden gemeld; een gedeelde specifieke bron is toegestaan', () => {
+test('URL-specificiteit: meerdere artikelen op dezelfde algemene URL worden gemeld; een specifieke URL is voor deze controle in orde, ook als hij vaker voorkomt', () => {
   const shared = findSourceLinkIssues([
     { slug: 'gids-a', sourceUrl: `${BD}/bldcontentnl/belastingdienst/zakelijk/` },
     { slug: 'gids-b', sourceUrl: `${BD}/bldcontentnl/belastingdienst/zakelijk` },
@@ -103,12 +114,54 @@ test('bronlink: meerdere artikelen op dezelfde algemene URL worden gemeld; een g
   assert.deepEqual(shared.filter((i) => i.type === 'generic-url').map((i) => i.slug), ['gids-a', 'gids-b']);
   assert.deepEqual(shared.filter((i) => i.type === 'shared-generic-url').map((i) => i.slugs), [['gids-a', 'gids-b']]);
 
-  // Een nieuwsbericht en een latere uitleg op basis van dezelfde specifieke pagina.
-  const legit = findSourceLinkIssues([
+  // Zelfde specifieke pagina (met en zonder slash): geen URL-probleem. Of twee
+  // artikelen die bron mogen delen, beslist de bronrelatie, niet deze controle.
+  const specific = findSourceLinkIssues([
     { slug: 'nieuws', sourceUrl: `${BD}/bldcontentnl/berichten/nieuws/belastingplan-2027` },
     { slug: 'uitleg', sourceUrl: `${BD}/bldcontentnl/berichten/nieuws/belastingplan-2027/` },
   ]);
-  assert.deepEqual(legit, []);
+  assert.deepEqual(specific, []);
+});
+
+// --- Afgewezen bronnen ---
+
+const REJECTED_RECORDS = [
+  { id: 'kvk-rubriek', sourceUrl: 'https://www.kvk.nl/deponeren/', processingStatus: 'afgewezen' },
+  { id: 'bd-oud-nieuws', sourceUrl: `${BD}/bldcontentnl/berichten/nieuws/btw-logies`, processingStatus: 'afgewezen' },
+  { id: 'ro-verwerkt', sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/x', processingStatus: 'verwerkt' },
+  { id: 'kvk-kandidaat', sourceUrl: 'https://www.kvk.nl/geldzaken/y/', processingStatus: 'kandidaat' },
+];
+
+test('afgewezen bron: een gepubliceerd artikel op een afgewezen bronrecord wordt gemeld, voor elke site en elke URL-vorm', () => {
+  const found = findRejectedSourcesInUse(
+    [
+      { slug: 'gids-op-rubriek', sourceUrl: 'https://www.kvk.nl/deponeren' }, // zonder slash
+      { slug: 'uitleg-op-oud-nieuws', sourceUrl: `${BD}/bldcontentnl/berichten/nieuws/btw-logies/` },
+    ],
+    REJECTED_RECORDS,
+  );
+  assert.deepEqual(found.map((f) => [f.recordId, f.slug]), [
+    ['kvk-rubriek', 'gids-op-rubriek'],
+    ['bd-oud-nieuws', 'uitleg-op-oud-nieuws'],
+  ]);
+  // De melding noemt record en artikel, niets uit de bron zelf.
+  assert.equal(
+    describeRejectedSourceInUse(found[0]),
+    'bronrecord kvk-rubriek is afgewezen, maar het gepubliceerde artikel gids-op-rubriek gebruikt deze bron',
+  );
+});
+
+test('afgewezen bron: artikelen op verwerkte of kandidaat-records, en verborgen artikelen, worden niet gemeld', () => {
+  const found = findRejectedSourcesInUse(
+    [
+      { slug: 'nieuws', sourceUrl: 'https://www.rijksoverheid.nl/actueel/nieuws/2026/10/01/x' },
+      { slug: 'gids', sourceUrl: 'https://www.kvk.nl/geldzaken/y/' },
+      { slug: 'zonder-record', sourceUrl: `${BD}/nl/box-3/box-3` },
+      { slug: 'verborgen', sourceUrl: 'https://www.kvk.nl/deponeren/', hidden: true },
+    ],
+    REJECTED_RECORDS,
+  );
+  assert.deepEqual(found, []);
 });
 
 // --- Huidige content ---
@@ -128,6 +181,14 @@ test('openstaande bronkeuzes: elk item heeft een reden, bestaat nog en staat nog
   }
 });
 
+test('artikelen: geen enkel gepubliceerd artikel gebruikt een afgewezen bronrecord (ook niet de openstaande redactiebeslissingen)', () => {
+  const found = findRejectedSourcesInUse(readArticles(), readSourceRecords(SOURCES_DIR));
+  assert.deepEqual(found.map(describeRejectedSourceInUse), []);
+});
+
+// Bronrelatie, los van URL-specificiteit: per bron-URL één record, gekoppeld
+// aan één artikel. Een tweede artikel op dezelfde specifieke bron faalt hier,
+// omdat er geen tweede record voor dezelfde URL kan bestaan.
 test('bronrelatie: elk artikel met een specifieke bron heeft precies één bronrecord dat ernaar verwijst, met dezelfde URL en een echte titel', () => {
   const records = readSourceRecords(SOURCES_DIR);
   const pending = new Set(PENDING.map((p) => p.slug));
