@@ -5,7 +5,7 @@ priority: "praktisch"
 publishedAt: 2026-10-01T09:15:00.000Z
 updatedAt: 2026-10-08T09:00:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/nl/box-3/box-3"
 summary: "Box 3 belast uw vermogen boven een bepaalde drempel, zoals spaargeld, beleggingen en tweede woningen. Dit artikel legt uit hoe box 3 in hoofdlijnen werkt en waarom dit onderdeel al enkele jaren volop in beweging is."
 relevance: "Box 3 raakt niet alleen particulieren, maar ook ondernemers en DGA's met privévermogen naast hun onderneming of BV. Door aanhoudende wetswijzigingen is het extra belangrijk om uw situatie periodiek te laten beoordelen."
 tags: ["box 3", "vermogen", "inkomstenbelasting", "sparen en beleggen"]

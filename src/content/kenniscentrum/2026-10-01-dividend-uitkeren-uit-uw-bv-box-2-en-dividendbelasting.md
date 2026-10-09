@@ -4,7 +4,7 @@ category: "BV & DGA"
 priority: "praktisch"
 publishedAt: 2026-10-01T08:15:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/dividendbelasting/als_u_dividend_uitkeert/als_u_dividend_uitkeert"
 summary: "Wilt u als DGA winst uit uw BV naar privé halen via dividend? Dit artikel legt uit hoe een dividenduitkering fiscaal werkt, wat het verschil is met loon of rekening-courant, en waar u rekening mee moet houden."
 relevance: "Dividend is, naast salaris, de belangrijkste manier voor een DGA om geld uit de BV te halen. De fiscale behandeling (box 2 en dividendbelasting) en het moment van uitkeren hebben direct effect op uw netto resultaat."
 tags: ["dividend", "box 2", "dividendbelasting", "dga", "bv", "aanmerkelijk belang"]

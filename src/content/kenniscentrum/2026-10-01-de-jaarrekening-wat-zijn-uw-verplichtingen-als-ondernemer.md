@@ -4,7 +4,7 @@ category: "Administratie & jaarrekening"
 priority: "praktisch"
 publishedAt: 2026-10-01T10:30:00.000Z
 sourceName: "KVK"
-sourceUrl: "https://www.kvk.nl/deponeren/"
+sourceUrl: "https://www.kvk.nl/deponeren/jaarrekening-deponeren/"
 summary: "Onderneemt u via een BV, dan bent u verplicht jaarlijks een jaarrekening op te stellen en te deponeren bij de Kamer van Koophandel. Dit artikel legt uit wat deze verplichting inhoudt, welke termijnen gelden, en wat de gevolgen zijn van het niet (tijdig) deponeren."
 relevance: "Het niet of te laat deponeren van de jaarrekening is niet vrijblijvend: het kan leiden tot een economisch delict en speelt zelfs een rol bij eventuele bestuurdersaansprakelijkheid bij faillissement."
 tags: ["jaarrekening", "deponeren", "kamer van koophandel", "administratieplicht", "bv"]

@@ -4,7 +4,7 @@ category: "Btw"
 priority: "praktisch"
 publishedAt: 2026-10-01T09:45:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/nl/btw/content/uiterste-aangifte-en-betaaldatums"
 summary: "Vrijwel elke ondernemer moet periodiek btw-aangifte doen. Dit artikel legt uit hoe de aangiftetijdvakken werken, wanneer u moet betalen, en wat de gevolgen zijn als u te laat bent met aangeven of betalen."
 relevance: "Te laat of niet aangeven kan leiden tot een naheffingsaanslag met boete en belastingrente. Weten welk tijdvak voor u geldt en wat de deadline is, voorkomt onnodige kosten."
 tags: ["btw-aangifte", "btw", "aangiftetijdvak", "deadline", "naheffing"]

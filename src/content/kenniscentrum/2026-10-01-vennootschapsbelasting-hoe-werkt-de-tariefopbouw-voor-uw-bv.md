@@ -4,7 +4,7 @@ category: "Vennootschapsbelasting"
 priority: "praktisch"
 publishedAt: 2026-10-01T08:45:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/vennootschapsbelasting/tarieven_vennootschapsbelasting"
 summary: "Elke BV betaalt vennootschapsbelasting (Vpb) over de winst. Dit artikel legt uit hoe de schijvenstructuur werkt, wat wel en niet tot de fiscale winst behoort, en wat dit praktisch betekent voor uw jaarplanning."
 relevance: "De Vpb is, naast loonheffingen, de belangrijkste belasting voor uw BV. Inzicht in hoe uw fiscale winst wordt belast, helpt bij het maken van tijdige, onderbouwde keuzes over investeringen, reserveringen en dividend."
 tags: ["vennootschapsbelasting", "vpb", "bv", "fiscale winst", "schijven"]

@@ -4,7 +4,7 @@ category: "Inkomstenbelasting"
 priority: "praktisch"
 publishedAt: 2026-10-01T09:00:00.000Z
 sourceName: "Belastingdienst"
-sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/"
+sourceUrl: "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/winst/inkomstenbelasting/inkomstenbelasting_voor_ondernemers/ondernemersaftrek/ondernemersaftrek"
 summary: "Als u als eenmanszaak, vof of maatschap onder de inkomstenbelasting valt, kunt u gebruikmaken van de ondernemersaftrek: een verzameling fiscale aftrekposten die uw belastbare winst verlagen. Dit artikel geeft een overzicht van de belangrijkste regelingen."
 relevance: "De ondernemersaftrek kan uw belastbare winst — en daarmee uw inkomstenbelasting — substantieel verlagen. Niet elke regeling geldt automatisch; voor de meeste posten gelden voorwaarden, waaronder het urencriterium."
 tags: ["ondernemersaftrek", "zelfstandigenaftrek", "startersaftrek", "mkb-winstvrijstelling", "inkomstenbelasting", "urencriterium"]
