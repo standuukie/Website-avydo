@@ -1,0 +1,14 @@
+{
+  "sourceUrl": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/berichten/nieuws/websites-van-belastingdienst-en-dienst-toeslagen-tijdelijk-offline",
+  "sourceName": "Belastingdienst",
+  "title": "Websites van Belastingdienst en Dienst Toeslagen weer online",
+  "description": "Vanwege preventieve beveiligingsmaatregelen van recent ontdekte kwetsbaarheden in PHP zijn verschillende websites (tijdelijk) offline gehaald. Ook de Belastingdienst en Dienst Toeslagen hebben een aantal websites offline gezet. Dit bericht vullen we gedurende de dag aan met nieuwe informatie.",
+  "body": "Vanwege preventieve beveiligingsmaatregelen van recent ontdekte kwetsbaarheden in PHP zijn verschillende websites (tijdelijk) offline gehaald. Ook de Belastingdienst en Dienst Toeslagen hebben een aantal websites offline gezet. Dit bericht vullen we gedurende de dag aan met nieuwe informatie.\n\nHet Nationaal Cyber Security Centrum (NCSC) heeft een advies uitgebracht om websites offline te halen. Overheidsorganisaties, waaronder de Belastingdienst en Dienst Toeslagen, volgen het advies van het NCSC op. Zo zijn al een aantal websites offline gehaald.\n\nMeer informatie over het verloop volgt nog. Onze excuses voor het ongemak.\n\nUpdate donderdag 22 oktober 09.00 uur\n\nDe websites van de Belastingdienst, Dienst Toeslagen en Douane die eerder preventief geblokkeerd waren, zijn weer online en toegankelijk. Dat komt doordat een beveiligingsupdate (patch) voor de PHP-kwetsbaarheden is geïmplementeerd voor de betreffende websites.\n\nDe eerder genomen beveiligingsmaatregelen hebben geen impact gehad op de dienstverleningsprocessen aan burgers en ondernemers.\n\nMeer nieuwsberichten leest u in het nieuwsoverzicht",
+  "sourcePublishedAt": "2026-10-21T15:30:00.000Z",
+  "fetchedAt": "2026-10-24T09:38:09.429Z",
+  "category": "Fiscale actualiteit",
+  "priority": "actueel",
+  "audiences": [],
+  "processingStatus": "verwerkt",
+  "avydoSlug": "2026-10-24-belastingdienst-websites-tijdelijk-offline-wegens-php-kwetsbaarheden"
+}
